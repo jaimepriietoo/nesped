@@ -18,6 +18,10 @@ const authToken =
 const twilioNumber =
   process.env.TWILIO_NUMERO || process.env.TWILIO_PHONE_NUMBER;
 
+if (!accountSid || !authToken || !twilioNumber || !process.env.BASE_URL) {
+  console.error("❌ Faltan variables de entorno importantes");
+}
+
 const client = twilio(accountSid, authToken);
 
 app.get("/", (req, res) => {
@@ -55,19 +59,29 @@ function buildVoiceTwiml() {
 }
 
 app.get("/voice", (req, res) => {
-  console.log("GET /voice");
-  const xml = buildVoiceTwiml();
-  console.log("📄 XML:", xml);
-  res.type("text/xml");
-  res.send(xml);
+  try {
+    console.log("GET /voice");
+    const xml = buildVoiceTwiml();
+    console.log("📄 XML:", xml);
+    res.type("text/xml");
+    res.send(xml);
+  } catch (error) {
+    console.error("❌ ERROR GET /voice:", error.message);
+    res.status(500).send("Error");
+  }
 });
 
 app.post("/voice", (req, res) => {
-  console.log("POST /voice");
-  const xml = buildVoiceTwiml();
-  console.log("📄 XML:", xml);
-  res.type("text/xml");
-  res.send(xml);
+  try {
+    console.log("POST /voice");
+    const xml = buildVoiceTwiml();
+    console.log("📄 XML:", xml);
+    res.type("text/xml");
+    res.send(xml);
+  } catch (error) {
+    console.error("❌ ERROR POST /voice:", error.message);
+    res.status(500).send("Error");
+  }
 });
 
 const wss = new WebSocket.Server({ server, path: "/media-stream" });
@@ -81,7 +95,7 @@ wss.on("connection", (twilioWs, req) => {
       const data = JSON.parse(raw.toString());
       console.log("Twilio event:", data.event);
     } catch (err) {
-      console.error("❌ Error WS:", err.message);
+      console.error("❌ Error procesando mensaje WS:", err.message);
     }
   });
 
@@ -92,6 +106,14 @@ wss.on("connection", (twilioWs, req) => {
   twilioWs.on("error", (err) => {
     console.error("❌ Error WS Twilio:", err.message);
   });
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("❌ uncaughtException:", err);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("❌ unhandledRejection:", reason);
 });
 
 const PORT = process.env.PORT || 3001;

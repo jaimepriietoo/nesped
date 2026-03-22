@@ -18,10 +18,6 @@ const authToken =
 const twilioNumber =
   process.env.TWILIO_NUMERO || process.env.TWILIO_PHONE_NUMBER;
 
-if (!accountSid || !authToken || !twilioNumber || !process.env.BASE_URL) {
-  console.error("❌ Faltan variables de entorno importantes");
-}
-
 const client = twilio(accountSid, authToken);
 
 app.get("/", (req, res) => {
@@ -59,29 +55,19 @@ function buildVoiceTwiml() {
 }
 
 app.get("/voice", (req, res) => {
-  try {
-    console.log("GET /voice");
-    const xml = buildVoiceTwiml();
-    console.log("📄 XML:", xml);
-    res.type("text/xml");
-    res.send(xml);
-  } catch (error) {
-    console.error("❌ ERROR GET /voice:", error.message);
-    res.status(500).send("Error");
-  }
+  console.log("GET /voice");
+  const xml = buildVoiceTwiml();
+  console.log("📄 XML:", xml);
+  res.type("text/xml");
+  res.send(xml);
 });
 
 app.post("/voice", (req, res) => {
-  try {
-    console.log("POST /voice");
-    const xml = buildVoiceTwiml();
-    console.log("📄 XML:", xml);
-    res.type("text/xml");
-    res.send(xml);
-  } catch (error) {
-    console.error("❌ ERROR POST /voice:", error.message);
-    res.status(500).send("Error");
-  }
+  console.log("POST /voice");
+  const xml = buildVoiceTwiml();
+  console.log("📄 XML:", xml);
+  res.type("text/xml");
+  res.send(xml);
 });
 
 const wss = new WebSocket.Server({ server, path: "/media-stream" });

@@ -151,9 +151,14 @@ export default function NespedApp() {
             </a>
           </nav>
 
-          <button className="rounded-2xl border border-white/15 px-4 py-2 text-sm font-medium transition hover:bg-white hover:text-black">
-            Solicitar reunión
-          </button>
+          <div className="flex items-center gap-3">
+            <a
+              href="/login"
+              className="rounded-2xl border border-white/15 px-4 py-2 text-sm font-medium transition hover:bg-white hover:text-black"
+            >
+              Acceso clientes
+            </a>
+          </div>
         </div>
       </header>
 
@@ -185,10 +190,10 @@ export default function NespedApp() {
                 </a>
 
                 <a
-                  href="#clientes"
+                  href="/login"
                   className="rounded-2xl border border-white/15 px-6 py-3 text-sm font-semibold transition hover:bg-white/5"
                 >
-                  Ver clientes
+                  Entrar al portal
                 </a>
               </div>
 

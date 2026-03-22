@@ -1,39 +1,9 @@
-export async function GET() {
-  try {
-    const voiceServerUrl = process.env.VOICE_SERVER_URL || "http://localhost:3001";
-
-    const res = await fetch(`${voiceServerUrl}/call`);
-
-    if (!res.ok) {
-      throw new Error(`Voice server error: ${res.status}`);
-    }
-
-    const text = await res.text();
-
-    return Response.json({
-      success: true,
-      message: text,
-    });
-
-  } catch (error) {
-    console.error("❌ Error lanzando demo:", error);
-
-    return Response.json(
-      {
-        success: false,
-        message: "No se pudo lanzar la llamada",
-      },
-      { status: 500 }
-    );
-  }
-}
-
 import twilio from "twilio";
 
 export async function POST(req) {
   try {
     const body = await req.json();
-    const telefono = body.telefono;
+    const telefono = body.telefono?.trim();
 
     if (!telefono) {
       return Response.json(
@@ -42,15 +12,30 @@ export async function POST(req) {
       );
     }
 
-    const client = twilio(
-      process.env.TWILIO_ACCOUNT_SID,
-      process.env.TWILIO_AUTH_TOKEN
-    );
+    const accountSid =
+      process.env.TWILIO_ACCOUNT_SID || process.env.ACCOUNT_SID;
+    const authToken =
+      process.env.TWILIO_AUTH_TOKEN || process.env.AUTH_TOKEN;
+    const fromNumber =
+      process.env.TWILIO_PHONE_NUMBER || process.env.TWILIO_NUMERO;
+
+    if (!accountSid || !authToken || !fromNumber || !process.env.BASE_URL) {
+      return Response.json(
+        {
+          success: false,
+          message: "Faltan variables de entorno de Twilio o BASE_URL",
+        },
+        { status: 500 }
+      );
+    }
+
+    const client = twilio(accountSid, authToken);
 
     const call = await client.calls.create({
       url: `${process.env.BASE_URL}/voice`,
       to: telefono,
-      from: process.env.TWILIO_PHONE_NUMBER,
+      from: fromNumber,
+      method: "POST",
     });
 
     return Response.json({
@@ -64,7 +49,7 @@ export async function POST(req) {
     return Response.json(
       {
         success: false,
-        message: "Error iniciando llamada",
+        message: error?.message || "Error iniciando llamada",
       },
       { status: 500 }
     );

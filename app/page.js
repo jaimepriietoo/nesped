@@ -33,35 +33,36 @@ export default function NespedApp() {
     }
   }
 
-  async function hacerLlamada() {
-    try {
-      setLoadingCall(true);
-      setCallStatus("");
+async function hacerLlamada() {
+  try {
+    setLoadingCall(true);
+    setCallStatus("");
 
-      const res = await fetch("/api/demo-call", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          telefono: telefonoDemo,
-        }),
-      });
+    const res = await fetch("/api/demo-call", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        telefono: telefonoDemo,
+      }),
+    });
 
-      const json = await res.json();
+    const json = await res.json();
 
-      if (!res.ok || !json.success) {
-        throw new Error(json.message || "Error iniciando llamada");
-      }
-
-      setCallStatus("Llamada lanzada correctamente. Revisa tu móvil.");
-    } catch (err) {
-      console.error(err);
-      setCallStatus("No se pudo lanzar la llamada.");
-    } finally {
-      setLoadingCall(false);
+    if (!res.ok || !json.success) {
+      setCallStatus(json.message || "No se pudo lanzar la llamada.");
+      return;
     }
+
+    setCallStatus("Llamada lanzada correctamente. Revisa tu móvil.");
+  } catch (err) {
+    console.error(err);
+    setCallStatus("Error técnico al lanzar la llamada.");
+  } finally {
+    setLoadingCall(false);
   }
+}
 
   useEffect(() => {
     loadLeads();

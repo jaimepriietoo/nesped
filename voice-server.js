@@ -33,20 +33,26 @@ app.get("/call", async (req, res) => {
   }
 });
 
-app.post("/voice", (req, res) => {
-  const streamUrl = `${process.env.BASE_URL.replace("https://", "wss://")}/media-stream`;
-
-  const twiml = `
+function buildVoiceTwiml() {
+  return `
 <Response>
   <Connect>
-    <Stream url="${streamUrl}" />
+    <Stream url="${process.env.BASE_URL.replace("https://", "wss://")}/media-stream" />
   </Connect>
 </Response>
   `.trim();
+}
 
-  console.log("➡️ TwiML enviado a Twilio con stream:", streamUrl);
+app.get("/voice", (req, res) => {
+  console.log("GET /voice");
   res.type("text/xml");
-  res.send(twiml);
+  res.send(buildVoiceTwiml());
+});
+
+app.post("/voice", (req, res) => {
+  console.log("POST /voice");
+  res.type("text/xml");
+  res.send(buildVoiceTwiml());
 });
 
 const wss = new WebSocket.Server({ server, path: "/media-stream" });

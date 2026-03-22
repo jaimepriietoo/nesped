@@ -36,12 +36,22 @@ app.get("/call", async (req, res) => {
 function buildVoiceTwiml() {
   return `
 <Response>
-  <Connect>
-    <Stream url="${process.env.BASE_URL.replace("https://", "wss://")}/media-stream" />
-  </Connect>
+  <Say language="es-ES">Hola. Esta es una prueba de NESPED.</Say>
 </Response>
   `.trim();
 }
+
+app.get("/voice", (req, res) => {
+  console.log("GET /voice");
+  res.type("text/xml");
+  res.send(buildVoiceTwiml());
+});
+
+app.post("/voice", (req, res) => {
+  console.log("POST /voice");
+  res.type("text/xml");
+  res.send(buildVoiceTwiml());
+});
 
 app.get("/voice", (req, res) => {
   console.log("GET /voice");

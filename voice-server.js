@@ -10,7 +10,15 @@ app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
 const server = http.createServer(app);
-const client = twilio(process.env.ACCOUNT_SID, process.env.AUTH_TOKEN);
+
+const accountSid =
+  process.env.ACCOUNT_SID || process.env.TWILIO_ACCOUNT_SID;
+const authToken =
+  process.env.AUTH_TOKEN || process.env.TWILIO_AUTH_TOKEN;
+const twilioNumber =
+  process.env.TWILIO_NUMERO || process.env.TWILIO_PHONE_NUMBER;
+
+const client = twilio(accountSid, authToken);
 
 app.get("/", (req, res) => {
   res.send("NESPED Voice Server activo");
@@ -20,8 +28,8 @@ app.get("/call", async (req, res) => {
   try {
     const call = await client.calls.create({
       to: process.env.TU_NUMERO,
-      from: process.env.TWILIO_NUMERO,
-      url: process.env.BASE_URL + "/voice",
+      from: twilioNumber,
+      url: `${process.env.BASE_URL}/voice`,
       method: "POST",
     });
 
@@ -34,24 +42,16 @@ app.get("/call", async (req, res) => {
 });
 
 function buildVoiceTwiml() {
+  const streamUrl = `${process.env.BASE_URL.replace("https://", "wss://")}/media-stream`;
+
   return `
 <Response>
-  <Say language="es-ES">Hola. Esta es una prueba de NESPED.</Say>
+  <Connect>
+    <Stream url="${streamUrl}" />
+  </Connect>
 </Response>
   `.trim();
 }
-
-app.get("/voice", (req, res) => {
-  console.log("GET /voice");
-  res.type("text/xml");
-  res.send(buildVoiceTwiml());
-});
-
-app.post("/voice", (req, res) => {
-  console.log("POST /voice");
-  res.type("text/xml");
-  res.send(buildVoiceTwiml());
-});
 
 app.get("/voice", (req, res) => {
   console.log("GET /voice");
@@ -87,14 +87,15 @@ wss.on("connection", (twilioWs) => {
   openaiWs.on("open", () => {
     console.log("🤖 OpenAI conectado");
 
-    const sessionUpdate = {
-      type: "session.update",
-      session: {
-        modalities: ["audio", "text"],
-        voice: "marin",
-        input_audio_format: "g711_ulaw",
-        output_audio_format: "g711_ulaw",
-        instructions: `
+    openaiWs.send(
+      JSON.stringify({
+        type: "session.update",
+        session: {
+          modalities: ["audio", "text"],
+          voice: "marin",
+          input_audio_format: "g711_ulaw",
+          output_audio_format: "g711_ulaw",
+          instructions: `
 Eres la recepcionista de NESPED.
 
 NESPED implanta sistemas de voz con IA para empresas.
@@ -117,30 +118,30 @@ usa la herramienta guardar_lead.
 
 Después confirma:
 "Perfecto, hemos registrado tu solicitud. El equipo de NESPED te contactará lo antes posible."
-        `,
-        tools: [
-          {
-            type: "function",
-            name: "guardar_lead",
-            description: "Guardar lead en sistema",
-            parameters: {
-              type: "object",
-              properties: {
-                nombre: { type: "string" },
-                telefono: { type: "string" },
-                necesidad: { type: "string" },
-                ciudad: { type: "string" },
-                preferencia: { type: "string" },
+          `,
+          tools: [
+            {
+              type: "function",
+              name: "guardar_lead",
+              description: "Guardar lead en sistema",
+              parameters: {
+                type: "object",
+                properties: {
+                  nombre: { type: "string" },
+                  telefono: { type: "string" },
+                  necesidad: { type: "string" },
+                  ciudad: { type: "string" },
+                  preferencia: { type: "string" },
+                },
+                required: ["nombre", "telefono", "necesidad"],
               },
-              required: ["nombre", "telefono", "necesidad"],
             },
-          },
-        ],
-        tool_choice: "auto",
-      },
-    };
+          ],
+          tool_choice: "auto",
+        },
+      })
+    );
 
-    openaiWs.send(JSON.stringify(sessionUpdate));
     console.log("⚙️ session.update enviado");
   });
 
@@ -202,7 +203,7 @@ Después confirma:
               },
             })
           );
-          console.log("👋 response.create enviado para saludo");
+          console.log("👋 response.create enviado");
         }
       }
 
@@ -281,6 +282,10 @@ Después confirma:
     if (openaiWs.readyState === WebSocket.OPEN) {
       openaiWs.close();
     }
+  });
+
+  twilioWs.on("error", (err) => {
+    console.error("❌ Error WS Twilio:", err.message);
   });
 
   openaiWs.on("close", () => {

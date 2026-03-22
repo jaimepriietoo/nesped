@@ -4,6 +4,7 @@ export async function POST(req) {
   try {
     const body = await req.json();
     const telefono = body.telefono?.trim();
+    const clientId = body.client_id || "demo";
 
     if (!telefono) {
       return Response.json(
@@ -19,20 +20,12 @@ export async function POST(req) {
     const fromNumber =
       process.env.TWILIO_PHONE_NUMBER || process.env.TWILIO_NUMERO;
 
-    if (!accountSid || !authToken || !fromNumber || !process.env.BASE_URL) {
-      return Response.json(
-        {
-          success: false,
-          message: "Faltan variables de entorno de Twilio o BASE_URL",
-        },
-        { status: 500 }
-      );
-    }
+    const cleanBaseUrl = (process.env.BASE_URL || "").replace(/\/+$/, "");
 
     const client = twilio(accountSid, authToken);
 
     const call = await client.calls.create({
-      url: `${process.env.BASE_URL}/voice?client_id=demo`,
+      url: `${cleanBaseUrl}/voice?client_id=${clientId}`,
       to: telefono,
       from: fromNumber,
       method: "POST",

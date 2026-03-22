@@ -20,20 +20,85 @@ const twilioNumber =
 
 const client = twilio(accountSid, authToken);
 
+/*
+  ===============================
+  CONFIGURACIÓN MULTI-CLIENTE
+  ===============================
+  AQUÍ AÑADES TODOS TUS CLIENTES
+*/
+const CLIENTS = {
+  demo: {
+    name: "NESPED Demo",
+    prompt: `
+Eres la recepcionista comercial de NESPED.
+
+NESPED implanta sistemas de voz con IA para empresas.
+
+Habla en español de España, de forma natural, cercana y profesional.
+Haz una sola pregunta cada vez.
+No hables demasiado.
+No digas que eres una IA.
+
+Tu objetivo es:
+- entender qué quiere la persona
+- recoger nombre
+- recoger teléfono
+- recoger necesidad
+- recoger ciudad si la menciona
+- recoger preferencia horaria si la menciona
+
+Cuando ya tengas nombre + teléfono + necesidad:
+usa la herramienta guardar_lead.
+
+Después confirma:
+"Perfecto, hemos registrado tu solicitud. El equipo de NESPED te contactará lo antes posible."
+    `,
+    webhook: process.env.N8N_WEBHOOK_URL,
+  },
+
+  clinica: {
+    name: "Cliente Clínica",
+    prompt: `
+Eres la recepcionista de una clínica dental.
+
+Habla en español de España.
+Sé cercana, profesional y breve.
+Haz una sola pregunta cada vez.
+
+Tu objetivo es:
+- saber qué tratamiento o consulta necesita el paciente
+- recoger nombre
+- recoger teléfono
+- recoger preferencia de horario
+
+Cuando ya tengas nombre + teléfono + necesidad:
+usa la herramienta guardar_lead.
+
+Después confirma:
+"Perfecto, hemos registrado tu solicitud y la clínica te llamará en breve."
+    `,
+    webhook: process.env.N8N_WEBHOOK_URL,
+  },
+};
+
 app.get("/", (req, res) => {
   res.send("NESPED Voice Server activo");
 });
 
 app.get("/call", async (req, res) => {
   try {
+    const clientId = req.query.client_id || "demo";
+
+    const cleanBaseUrl = (process.env.BASE_URL || "").replace(/\/+$/, "");
+
     const call = await client.calls.create({
       to: process.env.TU_NUMERO,
       from: twilioNumber,
-      url: `${(process.env.BASE_URL || "").replace(/\/+$/, "")}/voice`,
+      url: `${cleanBaseUrl}/voice?client_id=${clientId}`,
       method: "POST",
     });
 
-    console.log("📞 Llamada iniciada:", call.sid);
+    console.log("📞 Llamada iniciada:", call.sid, "cliente:", clientId);
     res.send("Llamada iniciada: " + call.sid);
   } catch (error) {
     console.error("❌ ERROR /call:", error.message);
@@ -41,9 +106,9 @@ app.get("/call", async (req, res) => {
   }
 });
 
-function buildVoiceTwiml() {
+function buildVoiceTwiml(clientId) {
   const cleanBaseUrl = (process.env.BASE_URL || "").replace(/\/+$/, "");
-  const streamUrl = `${cleanBaseUrl.replace("https://", "wss://")}/media-stream`;
+  const streamUrl = `${cleanBaseUrl.replace("https://", "wss://")}/media-stream?client_id=${clientId}`;
 
   console.log("🌐 STREAM URL:", streamUrl);
 
@@ -57,23 +122,38 @@ function buildVoiceTwiml() {
 }
 
 app.get("/voice", (req, res) => {
+  const clientId = req.query.client_id || "demo";
+
   console.log("GET /voice");
-  const xml = buildVoiceTwiml();
+  console.log("🏢 Cliente detectado en /voice:", clientId);
+
+  const xml = buildVoiceTwiml(clientId);
   res.type("text/xml");
   res.send(xml);
 });
 
 app.post("/voice", (req, res) => {
+  const clientId = req.query.client_id || "demo";
+
   console.log("POST /voice");
-  const xml = buildVoiceTwiml();
+  console.log("🏢 Cliente detectado en /voice:", clientId);
+
+  const xml = buildVoiceTwiml(clientId);
   res.type("text/xml");
   res.send(xml);
 });
 
 const wss = new WebSocket.Server({ server, path: "/media-stream" });
 
-wss.on("connection", (twilioWs) => {
+wss.on("connection", (twilioWs, req) => {
   console.log("🟢 Twilio conectado a /media-stream");
+
+  const url = new URL(req.url, "https://dummy");
+  const clientId = url.searchParams.get("client_id") || "demo";
+
+  console.log("🔥 Cliente WS:", clientId);
+
+  const config = CLIENTS[clientId] || CLIENTS.demo;
 
   let streamSid = null;
   let openAiReady = false;
@@ -90,7 +170,7 @@ wss.on("connection", (twilioWs) => {
   );
 
   openaiWs.on("open", () => {
-    console.log("🤖 OpenAI conectado");
+    console.log("🤖 OpenAI conectado para:", config.name);
 
     openaiWs.send(
       JSON.stringify({
@@ -100,30 +180,7 @@ wss.on("connection", (twilioWs) => {
           voice: "marin",
           input_audio_format: "g711_ulaw",
           output_audio_format: "g711_ulaw",
-          instructions: `
-Eres la recepcionista de NESPED.
-
-NESPED implanta sistemas de voz con IA para empresas.
-
-Habla en español de España, de forma natural, cercana y profesional.
-No hables demasiado.
-Haz una sola pregunta cada vez.
-No inventes datos.
-
-Tu objetivo es:
-- entender qué quiere la persona
-- recoger nombre
-- recoger teléfono
-- recoger necesidad
-- recoger ciudad si la menciona
-- recoger preferencia horaria si la menciona
-
-Cuando ya tengas nombre + teléfono + necesidad:
-usa la herramienta guardar_lead.
-
-Después confirma:
-"Perfecto, hemos registrado tu solicitud. El equipo de NESPED te contactará lo antes posible."
-          `,
+          instructions: config.prompt,
           tools: [
             {
               type: "function",
@@ -204,7 +261,7 @@ Después confirma:
               response: {
                 modalities: ["audio", "text"],
                 instructions:
-                  "Saluda como NESPED de forma natural y pregunta en qué puedes ayudar.",
+                  "Saluda de forma natural y pregunta en qué puedes ayudar.",
               },
             })
           );
@@ -232,7 +289,7 @@ Después confirma:
         console.log("💾 Guardando lead:", args);
 
         try {
-          const webhookRes = await fetch(process.env.N8N_WEBHOOK_URL, {
+          const webhookRes = await fetch(config.webhook, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -244,7 +301,8 @@ Después confirma:
               necesidad: args.necesidad || "",
               ciudad: args.ciudad || "",
               preferencia: args.preferencia || "",
-              origen: "llamada_nesped",
+              origen: `llamada_${clientId}`,
+              cliente: clientId,
             }),
           });
 
@@ -269,7 +327,7 @@ Después confirma:
               response: {
                 modalities: ["audio", "text"],
                 instructions:
-                  "Confirma que la solicitud ha quedado registrada y que el equipo de NESPED contactará pronto.",
+                  "Confirma que la solicitud ha quedado registrada y que el equipo contactará pronto.",
               },
             })
           );

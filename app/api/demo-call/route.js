@@ -32,7 +32,7 @@ export async function POST(req) {
     const client = twilio(accountSid, authToken);
 
     const call = await client.calls.create({
-      url: `${process.env.BASE_URL}/voice`,
+      url: `${process.env.BASE_URL}/voice?client_id=demo`,
       to: telefono,
       from: fromNumber,
       method: "POST",

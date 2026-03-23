@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { findUser } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
 
 export async function POST(req) {
   try {
@@ -15,11 +16,17 @@ export async function POST(req) {
       );
     }
 
+    const { data } = await supabase
+      .from("clients")
+      .select("id,name")
+      .eq("id", user.clientId)
+      .single();
+
     const cookieStore = await cookies();
 
     cookieStore.set("nesped_auth", "ok", {
       httpOnly: true,
-      secure: true,
+      secure: false,
       sameSite: "lax",
       path: "/",
       maxAge: 60 * 60 * 24 * 7,
@@ -27,15 +34,23 @@ export async function POST(req) {
 
     cookieStore.set("nesped_client_id", user.clientId, {
       httpOnly: true,
-      secure: true,
+      secure: false,
       sameSite: "lax",
       path: "/",
       maxAge: 60 * 60 * 24 * 7,
     });
 
-    cookieStore.set("nesped_client_name", user.clientName, {
+    cookieStore.set("nesped_client_name", data?.name || user.clientName, {
       httpOnly: true,
-      secure: true,
+      secure: false,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+
+    cookieStore.set("nesped_role", user.role || "client", {
+      httpOnly: true,
+      secure: false,
       sameSite: "lax",
       path: "/",
       maxAge: 60 * 60 * 24 * 7,
@@ -44,9 +59,12 @@ export async function POST(req) {
     return Response.json({
       success: true,
       clientId: user.clientId,
-      clientName: user.clientName,
+      clientName: data?.name || user.clientName,
+      role: user.role || "client",
     });
   } catch (error) {
+    console.error(error);
+
     return Response.json(
       { success: false, message: "Error iniciando sesión" },
       { status: 500 }

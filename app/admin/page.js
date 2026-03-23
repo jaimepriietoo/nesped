@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const emptyClientForm = {
   id: "",
@@ -27,11 +27,14 @@ export default function AdminPage() {
   const [form, setForm] = useState(emptyClientForm);
 
   const [users, setUsers] = useState([]);
+  const [calls, setCalls] = useState([]);
   const [userForm, setUserForm] = useState(emptyUserForm);
 
   const [loading, setLoading] = useState(true);
+  const [loadingCalls, setLoadingCalls] = useState(true);
   const [saving, setSaving] = useState(false);
   const [creating, setCreating] = useState(false);
+
   const [message, setMessage] = useState("");
   const [userMessage, setUserMessage] = useState("");
 
@@ -81,9 +84,24 @@ export default function AdminPage() {
     }
   }
 
+  async function loadCalls() {
+    try {
+      setLoadingCalls(true);
+      const res = await fetch("/api/admin/calls", { cache: "no-store" });
+      const json = await res.json();
+      setCalls(json.data || []);
+    } catch (err) {
+      console.error(err);
+      setCalls([]);
+    } finally {
+      setLoadingCalls(false);
+    }
+  }
+
   useEffect(() => {
     loadClients();
     loadUsers();
+    loadCalls();
   }, []);
 
   useEffect(() => {
@@ -156,7 +174,12 @@ export default function AdminPage() {
         return;
       }
 
-      setMessage(creating ? "Cliente creado correctamente" : "Cliente actualizado correctamente");
+      setMessage(
+        creating
+          ? "Cliente creado correctamente"
+          : "Cliente actualizado correctamente"
+      );
+
       setCreating(false);
       await loadClients();
       setSelectedId(form.id);
@@ -201,6 +224,22 @@ export default function AdminPage() {
     }
   }
 
+  const stats = useMemo(() => {
+    const totalClients = clients.length;
+    const totalUsers = users.length;
+    const totalCalls = calls.length;
+    const totalCompleted = calls.filter(
+      (call) => call.status === "completed"
+    ).length;
+
+    return [
+      { label: "Clientes", value: totalClients },
+      { label: "Usuarios", value: totalUsers },
+      { label: "Llamadas", value: totalCalls },
+      { label: "Completadas", value: totalCompleted },
+    ];
+  }, [clients, users, calls]);
+
   return (
     <div className="min-h-screen bg-[#050505] text-white px-6 py-10">
       <div className="mx-auto max-w-7xl">
@@ -209,7 +248,7 @@ export default function AdminPage() {
             <div className="text-sm text-white/45">Panel interno</div>
             <h1 className="mt-1 text-4xl font-semibold">NESPED Admin</h1>
             <div className="mt-2 text-sm text-white/55">
-              Gestiona clientes, prompts, webhooks, números y usuarios
+              Gestiona clientes, prompts, webhooks, números, usuarios y llamadas
             </div>
           </div>
 
@@ -219,6 +258,18 @@ export default function AdminPage() {
           >
             Nuevo cliente
           </button>
+        </div>
+
+        <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-4">
+          {stats.map((item) => (
+            <div
+              key={item.label}
+              className="rounded-[24px] border border-white/10 bg-white/[0.03] p-6"
+            >
+              <div className="text-sm text-white/45">{item.label}</div>
+              <div className="mt-2 text-3xl font-semibold">{item.value}</div>
+            </div>
+          ))}
         </div>
 
         <div className="grid gap-8 md:grid-cols-[320px_1fr]">
@@ -373,10 +424,14 @@ export default function AdminPage() {
 
                   <button
                     type="button"
-                    onClick={loadClients}
+                    onClick={() => {
+                      loadClients();
+                      loadCalls();
+                      loadUsers();
+                    }}
                     className="rounded-2xl border border-white/15 px-6 py-4 text-sm font-semibold transition hover:bg-white hover:text-black"
                   >
-                    Recargar
+                    Recargar todo
                   </button>
                 </div>
               </form>
@@ -477,6 +532,65 @@ export default function AdminPage() {
                     <div className="text-sm text-white/45">No hay usuarios.</div>
                   )}
                 </div>
+              </div>
+            </div>
+
+            <div className="rounded-[28px] border border-white/10 bg-white/[0.03] p-8">
+              <div className="mb-6 flex items-center justify-between">
+                <div>
+                  <div className="text-sm text-white/45">Actividad</div>
+                  <h2 className="mt-1 text-2xl font-semibold">
+                    Llamadas recientes
+                  </h2>
+                </div>
+
+                <button
+                  onClick={loadCalls}
+                  className="rounded-2xl border border-white/15 px-4 py-2 text-sm font-medium transition hover:bg-white hover:text-black"
+                >
+                  Refrescar llamadas
+                </button>
+              </div>
+
+              <div className="overflow-hidden rounded-[24px] border border-white/10">
+                <div className="grid grid-cols-6 bg-white/[0.04] px-5 py-4 text-xs uppercase tracking-[0.18em] text-white/40">
+                  <div>Cliente</div>
+                  <div>Estado</div>
+                  <div>Resumen</div>
+                  <div>Origen</div>
+                  <div>Duración</div>
+                  <div>Fecha</div>
+                </div>
+
+                {loadingCalls ? (
+                  <div className="px-5 py-8 text-sm text-white/45">
+                    Cargando llamadas...
+                  </div>
+                ) : calls.length === 0 ? (
+                  <div className="px-5 py-8 text-sm text-white/45">
+                    No hay llamadas todavía.
+                  </div>
+                ) : (
+                  calls.map((call, index) => (
+                    <div
+                      key={call.id || index}
+                      className="grid grid-cols-6 items-center border-t border-white/10 px-5 py-4 text-sm"
+                    >
+                      <div className="font-medium">{call.client_id || "-"}</div>
+                      <div className="text-white/70">{call.status || "-"}</div>
+                      <div className="text-white/70">{call.summary || "-"}</div>
+                      <div className="text-white/60">{call.from_number || "-"}</div>
+                      <div className="text-white/70">
+                        {call.duration_seconds || 0}s
+                      </div>
+                      <div className="text-white/45">
+                        {call.created_at
+                          ? new Date(call.created_at).toLocaleString("es-ES")
+                          : "-"}
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>

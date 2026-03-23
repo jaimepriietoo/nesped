@@ -1,14 +1,14 @@
 import { cookies } from "next/headers";
+import { findUser } from "@/lib/auth";
 
 export async function POST(req) {
   try {
     const body = await req.json();
     const { email, password } = body;
 
-    const validEmail = process.env.LOGIN_EMAIL;
-    const validPassword = process.env.LOGIN_PASSWORD;
+    const user = findUser(email, password);
 
-    if (email !== validEmail || password !== validPassword) {
+    if (!user) {
       return Response.json(
         { success: false, message: "Credenciales incorrectas" },
         { status: 401 }
@@ -16,6 +16,7 @@ export async function POST(req) {
     }
 
     const cookieStore = await cookies();
+
     cookieStore.set("nesped_auth", "ok", {
       httpOnly: true,
       secure: true,
@@ -24,7 +25,27 @@ export async function POST(req) {
       maxAge: 60 * 60 * 24 * 7,
     });
 
-    return Response.json({ success: true });
+    cookieStore.set("nesped_client_id", user.clientId, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+
+    cookieStore.set("nesped_client_name", user.clientName, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+
+    return Response.json({
+      success: true,
+      clientId: user.clientId,
+      clientName: user.clientName,
+    });
   } catch (error) {
     return Response.json(
       { success: false, message: "Error iniciando sesión" },

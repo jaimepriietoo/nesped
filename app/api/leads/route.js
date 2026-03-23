@@ -1,5 +1,10 @@
+import { cookies } from "next/headers";
+
 export async function GET() {
   try {
+    const cookieStore = await cookies();
+    const clientId = cookieStore.get("nesped_client_id")?.value || "demo";
+
     const res = await fetch("https://api.hubapi.com/crm/v3/objects/contacts/search", {
       method: "POST",
       headers: {
@@ -27,9 +32,10 @@ export async function GET() {
       cache: "no-store",
     });
 
+    const text = await res.text();
+
     if (!res.ok) {
-      const text = await res.text();
-      console.error("HubSpot error:", text);
+      console.error("HubSpot API error:", text);
       return Response.json(
         {
           success: false,
@@ -40,9 +46,9 @@ export async function GET() {
       );
     }
 
-    const json = await res.json();
+    const json = JSON.parse(text);
 
-    const leads = (json.results || []).map((item, index) => ({
+    const allLeads = (json.results || []).map((item, index) => ({
       id: item.id || index,
       nombre: item.properties?.firstname || "Sin nombre",
       telefono: item.properties?.phone || "",
@@ -55,10 +61,14 @@ export async function GET() {
         : "Reciente",
     }));
 
+    const filteredLeads = allLeads.filter((lead) =>
+      (lead.origen || "").includes(clientId)
+    );
+
     return Response.json({
       success: true,
-      total: leads.length,
-      data: leads,
+      total: filteredLeads.length,
+      data: filteredLeads,
     });
   } catch (error) {
     console.error("Error cargando leads reales:", error);

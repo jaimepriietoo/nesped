@@ -5,6 +5,18 @@ import { useEffect, useState } from "react";
 export default function PortalPage() {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState(null);
+
+  async function loadSession() {
+    try {
+      const res = await fetch("/api/session", { cache: "no-store" });
+      const json = await res.json();
+      setSession(json);
+    } catch (err) {
+      console.error(err);
+      setSession(null);
+    }
+  }
 
   async function loadLeads() {
     try {
@@ -26,6 +38,7 @@ export default function PortalPage() {
   }
 
   useEffect(() => {
+    loadSession();
     loadLeads();
   }, []);
 
@@ -36,6 +49,10 @@ export default function PortalPage() {
           <div>
             <div className="text-sm text-white/45">Portal privado</div>
             <h1 className="mt-1 text-4xl font-semibold">NESPED Client Portal</h1>
+            <div className="mt-2 text-sm text-white/55">
+              Cliente: {session?.clientName || "Cargando..."}{" "}
+              {session?.clientId ? `(${session.clientId})` : ""}
+            </div>
           </div>
 
           <button
@@ -46,9 +63,30 @@ export default function PortalPage() {
           </button>
         </div>
 
+        <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-6">
+            <div className="text-sm text-white/45">Cliente</div>
+            <div className="mt-2 text-2xl font-semibold">
+              {session?.clientName || "-"}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-6">
+            <div className="text-sm text-white/45">ID</div>
+            <div className="mt-2 text-2xl font-semibold">
+              {session?.clientId || "-"}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-6">
+            <div className="text-sm text-white/45">Leads visibles</div>
+            <div className="mt-2 text-2xl font-semibold">{leads.length}</div>
+          </div>
+        </div>
+
         <div className="rounded-[30px] border border-white/10 bg-white/[0.03] p-8 shadow-2xl shadow-black/40">
           <div className="mb-6 flex items-center justify-between">
-            <h2 className="text-2xl font-semibold">Leads</h2>
+            <h2 className="text-2xl font-semibold">Leads del cliente</h2>
             <button
               onClick={loadLeads}
               className="rounded-2xl border border-white/15 px-4 py-2 text-sm font-medium transition hover:bg-white hover:text-black"
@@ -73,7 +111,7 @@ export default function PortalPage() {
               </div>
             ) : leads.length === 0 ? (
               <div className="px-5 py-8 text-sm text-white/45">
-                No hay leads todavía.
+                No hay leads todavía para este cliente.
               </div>
             ) : (
               leads.map((lead, index) => (

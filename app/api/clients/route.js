@@ -1,21 +1,8 @@
-export async function GET() {
-  const clients = [
-    {
-      id: "demo",
-      name: "NESPED Demo",
-      status: "Activo",
-      type: "IA comercial",
-    },
-    {
-      id: "clinica",
-      name: "Clínica Dental",
-      status: "Activo",
-      type: "Recepción médica",
-    },
-  ];
+import { CLIENT_LIST } from "@/lib/clients";
 
+export async function GET() {
   return Response.json({
     success: true,
-    data: clients,
+    data: CLIENT_LIST,
   });
 }

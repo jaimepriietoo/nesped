@@ -1,11 +1,11 @@
 import { cookies } from "next/headers";
+import { getClientById } from "@/lib/clients";
 
 export async function GET() {
   const cookieStore = await cookies();
 
   const auth = cookieStore.get("nesped_auth")?.value;
   const clientId = cookieStore.get("nesped_client_id")?.value;
-  const clientName = cookieStore.get("nesped_client_name")?.value;
 
   if (auth !== "ok") {
     return Response.json({
@@ -14,10 +14,13 @@ export async function GET() {
     });
   }
 
+  const client = getClientById(clientId || "demo");
+
   return Response.json({
     success: true,
     authenticated: true,
-    clientId,
-    clientName,
+    clientId: client.id,
+    clientName: client.name,
+    client,
   });
 }

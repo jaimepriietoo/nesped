@@ -1,6 +1,33 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+function BarChart({ title, data = [] }) {
+  const max = Math.max(...data.map((d) => d.value), 1);
+
+  return (
+    <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-6">
+      <div className="mb-5 text-lg font-semibold">{title}</div>
+
+      <div className="space-y-4">
+        {data.map((item) => (
+          <div key={item.label}>
+            <div className="mb-2 flex items-center justify-between text-sm">
+              <span className="text-white/65">{item.label}</span>
+              <span className="text-white font-medium">{item.value}</span>
+            </div>
+            <div className="h-3 rounded-full bg-white/10">
+              <div
+                className="h-3 rounded-full bg-white"
+                style={{ width: `${(item.value / max) * 100}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function PortalPage() {
   const [leads, setLeads] = useState([]);
@@ -67,6 +94,30 @@ export default function PortalPage() {
     badge: "bg-emerald-500/15 text-emerald-300",
   };
 
+  const callStatusData = useMemo(() => {
+    const groups = {};
+    for (const call of calls) {
+      const key = call.status || "unknown";
+      groups[key] = (groups[key] || 0) + 1;
+    }
+    return Object.entries(groups).map(([label, value]) => ({ label, value }));
+  }, [calls]);
+
+  const recentDaysData = useMemo(() => {
+    const groups = {};
+
+    for (const call of calls) {
+      const date = call.created_at
+        ? new Date(call.created_at).toLocaleDateString("es-ES")
+        : "Sin fecha";
+      groups[date] = (groups[date] || 0) + 1;
+    }
+
+    return Object.entries(groups)
+      .slice(-7)
+      .map(([label, value]) => ({ label, value }));
+  }, [calls]);
+
   return (
     <div className="min-h-screen bg-[#050505] text-white px-6 py-10">
       <div className="mx-auto max-w-7xl">
@@ -104,13 +155,6 @@ export default function PortalPage() {
           </div>
 
           <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-6">
-            <div className="text-sm text-white/45">ID</div>
-            <div className="mt-2 text-2xl font-semibold">
-              {client?.id || "-"}
-            </div>
-          </div>
-
-          <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-6">
             <div className="text-sm text-white/45">Leads</div>
             <div className="mt-2 text-2xl font-semibold">{leads.length}</div>
           </div>
@@ -118,6 +162,13 @@ export default function PortalPage() {
           <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-6">
             <div className="text-sm text-white/45">Llamadas</div>
             <div className="mt-2 text-2xl font-semibold">{calls.length}</div>
+          </div>
+
+          <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-6">
+            <div className="text-sm text-white/45">Completadas</div>
+            <div className="mt-2 text-2xl font-semibold">
+              {calls.filter((c) => c.status === "completed").length}
+            </div>
           </div>
         </div>
 
@@ -139,6 +190,11 @@ export default function PortalPage() {
               {client?.status || "Activo"}
             </div>
           </div>
+        </div>
+
+        <div className="mb-8 grid gap-5 md:grid-cols-2">
+          <BarChart title="Estado de llamadas" data={callStatusData} />
+          <BarChart title="Llamadas por día" data={recentDaysData} />
         </div>
 
         <div className="mb-8 rounded-[30px] border border-white/10 bg-white/[0.03] p-8 shadow-2xl shadow-black/40">

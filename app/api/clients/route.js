@@ -1,8 +1,8 @@
-import { CLIENT_LIST } from "@/lib/clients";
+import { getClients } from "@/lib/clients-store";
 
 export async function GET() {
   return Response.json({
     success: true,
-    data: CLIENT_LIST,
+    data: getClients(),
   });
 }

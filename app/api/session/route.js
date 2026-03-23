@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { getClientById } from "@/lib/clients";
+import { getClientById } from "@/lib/clients-store";
 
 export async function GET() {
   const cookieStore = await cookies();
@@ -14,13 +14,13 @@ export async function GET() {
     });
   }
 
-  const client = getClientById(clientId || "demo");
+  const client = getClientById(clientId || "demo") || getClientById("demo");
 
   return Response.json({
     success: true,
     authenticated: true,
-    clientId: client.id,
-    clientName: client.name,
+    clientId: client?.id,
+    clientName: client?.name,
     client,
   });
 }

@@ -4,7 +4,7 @@ export function middleware(req) {
   const { pathname } = req.nextUrl;
   const auth = req.cookies.get("nesped_auth")?.value;
 
-  if (pathname.startsWith("/portal") && auth !== "ok") {
+  if ((pathname.startsWith("/portal") || pathname.startsWith("/admin")) && auth !== "ok") {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
@@ -12,5 +12,5 @@ export function middleware(req) {
 }
 
 export const config = {
-  matcher: ["/portal/:path*"],
+  matcher: ["/portal/:path*", "/admin/:path*"],
 };

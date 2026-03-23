@@ -4,6 +4,7 @@ const express = require("express");
 const http = require("http");
 const WebSocket = require("ws");
 const twilio = require("twilio");
+const { createClient } = require("@supabase/supabase-js");
 
 const app = express();
 app.use(express.urlencoded({ extended: false }));
@@ -20,66 +21,10 @@ const twilioNumber =
 
 const client = twilio(accountSid, authToken);
 
-/*
-  ===============================
-  CONFIGURACIÓN MULTI-CLIENTE
-  ===============================
-  AQUÍ AÑADES TODOS TUS CLIENTES
-*/
-const CLIENTS = {
-  demo: {
-    name: "NESPED Demo",
-    prompt: `
-Eres la recepcionista comercial de NESPED.
-
-NESPED implanta sistemas de voz con IA para empresas.
-
-Habla en español de España, de forma natural, cercana y profesional.
-Haz una sola pregunta cada vez.
-No hables demasiado.
-No digas que eres una IA.
-
-Tu objetivo es:
-- entender qué quiere la persona
-- recoger nombre
-- recoger teléfono
-- recoger necesidad
-- recoger ciudad si la menciona
-- recoger preferencia horaria si la menciona
-
-Cuando ya tengas nombre + teléfono + necesidad:
-usa la herramienta guardar_lead.
-
-Después confirma:
-"Perfecto, hemos registrado tu solicitud. El equipo de NESPED te contactará lo antes posible."
-    `,
-    webhook: process.env.N8N_WEBHOOK_URL,
-  },
-
-  clinica: {
-    name: "Cliente Clínica",
-    prompt: `
-Eres la recepcionista de una clínica dental.
-
-Habla en español de España.
-Sé cercana, profesional y breve.
-Haz una sola pregunta cada vez.
-
-Tu objetivo es:
-- saber qué tratamiento o consulta necesita el paciente
-- recoger nombre
-- recoger teléfono
-- recoger preferencia de horario
-
-Cuando ya tengas nombre + teléfono + necesidad:
-usa la herramienta guardar_lead.
-
-Después confirma:
-"Perfecto, hemos registrado tu solicitud y la clínica te llamará en breve."
-    `,
-    webhook: process.env.N8N_WEBHOOK_URL,
-  },
-};
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 app.get("/", (req, res) => {
   res.send("NESPED Voice Server activo");
@@ -88,12 +33,19 @@ app.get("/", (req, res) => {
 app.get("/call", async (req, res) => {
   try {
     const clientId = req.query.client_id || "demo";
-
     const cleanBaseUrl = (process.env.BASE_URL || "").replace(/\/+$/, "");
+
+    const { data: clientRow } = await supabase
+      .from("clients")
+      .select("twilio_number")
+      .eq("id", clientId)
+      .single();
+
+    const fromNumber = clientRow?.twilio_number || twilioNumber;
 
     const call = await client.calls.create({
       to: process.env.TU_NUMERO,
-      from: twilioNumber,
+      from: fromNumber,
       url: `${cleanBaseUrl}/voice?client_id=${clientId}`,
       method: "POST",
     });
@@ -105,6 +57,26 @@ app.get("/call", async (req, res) => {
     res.status(500).send("Error: " + error.message);
   }
 });
+
+async function getClientConfig(clientId) {
+  const { data, error } = await supabase
+    .from("clients")
+    .select("*")
+    .eq("id", clientId)
+    .single();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return {
+    id: data.id,
+    name: data.name,
+    prompt: data.prompt,
+    webhook: data.webhook,
+    twilioNumber: data.twilio_number,
+  };
+}
 
 function buildVoiceTwiml(clientId) {
   const cleanBaseUrl = (process.env.BASE_URL || "").replace(/\/+$/, "");
@@ -123,7 +95,6 @@ function buildVoiceTwiml(clientId) {
 
 app.get("/voice", (req, res) => {
   const clientId = req.query.client_id || "demo";
-
   console.log("GET /voice");
   console.log("🏢 Cliente detectado en /voice:", clientId);
 
@@ -134,7 +105,6 @@ app.get("/voice", (req, res) => {
 
 app.post("/voice", (req, res) => {
   const clientId = req.query.client_id || "demo";
-
   console.log("POST /voice");
   console.log("🏢 Cliente detectado en /voice:", clientId);
 
@@ -145,7 +115,7 @@ app.post("/voice", (req, res) => {
 
 const wss = new WebSocket.Server({ server, path: "/media-stream" });
 
-wss.on("connection", (twilioWs, req) => {
+wss.on("connection", async (twilioWs, req) => {
   console.log("🟢 Twilio conectado a /media-stream");
 
   const url = new URL(req.url, "https://dummy");
@@ -153,11 +123,22 @@ wss.on("connection", (twilioWs, req) => {
 
   console.log("🔥 Cliente WS:", clientId);
 
-  const config = CLIENTS[clientId] || CLIENTS.demo;
+  const config = await getClientConfig(clientId);
+
+  if (!config) {
+    console.error("❌ Cliente no encontrado en Supabase:", clientId);
+    twilioWs.close();
+    return;
+  }
 
   let streamSid = null;
   let openAiReady = false;
   let greeted = false;
+  let callStartedAt = Date.now();
+  let fromNumber = "";
+  let toNumber = "";
+  let leadCaptured = false;
+  let callSummary = "Llamada finalizada sin resumen";
 
   const openaiWs = new WebSocket(
     "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
@@ -207,6 +188,28 @@ wss.on("connection", (twilioWs, req) => {
     console.log("⚙️ session.update enviado");
   });
 
+  async function saveCall(status = "completed") {
+    try {
+      const durationSeconds = Math.max(
+        1,
+        Math.round((Date.now() - callStartedAt) / 1000)
+      );
+
+      await supabase.from("calls").insert({
+        client_id: clientId,
+        from_number: fromNumber || "",
+        to_number: toNumber || "",
+        status,
+        summary: leadCaptured ? callSummary : "Llamada atendida",
+        duration_seconds: durationSeconds,
+      });
+
+      console.log("📞 Llamada guardada en Supabase");
+    } catch (err) {
+      console.error("❌ Error guardando llamada:", err.message);
+    }
+  }
+
   twilioWs.on("message", async (raw) => {
     try {
       const data = JSON.parse(raw.toString());
@@ -214,6 +217,9 @@ wss.on("connection", (twilioWs, req) => {
       if (data.event === "start") {
         streamSid = data.start?.streamSid || null;
         console.log("📞 Stream iniciado:", streamSid);
+
+        fromNumber = data.start?.customParameters?.from || "";
+        toNumber = data.start?.customParameters?.to || "";
       }
 
       if (data.event === "media") {
@@ -288,6 +294,9 @@ wss.on("connection", (twilioWs, req) => {
         const args = JSON.parse(event.item.arguments || "{}");
         console.log("💾 Guardando lead:", args);
 
+        leadCaptured = true;
+        callSummary = `Lead capturado: ${args.nombre || "sin nombre"} · ${args.necesidad || "sin necesidad"}`;
+
         try {
           const webhookRes = await fetch(config.webhook, {
             method: "POST",
@@ -340,15 +349,18 @@ wss.on("connection", (twilioWs, req) => {
     }
   });
 
-  twilioWs.on("close", () => {
+  twilioWs.on("close", async () => {
     console.log("🔌 Twilio desconectado");
+    await saveCall("completed");
+
     if (openaiWs.readyState === WebSocket.OPEN) {
       openaiWs.close();
     }
   });
 
-  twilioWs.on("error", (err) => {
+  twilioWs.on("error", async (err) => {
     console.error("❌ Error WS Twilio:", err.message);
+    await saveCall("failed");
   });
 
   openaiWs.on("close", () => {

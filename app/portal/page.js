@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 
 export default function PortalPage() {
   const [leads, setLeads] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [calls, setCalls] = useState([]);
+  const [loadingLeads, setLoadingLeads] = useState(true);
+  const [loadingCalls, setLoadingCalls] = useState(true);
   const [session, setSession] = useState(null);
 
   async function loadSession() {
@@ -20,7 +22,7 @@ export default function PortalPage() {
 
   async function loadLeads() {
     try {
-      setLoading(true);
+      setLoadingLeads(true);
       const res = await fetch("/api/leads", { cache: "no-store" });
       const json = await res.json();
       setLeads(json.data || []);
@@ -28,7 +30,21 @@ export default function PortalPage() {
       console.error(err);
       setLeads([]);
     } finally {
-      setLoading(false);
+      setLoadingLeads(false);
+    }
+  }
+
+  async function loadCalls() {
+    try {
+      setLoadingCalls(true);
+      const res = await fetch("/api/calls", { cache: "no-store" });
+      const json = await res.json();
+      setCalls(json.data || []);
+    } catch (err) {
+      console.error(err);
+      setCalls([]);
+    } finally {
+      setLoadingCalls(false);
     }
   }
 
@@ -40,6 +56,7 @@ export default function PortalPage() {
   useEffect(() => {
     loadSession();
     loadLeads();
+    loadCalls();
   }, []);
 
   const client = session?.client;
@@ -94,15 +111,13 @@ export default function PortalPage() {
           </div>
 
           <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-6">
-            <div className="text-sm text-white/45">Tipo</div>
-            <div className="mt-2 text-2xl font-semibold">
-              {client?.type || "-"}
-            </div>
+            <div className="text-sm text-white/45">Leads</div>
+            <div className="mt-2 text-2xl font-semibold">{leads.length}</div>
           </div>
 
           <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-6">
-            <div className="text-sm text-white/45">Leads visibles</div>
-            <div className="mt-2 text-2xl font-semibold">{leads.length}</div>
+            <div className="text-sm text-white/45">Llamadas</div>
+            <div className="mt-2 text-2xl font-semibold">{calls.length}</div>
           </div>
         </div>
 
@@ -123,6 +138,57 @@ export default function PortalPage() {
             <div className={`rounded-2xl px-4 py-2 text-sm font-medium ${theme.badge}`}>
               {client?.status || "Activo"}
             </div>
+          </div>
+        </div>
+
+        <div className="mb-8 rounded-[30px] border border-white/10 bg-white/[0.03] p-8 shadow-2xl shadow-black/40">
+          <div className="mb-6 flex items-center justify-between">
+            <h2 className="text-2xl font-semibold">Llamadas recientes</h2>
+            <button
+              onClick={loadCalls}
+              className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${theme.button}`}
+            >
+              Refrescar
+            </button>
+          </div>
+
+          <div className="overflow-hidden rounded-[24px] border border-white/10">
+            <div className="grid grid-cols-5 bg-white/[0.04] px-5 py-4 text-xs uppercase tracking-[0.18em] text-white/40">
+              <div>Estado</div>
+              <div>Resumen</div>
+              <div>Origen</div>
+              <div>Duración</div>
+              <div>Fecha</div>
+            </div>
+
+            {loadingCalls ? (
+              <div className="px-5 py-8 text-sm text-white/45">
+                Cargando llamadas...
+              </div>
+            ) : calls.length === 0 ? (
+              <div className="px-5 py-8 text-sm text-white/45">
+                No hay llamadas todavía.
+              </div>
+            ) : (
+              calls.map((call, index) => (
+                <div
+                  key={call.id || index}
+                  className="grid grid-cols-5 items-center border-t border-white/10 px-5 py-4 text-sm"
+                >
+                  <div className="font-medium">{call.status || "-"}</div>
+                  <div className="text-white/70">{call.summary || "-"}</div>
+                  <div className="text-white/60">{call.from_number || "-"}</div>
+                  <div className="text-white/70">
+                    {call.duration_seconds || 0}s
+                  </div>
+                  <div className="text-white/45">
+                    {call.created_at
+                      ? new Date(call.created_at).toLocaleString("es-ES")
+                      : "-"}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -147,7 +213,7 @@ export default function PortalPage() {
               <div>Fecha</div>
             </div>
 
-            {loading ? (
+            {loadingLeads ? (
               <div className="px-5 py-8 text-sm text-white/45">
                 Cargando leads...
               </div>

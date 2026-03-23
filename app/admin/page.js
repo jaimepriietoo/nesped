@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-const emptyForm = {
+const emptyClientForm = {
   id: "",
   name: "",
   type: "",
@@ -14,14 +14,26 @@ const emptyForm = {
   twilioNumber: "",
 };
 
+const emptyUserForm = {
+  email: "",
+  password: "",
+  role: "client",
+  clientId: "",
+};
+
 export default function AdminPage() {
   const [clients, setClients] = useState([]);
   const [selectedId, setSelectedId] = useState("");
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(emptyClientForm);
+
+  const [users, setUsers] = useState([]);
+  const [userForm, setUserForm] = useState(emptyUserForm);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState("");
+  const [userMessage, setUserMessage] = useState("");
 
   async function loadClients() {
     try {
@@ -47,6 +59,10 @@ export default function AdminPage() {
           twilioNumber: first.twilioNumber || "",
         });
       }
+
+      if (!userForm.clientId && data.length > 0) {
+        setUserForm((prev) => ({ ...prev, clientId: data[0].id }));
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -54,8 +70,20 @@ export default function AdminPage() {
     }
   }
 
+  async function loadUsers() {
+    try {
+      const res = await fetch("/api/admin/users", { cache: "no-store" });
+      const json = await res.json();
+      setUsers(json.data || []);
+    } catch (err) {
+      console.error(err);
+      setUsers([]);
+    }
+  }
+
   useEffect(() => {
     loadClients();
+    loadUsers();
   }, []);
 
   useEffect(() => {
@@ -84,11 +112,18 @@ export default function AdminPage() {
     }));
   }
 
+  function handleUserChange(field, value) {
+    setUserForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  }
+
   function handleNewClient() {
     setCreating(true);
     setSelectedId("");
     setMessage("");
-    setForm(emptyForm);
+    setForm(emptyClientForm);
   }
 
   function handleSelectClient(id) {
@@ -97,7 +132,7 @@ export default function AdminPage() {
     setMessage("");
   }
 
-  async function handleSave(e) {
+  async function handleSaveClient(e) {
     e.preventDefault();
 
     try {
@@ -133,6 +168,39 @@ export default function AdminPage() {
     }
   }
 
+  async function handleCreateUser(e) {
+    e.preventDefault();
+
+    try {
+      setUserMessage("");
+
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(userForm),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.success) {
+        setUserMessage(json.message || "Error creando usuario");
+        return;
+      }
+
+      setUserMessage("Usuario creado correctamente");
+      setUserForm({
+        ...emptyUserForm,
+        clientId: userForm.clientId || "",
+      });
+      await loadUsers();
+    } catch (err) {
+      console.error(err);
+      setUserMessage("Error creando usuario");
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#050505] text-white px-6 py-10">
       <div className="mx-auto max-w-7xl">
@@ -141,7 +209,7 @@ export default function AdminPage() {
             <div className="text-sm text-white/45">Panel interno</div>
             <h1 className="mt-1 text-4xl font-semibold">NESPED Admin</h1>
             <div className="mt-2 text-sm text-white/55">
-              Crea y edita clientes, prompts, webhooks y números Twilio
+              Gestiona clientes, prompts, webhooks, números y usuarios
             </div>
           </div>
 
@@ -179,158 +247,238 @@ export default function AdminPage() {
             )}
           </div>
 
-          <div className="rounded-[28px] border border-white/10 bg-white/[0.03] p-8">
-            <div className="mb-6">
-              <div className="text-sm text-white/45">
-                {creating ? "Crear cliente" : "Editar cliente"}
+          <div className="space-y-8">
+            <div className="rounded-[28px] border border-white/10 bg-white/[0.03] p-8">
+              <div className="mb-6">
+                <div className="text-sm text-white/45">
+                  {creating ? "Crear cliente" : "Editar cliente"}
+                </div>
+                <h2 className="mt-1 text-2xl font-semibold">
+                  {creating ? "Nuevo cliente" : "Configuración del cliente"}
+                </h2>
               </div>
-              <h2 className="mt-1 text-2xl font-semibold">
-                {creating ? "Nuevo cliente" : "Configuración del cliente"}
-              </h2>
+
+              <form onSubmit={handleSaveClient} className="grid gap-5">
+                <div className="grid gap-5 md:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-sm text-white/60">ID</label>
+                    <input
+                      value={form.id}
+                      onChange={(e) => handleChange("id", e.target.value)}
+                      disabled={!creating}
+                      className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none disabled:text-white/50"
+                      placeholder="ej: inmobiliaria"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm text-white/60">
+                      Logo Text
+                    </label>
+                    <input
+                      value={form.logoText}
+                      onChange={(e) => handleChange("logoText", e.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-5 md:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-sm text-white/60">Nombre</label>
+                    <input
+                      value={form.name}
+                      onChange={(e) => handleChange("name", e.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm text-white/60">Tipo</label>
+                    <input
+                      value={form.type}
+                      onChange={(e) => handleChange("type", e.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-5 md:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-sm text-white/60">Estado</label>
+                    <input
+                      value={form.status}
+                      onChange={(e) => handleChange("status", e.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm text-white/60">
+                      Número Twilio
+                    </label>
+                    <input
+                      value={form.twilioNumber}
+                      onChange={(e) => handleChange("twilioNumber", e.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm text-white/60">Tagline</label>
+                  <textarea
+                    value={form.tagline}
+                    onChange={(e) => handleChange("tagline", e.target.value)}
+                    className="min-h-[100px] w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm text-white/60">Prompt</label>
+                  <textarea
+                    value={form.prompt}
+                    onChange={(e) => handleChange("prompt", e.target.value)}
+                    className="min-h-[180px] w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm text-white/60">Webhook</label>
+                  <input
+                    value={form.webhook}
+                    onChange={(e) => handleChange("webhook", e.target.value)}
+                    className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
+                  />
+                </div>
+
+                {message && (
+                  <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white/70">
+                    {message}
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="rounded-2xl bg-white px-6 py-4 text-sm font-semibold text-black transition hover:bg-white/90 disabled:opacity-60"
+                  >
+                    {saving
+                      ? "Guardando..."
+                      : creating
+                      ? "Crear cliente"
+                      : "Guardar cambios"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={loadClients}
+                    className="rounded-2xl border border-white/15 px-6 py-4 text-sm font-semibold transition hover:bg-white hover:text-black"
+                  >
+                    Recargar
+                  </button>
+                </div>
+              </form>
             </div>
 
-            <form onSubmit={handleSave} className="grid gap-5">
-              <div className="grid gap-5 md:grid-cols-2">
-                <div>
-                  <label className="mb-2 block text-sm text-white/60">ID</label>
-                  <input
-                    value={form.id}
-                    onChange={(e) => handleChange("id", e.target.value)}
-                    disabled={!creating}
-                    className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none disabled:text-white/50"
-                    placeholder="ej: inmobiliaria"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm text-white/60">
-                    Logo Text
-                  </label>
-                  <input
-                    value={form.logoText}
-                    onChange={(e) => handleChange("logoText", e.target.value)}
-                    className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
-                    placeholder="ej: I"
-                  />
-                </div>
+            <div className="rounded-[28px] border border-white/10 bg-white/[0.03] p-8">
+              <div className="mb-6">
+                <div className="text-sm text-white/45">Usuarios</div>
+                <h2 className="mt-1 text-2xl font-semibold">Crear usuario</h2>
               </div>
 
-              <div className="grid gap-5 md:grid-cols-2">
-                <div>
-                  <label className="mb-2 block text-sm text-white/60">
-                    Nombre
-                  </label>
-                  <input
-                    value={form.name}
-                    onChange={(e) => handleChange("name", e.target.value)}
-                    className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
-                    placeholder="Nombre comercial"
-                  />
+              <form onSubmit={handleCreateUser} className="grid gap-5">
+                <div className="grid gap-5 md:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-sm text-white/60">Email</label>
+                    <input
+                      value={userForm.email}
+                      onChange={(e) => handleUserChange("email", e.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
+                      placeholder="cliente@empresa.com"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm text-white/60">
+                      Contraseña
+                    </label>
+                    <input
+                      value={userForm.password}
+                      onChange={(e) => handleUserChange("password", e.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
+                      placeholder="password"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="mb-2 block text-sm text-white/60">
-                    Tipo
-                  </label>
-                  <input
-                    value={form.type}
-                    onChange={(e) => handleChange("type", e.target.value)}
-                    className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
-                    placeholder="Tipo de negocio"
-                  />
+                <div className="grid gap-5 md:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-sm text-white/60">Rol</label>
+                    <select
+                      value={userForm.role}
+                      onChange={(e) => handleUserChange("role", e.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
+                    >
+                      <option value="client">client</option>
+                      <option value="admin">admin</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm text-white/60">
+                      Cliente
+                    </label>
+                    <select
+                      value={userForm.clientId}
+                      onChange={(e) => handleUserChange("clientId", e.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
+                    >
+                      <option value="">Selecciona cliente</option>
+                      {clients.map((client) => (
+                        <option key={client.id} value={client.id}>
+                          {client.name} ({client.id})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-              </div>
 
-              <div className="grid gap-5 md:grid-cols-2">
-                <div>
-                  <label className="mb-2 block text-sm text-white/60">
-                    Estado
-                  </label>
-                  <input
-                    value={form.status}
-                    onChange={(e) => handleChange("status", e.target.value)}
-                    className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
-                    placeholder="Activo"
-                  />
-                </div>
+                {userMessage && (
+                  <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white/70">
+                    {userMessage}
+                  </div>
+                )}
 
-                <div>
-                  <label className="mb-2 block text-sm text-white/60">
-                    Número Twilio
-                  </label>
-                  <input
-                    value={form.twilioNumber}
-                    onChange={(e) => handleChange("twilioNumber", e.target.value)}
-                    className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
-                    placeholder="+1XXXXXXXXXX"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm text-white/60">
-                  Tagline
-                </label>
-                <textarea
-                  value={form.tagline}
-                  onChange={(e) => handleChange("tagline", e.target.value)}
-                  className="min-h-[100px] w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
-                  placeholder="Frase comercial del cliente"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm text-white/60">
-                  Prompt
-                </label>
-                <textarea
-                  value={form.prompt}
-                  onChange={(e) => handleChange("prompt", e.target.value)}
-                  className="min-h-[180px] w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
-                  placeholder="Prompt de la IA"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm text-white/60">
-                  Webhook
-                </label>
-                <input
-                  value={form.webhook}
-                  onChange={(e) => handleChange("webhook", e.target.value)}
-                  className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
-                  placeholder="https://..."
-                />
-              </div>
-
-              {message && (
-                <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white/70">
-                  {message}
-                </div>
-              )}
-
-              <div className="flex gap-3">
                 <button
                   type="submit"
-                  disabled={saving}
-                  className="rounded-2xl bg-white px-6 py-4 text-sm font-semibold text-black transition hover:bg-white/90 disabled:opacity-60"
+                  className="rounded-2xl bg-white px-6 py-4 text-sm font-semibold text-black transition hover:bg-white/90"
                 >
-                  {saving
-                    ? "Guardando..."
-                    : creating
-                    ? "Crear cliente"
-                    : "Guardar cambios"}
+                  Crear usuario
                 </button>
+              </form>
 
-                <button
-                  type="button"
-                  onClick={loadClients}
-                  className="rounded-2xl border border-white/15 px-6 py-4 text-sm font-semibold transition hover:bg-white hover:text-black"
-                >
-                  Recargar
-                </button>
+              <div className="mt-8">
+                <div className="mb-3 text-lg font-semibold">Usuarios actuales</div>
+                <div className="space-y-3">
+                  {users.map((user) => (
+                    <div
+                      key={user.id}
+                      className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4"
+                    >
+                      <div className="font-medium">{user.email}</div>
+                      <div className="mt-1 text-sm text-white/45">
+                        rol: {user.role} · cliente: {user.client_id}
+                      </div>
+                    </div>
+                  ))}
+                  {users.length === 0 && (
+                    <div className="text-sm text-white/45">No hay usuarios.</div>
+                  )}
+                </div>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       </div>

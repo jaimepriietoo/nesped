@@ -1,56 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-export default function NespedApp() {
-  const [leads, setLeads] = useState([]);
+export default function NespedLanding() {
   const [clients, setClients] = useState([]);
-
-  const [loadingLeads, setLoadingLeads] = useState(true);
-  const [loadingClients, setLoadingClients] = useState(true);
-
-  const [errorLeads, setErrorLeads] = useState("");
-  const [errorClients, setErrorClients] = useState("");
-
+  const [leads, setLeads] = useState([]);
   const [telefonoDemo, setTelefonoDemo] = useState("");
   const [selectedClientId, setSelectedClientId] = useState("demo");
   const [loadingCall, setLoadingCall] = useState(false);
   const [callStatus, setCallStatus] = useState("");
 
-  async function loadLeads() {
-    try {
-      setLoadingLeads(true);
-      setErrorLeads("");
-
-      const res = await fetch("/api/leads", { cache: "no-store" });
-      const json = await res.json();
-
-      if (!res.ok || !json.success) {
-        throw new Error(json.message || "Error cargando leads");
-      }
-
-      setLeads(Array.isArray(json.data) ? json.data : []);
-    } catch (err) {
-      console.error(err);
-      setErrorLeads("No se pudieron cargar los leads.");
-      setLeads([]);
-    } finally {
-      setLoadingLeads(false);
-    }
-  }
-
   async function loadClients() {
     try {
-      setLoadingClients(true);
-      setErrorClients("");
-
       const res = await fetch("/api/clients", { cache: "no-store" });
       const json = await res.json();
-
-      if (!res.ok || !json.success) {
-        throw new Error(json.message || "Error cargando clientes");
-      }
-
       const data = Array.isArray(json.data) ? json.data : [];
       setClients(data);
 
@@ -59,10 +22,18 @@ export default function NespedApp() {
       }
     } catch (err) {
       console.error(err);
-      setErrorClients("No se pudieron cargar los clientes.");
       setClients([]);
-    } finally {
-      setLoadingClients(false);
+    }
+  }
+
+  async function loadLeads() {
+    try {
+      const res = await fetch("/api/leads", { cache: "no-store" });
+      const json = await res.json();
+      setLeads(Array.isArray(json.data) ? json.data : []);
+    } catch (err) {
+      console.error(err);
+      setLeads([]);
     }
   }
 
@@ -99,32 +70,33 @@ export default function NespedApp() {
   }
 
   useEffect(() => {
-    loadLeads();
     loadClients();
+    loadLeads();
   }, []);
 
-  const totalLeads = leads.length;
-  const totalClients = clients.length;
-  const totalCiudades = new Set(
-    leads.map((lead) => lead.ciudad || lead.city).filter(Boolean)
-  ).size;
-  const totalNuevos = leads.filter((lead) => {
-    const estado = (lead.estado || "").toLowerCase();
-    return estado.includes("nuevo") || estado === "";
-  }).length;
+  const stats = useMemo(() => {
+    const totalClients = clients.length;
+    const totalLeads = leads.length;
+    const activeCities = new Set(
+      leads.map((lead) => lead.ciudad || lead.city).filter(Boolean)
+    ).size;
 
-  const stats = [
-    { label: "Leads capturados", value: totalLeads || "0" },
-    { label: "Clientes activos", value: totalClients || "0" },
-    { label: "Ciudades activas", value: totalCiudades || "0" },
-    { label: "Leads nuevos", value: totalNuevos || "0" },
-  ];
+    return [
+      { label: "Clientes activos", value: totalClients || "0" },
+      { label: "Leads capturados", value: totalLeads || "0" },
+      { label: "Ciudades activas", value: activeCities || "0" },
+      { label: "Disponibilidad", value: "24/7" },
+    ];
+  }, [clients, leads]);
+
+  const selectedClient =
+    clients.find((client) => client.id === selectedClientId) || clients[0];
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.18),transparent_30%),radial-gradient(circle_at_top_right,rgba(16,185,129,0.12),transparent_25%),radial-gradient(circle_at_bottom,rgba(255,255,255,0.06),transparent_35%)]" />
+    <div className="min-h-screen bg-[#030303] text-white">
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.18),transparent_28%),radial-gradient(circle_at_top_right,rgba(16,185,129,0.14),transparent_24%),radial-gradient(circle_at_bottom,rgba(255,255,255,0.05),transparent_35%)]" />
 
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-black/50 backdrop-blur-xl">
+      <header className="sticky top-0 z-50 border-b border-white/10 bg-black/45 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-black text-lg font-bold shadow-2xl">
@@ -140,14 +112,14 @@ export default function NespedApp() {
             <a href="#producto" className="transition hover:text-white">
               Producto
             </a>
-            <a href="#clientes" className="transition hover:text-white">
-              Clientes
+            <a href="#casos" className="transition hover:text-white">
+              Casos
             </a>
             <a href="#demo" className="transition hover:text-white">
               Demo
             </a>
-            <a href="#dashboard" className="transition hover:text-white">
-              Dashboard
+            <a href="#faq" className="transition hover:text-white">
+              FAQ
             </a>
           </nav>
 
@@ -156,29 +128,29 @@ export default function NespedApp() {
               href="/login"
               className="rounded-2xl border border-white/15 px-4 py-2 text-sm font-medium transition hover:bg-white hover:text-black"
             >
-              Acceso clientes
+              Portal clientes
             </a>
           </div>
         </div>
       </header>
 
       <main className="relative">
-        <section className="mx-auto max-w-7xl px-6 pb-16 pt-20 md:pb-24 md:pt-28">
-          <div className="grid items-center gap-12 md:grid-cols-2">
+        <section className="mx-auto max-w-7xl px-6 pb-20 pt-20 md:pb-28 md:pt-28">
+          <div className="grid items-center gap-14 md:grid-cols-[1.08fr_0.92fr]">
             <div>
               <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.22em] text-white/60">
                 <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                Plataforma SaaS de voz e IA
+                Automatización de llamadas con IA
               </div>
 
-              <h1 className="max-w-3xl text-5xl font-semibold tracking-tight md:text-7xl">
-                Convierte llamadas en clientes, automáticamente.
+              <h1 className="max-w-4xl text-5xl font-semibold tracking-tight md:text-7xl">
+                Una recepcionista IA que capta clientes por ti.
               </h1>
 
               <p className="mt-6 max-w-2xl text-lg leading-8 text-white/65 md:text-xl">
-                NESPED es una plataforma multi-cliente que implanta recepcionistas
-                IA para empresas, capta leads, automatiza procesos y conecta toda la
-                operación comercial con CRM y automatizaciones.
+                NESPED permite a empresas automatizar llamadas, captar leads,
+                responder en tiempo real y conectar toda la operación con CRM,
+                flujos y dashboards privados por cliente.
               </p>
 
               <div className="mt-8 flex flex-wrap gap-4">
@@ -186,7 +158,7 @@ export default function NespedApp() {
                   href="#demo"
                   className="rounded-2xl bg-white px-6 py-3 text-sm font-semibold text-black shadow-2xl shadow-white/10 transition hover:bg-white/90"
                 >
-                  Probar demo
+                  Probar llamada en vivo
                 </a>
 
                 <a
@@ -218,11 +190,9 @@ export default function NespedApp() {
                 <div className="rounded-[28px] border border-white/10 bg-black/50 p-6">
                   <div className="flex items-center justify-between border-b border-white/10 pb-4">
                     <div>
-                      <div className="text-sm text-white/45">
-                        Vista de plataforma
-                      </div>
+                      <div className="text-sm text-white/45">Vista ejecutiva</div>
                       <div className="mt-1 text-2xl font-semibold">
-                        NESPED SaaS Control
+                        NESPED Control Layer
                       </div>
                     </div>
                     <div className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs text-emerald-300">
@@ -232,37 +202,31 @@ export default function NespedApp() {
 
                   <div className="mt-5 space-y-4">
                     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                      <div className="text-sm text-white/45">
-                        Arquitectura
-                      </div>
+                      <div className="text-sm text-white/45">Flujo</div>
                       <div className="mt-2 text-sm leading-7 text-white/70">
-                        Cliente → Número de empresa → IA en tiempo real → Lead →
-                        CRM → Dashboard.
+                        Llamada → IA en tiempo real → lead capturado → CRM →
+                        dashboard privado → seguimiento comercial.
                       </div>
                     </div>
 
                     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                      <div className="text-sm text-white/45">
-                        Multi-cliente
-                      </div>
+                      <div className="text-sm text-white/45">Multi-cliente</div>
                       <div className="mt-2 text-sm leading-7 text-white/70">
-                        Cada empresa puede tener su propio prompt, webhook,
-                        CRM, tono comercial y flujos.
+                        Cada empresa tiene su propio prompt, webhook, branding,
+                        usuarios y portal privado.
                       </div>
                     </div>
 
                     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                      <div className="text-sm text-white/45">
-                        Casos de uso
-                      </div>
+                      <div className="text-sm text-white/45">Casos ideales</div>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {[
                           "Clínicas",
                           "Inmobiliarias",
                           "Seguros",
-                          "B2B",
                           "Energía",
-                          "Telecom",
+                          "B2B",
+                          "Atención al cliente",
                         ].map((tag) => (
                           <span
                             key={tag}
@@ -271,6 +235,14 @@ export default function NespedApp() {
                             {tag}
                           </span>
                         ))}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                      <div className="text-sm text-white/45">Stack</div>
+                      <div className="mt-2 text-sm leading-7 text-white/70">
+                        OpenAI Realtime · Twilio · Supabase · Vercel · Railway ·
+                        HubSpot · n8n
                       </div>
                     </div>
                   </div>
@@ -285,15 +257,15 @@ export default function NespedApp() {
             {[
               {
                 title: "Recepcionista IA 24/7",
-                text: "Atiende llamadas en tiempo real con voz natural y evita que la empresa pierda oportunidades por no contestar.",
+                text: "Atiende llamadas en tiempo real con voz natural y evita que se pierdan oportunidades por no responder.",
               },
               {
-                title: "Lead capture engine",
-                text: "Capta nombre, teléfono, necesidad y prioridad para que el equipo comercial actúe más rápido.",
+                title: "Captura y calificación",
+                text: "Recoge nombre, teléfono, necesidad y contexto comercial para que ventas actúe más rápido.",
               },
               {
-                title: "SaaS multi-cliente",
-                text: "Gestiona varias empresas desde una misma plataforma con configuraciones independientes.",
+                title: "Infraestructura multi-cliente",
+                text: "Cada empresa opera con su propia configuración, identidad, usuarios y flujo comercial.",
               },
             ].map((card) => (
               <div
@@ -309,95 +281,75 @@ export default function NespedApp() {
           </div>
         </section>
 
-        <section id="clientes" className="mx-auto max-w-7xl px-6 py-10 md:py-16">
+        <section id="casos" className="mx-auto max-w-7xl px-6 py-10 md:py-16">
           <div className="rounded-[34px] border border-white/10 bg-white/[0.03] p-8 shadow-2xl shadow-black/40">
-            <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <div className="text-sm uppercase tracking-[0.2em] text-blue-300">
-                  Clientes
-                </div>
-                <h2 className="mt-2 text-3xl font-semibold tracking-tight md:text-5xl">
-                  Empresas activas en la plataforma
-                </h2>
+            <div className="mb-8">
+              <div className="text-sm uppercase tracking-[0.2em] text-blue-300">
+                Casos de uso
               </div>
-
-              <button
-                onClick={loadClients}
-                className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-semibold transition hover:bg-white hover:text-black"
-              >
-                Refrescar clientes
-              </button>
+              <h2 className="mt-2 text-3xl font-semibold tracking-tight md:text-5xl">
+                Diseñado para negocios con volumen de llamadas
+              </h2>
             </div>
 
-            {loadingClients ? (
-              <div className="text-sm text-white/45">Cargando clientes...</div>
-            ) : errorClients ? (
-              <div className="text-sm text-red-300">{errorClients}</div>
-            ) : clients.length === 0 ? (
-              <div className="text-sm text-white/45">No hay clientes todavía.</div>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2">
-                {clients.map((client) => (
-                  <div
-                    key={client.id}
-                    className={`rounded-[26px] border p-5 transition ${
-                      selectedClientId === client.id
-                        ? "border-white bg-white/[0.06]"
-                        : "border-white/10 bg-white/[0.03]"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <div className="text-xl font-semibold">{client.name}</div>
-                        <div className="mt-1 text-sm text-white/45">
-                          {client.type}
-                        </div>
-                      </div>
-
-                      <div className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs text-emerald-300">
-                        {client.status}
-                      </div>
-                    </div>
-
-                    <div className="mt-5 flex gap-3">
-                      <button
-                        onClick={() => setSelectedClientId(client.id)}
-                        className="rounded-2xl border border-white/15 px-4 py-2 text-sm font-medium transition hover:bg-white hover:text-black"
-                      >
-                        Seleccionar
-                      </button>
-
-                      <span className="rounded-2xl bg-black/40 px-4 py-2 text-sm text-white/60">
-                        ID: {client.id}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className="grid gap-5 md:grid-cols-3">
+              {[
+                {
+                  title: "Clínicas",
+                  text: "Recepción de pacientes, captura de datos y gestión de solicitudes de cita o tratamiento.",
+                },
+                {
+                  title: "Inmobiliarias",
+                  text: "Filtrado de compradores, propietarios e interesados para priorizar oportunidades reales.",
+                },
+                {
+                  title: "Empresas de servicios",
+                  text: "Atención de incidencias, nuevos leads y pre-cualificación antes de pasar a comercial.",
+                },
+              ].map((item) => (
+                <div
+                  key={item.title}
+                  className="rounded-[24px] border border-white/10 bg-black/20 p-6"
+                >
+                  <div className="text-lg font-semibold">{item.title}</div>
+                  <p className="mt-3 text-sm leading-7 text-white/60">
+                    {item.text}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 
         <section id="demo" className="mx-auto max-w-7xl px-6 py-10 md:py-16">
           <div className="rounded-[34px] border border-white/10 bg-gradient-to-br from-white/[0.05] to-white/[0.02] p-8 shadow-2xl shadow-black/40 backdrop-blur-xl">
-            <div className="grid gap-8 md:grid-cols-[1.2fr_0.8fr] md:items-center">
+            <div className="grid gap-8 md:grid-cols-[1.15fr_0.85fr] md:items-center">
               <div>
                 <div className="text-sm uppercase tracking-[0.2em] text-emerald-300">
                   Demo interactiva
                 </div>
                 <h2 className="mt-3 text-3xl font-semibold tracking-tight md:text-5xl">
-                  Lanza una llamada para el cliente seleccionado.
+                  Recibe una llamada en directo.
                 </h2>
                 <p className="mt-4 max-w-2xl text-lg text-white/65">
-                  Introduce un número, elige el cliente y deja que NESPED te enseñe
-                  cómo suena una IA adaptada a cada negocio.
+                  Elige una configuración de cliente, introduce tu número y deja
+                  que NESPED te muestre cómo suena una IA preparada para captar
+                  oportunidades comerciales.
                 </p>
+
+                <div className="mt-6 rounded-[24px] border border-white/10 bg-black/20 p-5">
+                  <div className="text-sm text-white/45">Cliente seleccionado</div>
+                  <div className="mt-2 text-2xl font-semibold">
+                    {selectedClient?.name || "Cargando..."}
+                  </div>
+                  <div className="mt-2 text-sm text-white/60">
+                    {selectedClient?.tagline || "Sin descripción"}
+                  </div>
+                </div>
               </div>
 
               <div className="rounded-[28px] border border-white/10 bg-black/40 p-6">
-                <label className="mb-3 block text-sm text-white/60">
-                  Cliente
-                </label>
+                <label className="mb-3 block text-sm text-white/60">Cliente</label>
                 <select
                   value={selectedClientId}
                   onChange={(e) => setSelectedClientId(e.target.value)}
@@ -442,61 +394,74 @@ export default function NespedApp() {
           </div>
         </section>
 
-        <section id="dashboard" className="mx-auto max-w-7xl px-6 pb-16 pt-4 md:pb-24">
-          <div className="rounded-[34px] border border-white/10 bg-white/[0.03] p-8 shadow-2xl shadow-black/40">
-            <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <div className="text-sm uppercase tracking-[0.2em] text-blue-300">
-                  Dashboard
-                </div>
-                <h2 className="mt-2 text-3xl font-semibold tracking-tight md:text-5xl">
-                  Leads en tiempo real
-                </h2>
+        <section className="mx-auto max-w-7xl px-6 py-10 md:py-16">
+          <div className="grid gap-5 md:grid-cols-2">
+            <div className="rounded-[28px] border border-white/10 bg-white/[0.03] p-8">
+              <div className="text-sm uppercase tracking-[0.2em] text-white/45">
+                Qué ve tu cliente
               </div>
-
-              <button
-                onClick={loadLeads}
-                className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-semibold transition hover:bg-white hover:text-black"
-              >
-                Refrescar leads
-              </button>
+              <h3 className="mt-3 text-3xl font-semibold">
+                Portal privado con datos reales
+              </h3>
+              <p className="mt-4 text-sm leading-7 text-white/60">
+                Cada cliente dispone de su propio portal con branding,
+                métricas, historial de llamadas, leads y estado de actividad.
+              </p>
             </div>
 
-            <div className="overflow-hidden rounded-[26px] border border-white/10">
-              <div className="grid grid-cols-6 bg-white/[0.04] px-5 py-4 text-xs uppercase tracking-[0.18em] text-white/40">
-                <div>Lead</div>
-                <div>Teléfono</div>
-                <div>Ciudad</div>
-                <div>Necesidad</div>
-                <div>Origen</div>
-                <div>Fecha</div>
+            <div className="rounded-[28px] border border-white/10 bg-white/[0.03] p-8">
+              <div className="text-sm uppercase tracking-[0.2em] text-white/45">
+                Qué controlas tú
               </div>
+              <h3 className="mt-3 text-3xl font-semibold">
+                Admin centralizado de toda la plataforma
+              </h3>
+              <p className="mt-4 text-sm leading-7 text-white/60">
+                Gestiona clientes, usuarios, prompts, webhooks, llamadas y
+                configuración desde un único panel interno.
+              </p>
+            </div>
+          </div>
+        </section>
 
-              {loadingLeads ? (
-                <div className="px-5 py-8 text-sm text-white/45">
-                  Cargando leads...
+        <section id="faq" className="mx-auto max-w-7xl px-6 pb-20 pt-8 md:pb-28">
+          <div className="rounded-[34px] border border-white/10 bg-white/[0.03] p-8 shadow-2xl shadow-black/40">
+            <div className="mb-8">
+              <div className="text-sm uppercase tracking-[0.2em] text-blue-300">
+                FAQ
+              </div>
+              <h2 className="mt-2 text-3xl font-semibold tracking-tight md:text-5xl">
+                Preguntas frecuentes
+              </h2>
+            </div>
+
+            <div className="grid gap-4">
+              {[
+                {
+                  q: "¿La IA habla en tiempo real?",
+                  a: "Sí. La llamada se atiende en tiempo real con voz natural y flujo conversacional orientado a captación.",
+                },
+                {
+                  q: "¿Cada empresa puede tener su propio prompt?",
+                  a: "Sí. Cada cliente puede tener su propio tono, prompt, webhook, número y branding.",
+                },
+                {
+                  q: "¿Se integra con CRM?",
+                  a: "Sí. Puede enviar leads a HubSpot y a cualquier automatización compatible vía webhook.",
+                },
+                {
+                  q: "¿Es multi-cliente?",
+                  a: "Sí. La plataforma está preparada para gestionar varios clientes con panel y configuración independiente.",
+                },
+              ].map((item) => (
+                <div
+                  key={item.q}
+                  className="rounded-[24px] border border-white/10 bg-black/20 p-6"
+                >
+                  <div className="text-lg font-semibold">{item.q}</div>
+                  <p className="mt-3 text-sm leading-7 text-white/60">{item.a}</p>
                 </div>
-              ) : errorLeads ? (
-                <div className="px-5 py-8 text-sm text-red-300">{errorLeads}</div>
-              ) : leads.length === 0 ? (
-                <div className="px-5 py-8 text-sm text-white/45">
-                  No hay leads todavía.
-                </div>
-              ) : (
-                leads.map((lead, index) => (
-                  <div
-                    key={lead.id || index}
-                    className="grid grid-cols-6 items-center border-t border-white/10 px-5 py-4 text-sm"
-                  >
-                    <div className="font-medium">{lead.nombre || "Sin nombre"}</div>
-                    <div className="text-white/70">{lead.telefono || "-"}</div>
-                    <div className="text-white/60">{lead.ciudad || "-"}</div>
-                    <div className="text-white/70">{lead.necesidad || "-"}</div>
-                    <div className="text-white/45">{lead.origen || "-"}</div>
-                    <div className="text-white/45">{lead.fecha || "-"}</div>
-                  </div>
-                ))
-              )}
+              ))}
             </div>
           </div>
         </section>

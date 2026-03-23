@@ -19,7 +19,7 @@ export async function GET() {
       .select("*")
       .eq("client_id", clientId)
       .order("created_at", { ascending: false })
-      .limit(20);
+      .limit(50);
 
     if (error) {
       return Response.json(

@@ -16,7 +16,7 @@ const accountSid =
   process.env.ACCOUNT_SID || process.env.TWILIO_ACCOUNT_SID;
 const authToken =
   process.env.AUTH_TOKEN || process.env.TWILIO_AUTH_TOKEN;
-const twilioNumber =
+const fallbackTwilioNumber =
   process.env.TWILIO_NUMERO || process.env.TWILIO_PHONE_NUMBER;
 
 const client = twilio(accountSid, authToken);
@@ -30,22 +30,37 @@ app.get("/", (req, res) => {
   res.send("NESPED Voice Server activo");
 });
 
+async function getClientConfig(clientId) {
+  const { data, error } = await supabase
+    .from("clients")
+    .select("*")
+    .eq("id", clientId)
+    .single();
+
+  if (error || !data) return null;
+
+  return {
+    id: data.id,
+    name: data.name,
+    prompt: data.prompt || "",
+    webhook: data.webhook || "",
+    twilioNumber: data.twilio_number || fallbackTwilioNumber,
+  };
+}
+
 app.get("/call", async (req, res) => {
   try {
     const clientId = req.query.client_id || "demo";
     const cleanBaseUrl = (process.env.BASE_URL || "").replace(/\/+$/, "");
 
-    const { data: clientRow } = await supabase
-      .from("clients")
-      .select("twilio_number")
-      .eq("id", clientId)
-      .single();
-
-    const fromNumber = clientRow?.twilio_number || twilioNumber;
+    const config = await getClientConfig(clientId);
+    if (!config) {
+      return res.status(404).send("Cliente no encontrado");
+    }
 
     const call = await client.calls.create({
       to: process.env.TU_NUMERO,
-      from: fromNumber,
+      from: config.twilioNumber || fallbackTwilioNumber,
       url: `${cleanBaseUrl}/voice?client_id=${clientId}`,
       method: "POST",
     });
@@ -58,31 +73,9 @@ app.get("/call", async (req, res) => {
   }
 });
 
-async function getClientConfig(clientId) {
-  const { data, error } = await supabase
-    .from("clients")
-    .select("*")
-    .eq("id", clientId)
-    .single();
-
-  if (error || !data) {
-    return null;
-  }
-
-  return {
-    id: data.id,
-    name: data.name,
-    prompt: data.prompt,
-    webhook: data.webhook,
-    twilioNumber: data.twilio_number,
-  };
-}
-
 function buildVoiceTwiml(clientId) {
   const cleanBaseUrl = (process.env.BASE_URL || "").replace(/\/+$/, "");
   const streamUrl = `${cleanBaseUrl.replace("https://", "wss://")}/media-stream?client_id=${clientId}`;
-
-  console.log("🌐 STREAM URL:", streamUrl);
 
   return `
 <Response>
@@ -95,9 +88,6 @@ function buildVoiceTwiml(clientId) {
 
 app.get("/voice", (req, res) => {
   const clientId = req.query.client_id || "demo";
-  console.log("GET /voice");
-  console.log("🏢 Cliente detectado en /voice:", clientId);
-
   const xml = buildVoiceTwiml(clientId);
   res.type("text/xml");
   res.send(xml);
@@ -105,9 +95,6 @@ app.get("/voice", (req, res) => {
 
 app.post("/voice", (req, res) => {
   const clientId = req.query.client_id || "demo";
-  console.log("POST /voice");
-  console.log("🏢 Cliente detectado en /voice:", clientId);
-
   const xml = buildVoiceTwiml(clientId);
   res.type("text/xml");
   res.send(xml);
@@ -116,11 +103,10 @@ app.post("/voice", (req, res) => {
 const wss = new WebSocket.Server({ server, path: "/media-stream" });
 
 wss.on("connection", async (twilioWs, req) => {
-  console.log("🟢 Twilio conectado a /media-stream");
-
   const url = new URL(req.url, "https://dummy");
   const clientId = url.searchParams.get("client_id") || "demo";
 
+  console.log("🟢 Twilio conectado a /media-stream");
   console.log("🔥 Cliente WS:", clientId);
 
   const config = await getClientConfig(clientId);
@@ -132,13 +118,15 @@ wss.on("connection", async (twilioWs, req) => {
   }
 
   let streamSid = null;
+  let callSid = null;
   let openAiReady = false;
   let greeted = false;
   let callStartedAt = Date.now();
   let fromNumber = "";
   let toNumber = "";
   let leadCaptured = false;
-  let callSummary = "Llamada finalizada sin resumen";
+  let callSummary = "Llamada atendida";
+  let transcriptParts = [];
 
   const openaiWs = new WebSocket(
     "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
@@ -149,6 +137,41 @@ wss.on("connection", async (twilioWs, req) => {
       },
     }
   );
+
+  function addTranscriptLine(line) {
+    if (!line) return;
+    transcriptParts.push(line);
+    if (transcriptParts.length > 200) {
+      transcriptParts = transcriptParts.slice(-200);
+    }
+  }
+
+  async function saveCall(status = "completed") {
+    try {
+      const durationSeconds = Math.max(
+        1,
+        Math.round((Date.now() - callStartedAt) / 1000)
+      );
+
+      const transcript = transcriptParts.join("\n").trim();
+
+      await supabase.from("calls").insert({
+        client_id: clientId,
+        call_sid: callSid || null,
+        from_number: fromNumber || "",
+        to_number: toNumber || "",
+        status,
+        summary: callSummary,
+        transcript,
+        lead_captured: leadCaptured,
+        duration_seconds: durationSeconds,
+      });
+
+      console.log("📞 Llamada guardada en Supabase");
+    } catch (err) {
+      console.error("❌ Error guardando llamada:", err.message);
+    }
+  }
 
   openaiWs.on("open", () => {
     console.log("🤖 OpenAI conectado para:", config.name);
@@ -184,31 +207,7 @@ wss.on("connection", async (twilioWs, req) => {
         },
       })
     );
-
-    console.log("⚙️ session.update enviado");
   });
-
-  async function saveCall(status = "completed") {
-    try {
-      const durationSeconds = Math.max(
-        1,
-        Math.round((Date.now() - callStartedAt) / 1000)
-      );
-
-      await supabase.from("calls").insert({
-        client_id: clientId,
-        from_number: fromNumber || "",
-        to_number: toNumber || "",
-        status,
-        summary: leadCaptured ? callSummary : "Llamada atendida",
-        duration_seconds: durationSeconds,
-      });
-
-      console.log("📞 Llamada guardada en Supabase");
-    } catch (err) {
-      console.error("❌ Error guardando llamada:", err.message);
-    }
-  }
 
   twilioWs.on("message", async (raw) => {
     try {
@@ -216,10 +215,10 @@ wss.on("connection", async (twilioWs, req) => {
 
       if (data.event === "start") {
         streamSid = data.start?.streamSid || null;
-        console.log("📞 Stream iniciado:", streamSid);
-
+        callSid = data.start?.callSid || null;
         fromNumber = data.start?.customParameters?.from || "";
         toNumber = data.start?.customParameters?.to || "";
+        addTranscriptLine(`[SYSTEM] Inicio de llamada`);
       }
 
       if (data.event === "media") {
@@ -234,7 +233,6 @@ wss.on("connection", async (twilioWs, req) => {
       }
 
       if (data.event === "stop") {
-        console.log("🔴 Twilio stop recibido");
         if (openaiWs.readyState === WebSocket.OPEN) {
           openaiWs.close();
         }
@@ -249,15 +247,12 @@ wss.on("connection", async (twilioWs, req) => {
       const event = JSON.parse(raw.toString());
 
       if (event.type === "error") {
-        console.error("❌ OPENAI ERROR COMPLETO:", JSON.stringify(event, null, 2));
+        console.error("❌ OPENAI ERROR:", JSON.stringify(event, null, 2));
         return;
       }
 
-      console.log("OpenAI event:", event.type);
-
       if (event.type === "session.updated") {
         openAiReady = true;
-        console.log("✅ OpenAI listo");
 
         if (!greeted) {
           greeted = true;
@@ -267,11 +262,10 @@ wss.on("connection", async (twilioWs, req) => {
               response: {
                 modalities: ["audio", "text"],
                 instructions:
-                  "Saluda de forma natural y pregunta en qué puedes ayudar.",
+                  "Saluda de forma natural, di el nombre de la empresa si procede y pregunta en qué puedes ayudar.",
               },
             })
           );
-          console.log("👋 response.create enviado");
         }
       }
 
@@ -287,12 +281,21 @@ wss.on("connection", async (twilioWs, req) => {
         );
       }
 
+      if (event.type === "response.text.delta" && event.delta) {
+        addTranscriptLine(`[AI] ${event.delta}`);
+      }
+
+      if (event.type === "conversation.item.input_audio_transcription.completed") {
+        if (event.transcript) {
+          addTranscriptLine(`[USER] ${event.transcript}`);
+        }
+      }
+
       if (
         event.type === "response.output_item.done" &&
         event.item?.type === "function_call"
       ) {
         const args = JSON.parse(event.item.arguments || "{}");
-        console.log("💾 Guardando lead:", args);
 
         leadCaptured = true;
         callSummary = `Lead capturado: ${args.nombre || "sin nombre"} · ${args.necesidad || "sin necesidad"}`;

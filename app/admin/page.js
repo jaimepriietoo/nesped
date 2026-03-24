@@ -5,11 +5,12 @@ import { useEffect, useMemo, useState } from "react";
 const emptyClientForm = {
   id: "",
   name: "",
+  prompt: "",
+  email: "",
   type: "",
   status: "Activo",
   tagline: "",
   logoText: "",
-  prompt: "",
   webhook: "",
   twilioNumber: "",
 };
@@ -21,6 +22,33 @@ const emptyUserForm = {
   clientId: "",
 };
 
+function BarChart({ title, data = [] }) {
+  const max = Math.max(...data.map((d) => d.value), 1);
+
+  return (
+    <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-6">
+      <div className="mb-5 text-lg font-semibold">{title}</div>
+
+      <div className="space-y-4">
+        {data.map((item) => (
+          <div key={item.label}>
+            <div className="mb-2 flex items-center justify-between text-sm">
+              <span className="text-white/65">{item.label}</span>
+              <span className="text-white font-medium">{item.value}</span>
+            </div>
+            <div className="h-3 rounded-full bg-white/10">
+              <div
+                className="h-3 rounded-full bg-white"
+                style={{ width: `${(item.value / max) * 100}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const [clients, setClients] = useState([]);
   const [selectedId, setSelectedId] = useState("");
@@ -30,46 +58,52 @@ export default function AdminPage() {
   const [calls, setCalls] = useState([]);
   const [userForm, setUserForm] = useState(emptyUserForm);
 
-  const [loading, setLoading] = useState(true);
+  const [loadingClients, setLoadingClients] = useState(true);
   const [loadingCalls, setLoadingCalls] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [creating, setCreating] = useState(false);
+  const [savingClient, setSavingClient] = useState(false);
+  const [savingUser, setSavingUser] = useState(false);
+  const [creatingClient, setCreatingClient] = useState(false);
 
-  const [message, setMessage] = useState("");
+  const [clientMessage, setClientMessage] = useState("");
   const [userMessage, setUserMessage] = useState("");
 
   async function loadClients() {
     try {
-      setLoading(true);
+      setLoadingClients(true);
       const res = await fetch("/api/admin/clients", { cache: "no-store" });
       const json = await res.json();
 
-      const data = json.data || [];
+      const data = Array.isArray(json.data) ? json.data : [];
       setClients(data);
 
-      if (data.length > 0 && !creating) {
+      if (data.length > 0 && !creatingClient) {
         const first = data[0];
         setSelectedId(first.id);
         setForm({
-          id: first.id,
+          id: first.id || "",
           name: first.name || "",
+          prompt: first.prompt || "",
+          email: "",
           type: first.type || "",
-          status: first.status || "",
+          status: first.status || "Activo",
           tagline: first.tagline || "",
           logoText: first.logoText || "",
-          prompt: first.prompt || "",
           webhook: first.webhook || "",
           twilioNumber: first.twilioNumber || "",
         });
       }
 
       if (!userForm.clientId && data.length > 0) {
-        setUserForm((prev) => ({ ...prev, clientId: data[0].id }));
+        setUserForm((prev) => ({
+          ...prev,
+          clientId: data[0].id,
+        }));
       }
     } catch (err) {
       console.error(err);
+      setClients([]);
     } finally {
-      setLoading(false);
+      setLoadingClients(false);
     }
   }
 
@@ -77,7 +111,7 @@ export default function AdminPage() {
     try {
       const res = await fetch("/api/admin/users", { cache: "no-store" });
       const json = await res.json();
-      setUsers(json.data || []);
+      setUsers(Array.isArray(json.data) ? json.data : []);
     } catch (err) {
       console.error(err);
       setUsers([]);
@@ -89,7 +123,7 @@ export default function AdminPage() {
       setLoadingCalls(true);
       const res = await fetch("/api/admin/calls", { cache: "no-store" });
       const json = await res.json();
-      setCalls(json.data || []);
+      setCalls(Array.isArray(json.data) ? json.data : []);
     } catch (err) {
       console.error(err);
       setCalls([]);
@@ -105,25 +139,26 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
-    if (creating) return;
+    if (creatingClient) return;
 
     const client = clients.find((c) => c.id === selectedId);
     if (!client) return;
 
     setForm({
-      id: client.id,
+      id: client.id || "",
       name: client.name || "",
+      prompt: client.prompt || "",
+      email: "",
       type: client.type || "",
-      status: client.status || "",
+      status: client.status || "Activo",
       tagline: client.tagline || "",
       logoText: client.logoText || "",
-      prompt: client.prompt || "",
       webhook: client.webhook || "",
       twilioNumber: client.twilioNumber || "",
     });
-  }, [selectedId, clients, creating]);
+  }, [selectedId, clients, creatingClient]);
 
-  function handleChange(field, value) {
+  function handleClientChange(field, value) {
     setForm((prev) => ({
       ...prev,
       [field]: value,
@@ -138,56 +173,81 @@ export default function AdminPage() {
   }
 
   function handleNewClient() {
-    setCreating(true);
+    setCreatingClient(true);
     setSelectedId("");
-    setMessage("");
+    setClientMessage("");
     setForm(emptyClientForm);
   }
 
   function handleSelectClient(id) {
-    setCreating(false);
+    setCreatingClient(false);
     setSelectedId(id);
-    setMessage("");
+    setClientMessage("");
   }
 
   async function handleSaveClient(e) {
     e.preventDefault();
 
     try {
-      setSaving(true);
-      setMessage("");
+      setSavingClient(true);
+      setClientMessage("");
 
-      const method = creating ? "POST" : "PATCH";
+      const payload = {
+        id: form.id.trim(),
+        name: form.name.trim(),
+        prompt: form.prompt,
+        email: form.email.trim(),
+        type: form.type,
+        status: form.status,
+        tagline: form.tagline,
+        logoText: form.logoText,
+        webhook: form.webhook,
+        twilioNumber: form.twilioNumber,
+      };
+
+      const method = creatingClient ? "POST" : "PATCH";
 
       const res = await fetch("/api/admin/clients", {
         method,
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
 
       const json = await res.json();
 
-      if (!res.ok || !json.success) {
-        setMessage(json.message || "Error guardando");
+      if (!res.ok || (!json.ok && !json.success)) {
+        setClientMessage(
+          json?.error?.message ||
+            json?.error ||
+            json?.message ||
+            "Error guardando cliente"
+        );
         return;
       }
 
-      setMessage(
-        creating
+      setClientMessage(
+        creatingClient
           ? "Cliente creado correctamente"
           : "Cliente actualizado correctamente"
       );
 
-      setCreating(false);
+      const savedId = form.id.trim();
+
+      setCreatingClient(false);
       await loadClients();
-      setSelectedId(form.id);
+      await loadUsers();
+      setSelectedId(savedId);
+      setForm((prev) => ({
+        ...prev,
+        email: "",
+      }));
     } catch (err) {
       console.error(err);
-      setMessage("Error guardando");
+      setClientMessage("Error guardando cliente");
     } finally {
-      setSaving(false);
+      setSavingClient(false);
     }
   }
 
@@ -195,6 +255,7 @@ export default function AdminPage() {
     e.preventDefault();
 
     try {
+      setSavingUser(true);
       setUserMessage("");
 
       const res = await fetch("/api/admin/users", {
@@ -221,6 +282,8 @@ export default function AdminPage() {
     } catch (err) {
       console.error(err);
       setUserMessage("Error creando usuario");
+    } finally {
+      setSavingUser(false);
     }
   }
 
@@ -240,6 +303,24 @@ export default function AdminPage() {
     ];
   }, [clients, users, calls]);
 
+  const clientCallsData = useMemo(() => {
+    const groups = {};
+    for (const call of calls) {
+      const key = call.client_id || "unknown";
+      groups[key] = (groups[key] || 0) + 1;
+    }
+    return Object.entries(groups).map(([label, value]) => ({ label, value }));
+  }, [calls]);
+
+  const callStatusData = useMemo(() => {
+    const groups = {};
+    for (const call of calls) {
+      const key = call.status || "unknown";
+      groups[key] = (groups[key] || 0) + 1;
+    }
+    return Object.entries(groups).map(([label, value]) => ({ label, value }));
+  }, [calls]);
+
   return (
     <div className="min-h-screen bg-[#050505] text-white px-6 py-10">
       <div className="mx-auto max-w-7xl">
@@ -248,7 +329,7 @@ export default function AdminPage() {
             <div className="text-sm text-white/45">Panel interno</div>
             <h1 className="mt-1 text-4xl font-semibold">NESPED Admin</h1>
             <div className="mt-2 text-sm text-white/55">
-              Gestiona clientes, prompts, webhooks, números, usuarios y llamadas
+              Gestiona clientes, prompts, usuarios y llamadas
             </div>
           </div>
 
@@ -272,11 +353,16 @@ export default function AdminPage() {
           ))}
         </div>
 
+        <div className="mb-8 grid gap-5 md:grid-cols-2">
+          <BarChart title="Llamadas por cliente" data={clientCallsData} />
+          <BarChart title="Estados de llamada" data={callStatusData} />
+        </div>
+
         <div className="grid gap-8 md:grid-cols-[320px_1fr]">
           <div className="rounded-[28px] border border-white/10 bg-white/[0.03] p-5">
             <div className="mb-4 text-lg font-semibold">Clientes</div>
 
-            {loading ? (
+            {loadingClients ? (
               <div className="text-sm text-white/45">Cargando...</div>
             ) : (
               <div className="space-y-3">
@@ -285,7 +371,7 @@ export default function AdminPage() {
                     key={client.id}
                     onClick={() => handleSelectClient(client.id)}
                     className={`w-full rounded-2xl border px-4 py-4 text-left transition ${
-                      !creating && selectedId === client.id
+                      !creatingClient && selectedId === client.id
                         ? "border-white bg-white/[0.08]"
                         : "border-white/10 bg-black/20 hover:bg-white/[0.04]"
                     }`}
@@ -302,10 +388,10 @@ export default function AdminPage() {
             <div className="rounded-[28px] border border-white/10 bg-white/[0.03] p-8">
               <div className="mb-6">
                 <div className="text-sm text-white/45">
-                  {creating ? "Crear cliente" : "Editar cliente"}
+                  {creatingClient ? "Crear cliente" : "Editar cliente"}
                 </div>
                 <h2 className="mt-1 text-2xl font-semibold">
-                  {creating ? "Nuevo cliente" : "Configuración del cliente"}
+                  {creatingClient ? "Nuevo cliente" : "Configuración del cliente"}
                 </h2>
               </div>
 
@@ -315,10 +401,39 @@ export default function AdminPage() {
                     <label className="mb-2 block text-sm text-white/60">ID</label>
                     <input
                       value={form.id}
-                      onChange={(e) => handleChange("id", e.target.value)}
-                      disabled={!creating}
+                      onChange={(e) => handleClientChange("id", e.target.value)}
+                      disabled={!creatingClient}
                       className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none disabled:text-white/50"
-                      placeholder="ej: inmobiliaria"
+                      placeholder="ej: clinica"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm text-white/60">
+                      Email del cliente
+                    </label>
+                    <input
+                      value={form.email}
+                      onChange={(e) =>
+                        handleClientChange("email", e.target.value)
+                      }
+                      className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
+                      placeholder="cliente@empresa.com"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-5 md:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-sm text-white/60">
+                      Nombre
+                    </label>
+                    <input
+                      value={form.name}
+                      onChange={(e) =>
+                        handleClientChange("name", e.target.value)
+                      }
+                      className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
                     />
                   </div>
 
@@ -328,27 +443,38 @@ export default function AdminPage() {
                     </label>
                     <input
                       value={form.logoText}
-                      onChange={(e) => handleChange("logoText", e.target.value)}
+                      onChange={(e) =>
+                        handleClientChange("logoText", e.target.value)
+                      }
                       className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
+                      placeholder="N"
                     />
                   </div>
                 </div>
 
                 <div className="grid gap-5 md:grid-cols-2">
                   <div>
-                    <label className="mb-2 block text-sm text-white/60">Nombre</label>
-                    <input
-                      value={form.name}
-                      onChange={(e) => handleChange("name", e.target.value)}
-                      className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm text-white/60">Tipo</label>
+                    <label className="mb-2 block text-sm text-white/60">
+                      Tipo
+                    </label>
                     <input
                       value={form.type}
-                      onChange={(e) => handleChange("type", e.target.value)}
+                      onChange={(e) =>
+                        handleClientChange("type", e.target.value)
+                      }
+                      className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm text-white/60">
+                      Estado
+                    </label>
+                    <input
+                      value={form.status}
+                      onChange={(e) =>
+                        handleClientChange("status", e.target.value)
+                      }
                       className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
                     />
                   </div>
@@ -356,10 +482,14 @@ export default function AdminPage() {
 
                 <div className="grid gap-5 md:grid-cols-2">
                   <div>
-                    <label className="mb-2 block text-sm text-white/60">Estado</label>
+                    <label className="mb-2 block text-sm text-white/60">
+                      Webhook
+                    </label>
                     <input
-                      value={form.status}
-                      onChange={(e) => handleChange("status", e.target.value)}
+                      value={form.webhook}
+                      onChange={(e) =>
+                        handleClientChange("webhook", e.target.value)
+                      }
                       className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
                     />
                   </div>
@@ -370,54 +500,56 @@ export default function AdminPage() {
                     </label>
                     <input
                       value={form.twilioNumber}
-                      onChange={(e) => handleChange("twilioNumber", e.target.value)}
+                      onChange={(e) =>
+                        handleClientChange("twilioNumber", e.target.value)
+                      }
                       className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
+                      placeholder="+1XXXXXXXXXX"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm text-white/60">Tagline</label>
+                  <label className="mb-2 block text-sm text-white/60">
+                    Tagline
+                  </label>
                   <textarea
                     value={form.tagline}
-                    onChange={(e) => handleChange("tagline", e.target.value)}
+                    onChange={(e) =>
+                      handleClientChange("tagline", e.target.value)
+                    }
                     className="min-h-[100px] w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm text-white/60">Prompt</label>
+                  <label className="mb-2 block text-sm text-white/60">
+                    Prompt
+                  </label>
                   <textarea
                     value={form.prompt}
-                    onChange={(e) => handleChange("prompt", e.target.value)}
+                    onChange={(e) =>
+                      handleClientChange("prompt", e.target.value)
+                    }
                     className="min-h-[180px] w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
                   />
                 </div>
 
-                <div>
-                  <label className="mb-2 block text-sm text-white/60">Webhook</label>
-                  <input
-                    value={form.webhook}
-                    onChange={(e) => handleChange("webhook", e.target.value)}
-                    className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
-                  />
-                </div>
-
-                {message && (
+                {clientMessage && (
                   <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white/70">
-                    {message}
+                    {clientMessage}
                   </div>
                 )}
 
                 <div className="flex gap-3">
                   <button
                     type="submit"
-                    disabled={saving}
+                    disabled={savingClient}
                     className="rounded-2xl bg-white px-6 py-4 text-sm font-semibold text-black transition hover:bg-white/90 disabled:opacity-60"
                   >
-                    {saving
+                    {savingClient
                       ? "Guardando..."
-                      : creating
+                      : creatingClient
                       ? "Crear cliente"
                       : "Guardar cambios"}
                   </button>
@@ -426,8 +558,8 @@ export default function AdminPage() {
                     type="button"
                     onClick={() => {
                       loadClients();
-                      loadCalls();
                       loadUsers();
+                      loadCalls();
                     }}
                     className="rounded-2xl border border-white/15 px-6 py-4 text-sm font-semibold transition hover:bg-white hover:text-black"
                   >
@@ -446,12 +578,15 @@ export default function AdminPage() {
               <form onSubmit={handleCreateUser} className="grid gap-5">
                 <div className="grid gap-5 md:grid-cols-2">
                   <div>
-                    <label className="mb-2 block text-sm text-white/60">Email</label>
+                    <label className="mb-2 block text-sm text-white/60">
+                      Email
+                    </label>
                     <input
                       value={userForm.email}
-                      onChange={(e) => handleUserChange("email", e.target.value)}
+                      onChange={(e) =>
+                        handleUserChange("email", e.target.value)
+                      }
                       className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
-                      placeholder="cliente@empresa.com"
                     />
                   </div>
 
@@ -461,9 +596,10 @@ export default function AdminPage() {
                     </label>
                     <input
                       value={userForm.password}
-                      onChange={(e) => handleUserChange("password", e.target.value)}
+                      onChange={(e) =>
+                        handleUserChange("password", e.target.value)
+                      }
                       className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
-                      placeholder="password"
                     />
                   </div>
                 </div>
@@ -473,7 +609,9 @@ export default function AdminPage() {
                     <label className="mb-2 block text-sm text-white/60">Rol</label>
                     <select
                       value={userForm.role}
-                      onChange={(e) => handleUserChange("role", e.target.value)}
+                      onChange={(e) =>
+                        handleUserChange("role", e.target.value)
+                      }
                       className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
                     >
                       <option value="client">client</option>
@@ -487,7 +625,9 @@ export default function AdminPage() {
                     </label>
                     <select
                       value={userForm.clientId}
-                      onChange={(e) => handleUserChange("clientId", e.target.value)}
+                      onChange={(e) =>
+                        handleUserChange("clientId", e.target.value)
+                      }
                       className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
                     >
                       <option value="">Selecciona cliente</option>
@@ -508,9 +648,10 @@ export default function AdminPage() {
 
                 <button
                   type="submit"
-                  className="rounded-2xl bg-white px-6 py-4 text-sm font-semibold text-black transition hover:bg-white/90"
+                  disabled={savingUser}
+                  className="rounded-2xl bg-white px-6 py-4 text-sm font-semibold text-black transition hover:bg-white/90 disabled:opacity-60"
                 >
-                  Crear usuario
+                  {savingUser ? "Creando..." : "Crear usuario"}
                 </button>
               </form>
 
@@ -553,9 +694,10 @@ export default function AdminPage() {
               </div>
 
               <div className="overflow-hidden rounded-[24px] border border-white/10">
-                <div className="grid grid-cols-6 bg-white/[0.04] px-5 py-4 text-xs uppercase tracking-[0.18em] text-white/40">
+                <div className="grid grid-cols-7 bg-white/[0.04] px-5 py-4 text-xs uppercase tracking-[0.18em] text-white/40">
                   <div>Cliente</div>
                   <div>Estado</div>
+                  <div>Lead</div>
                   <div>Resumen</div>
                   <div>Origen</div>
                   <div>Duración</div>
@@ -574,10 +716,13 @@ export default function AdminPage() {
                   calls.map((call, index) => (
                     <div
                       key={call.id || index}
-                      className="grid grid-cols-6 items-center border-t border-white/10 px-5 py-4 text-sm"
+                      className="grid grid-cols-7 items-center border-t border-white/10 px-5 py-4 text-sm"
                     >
                       <div className="font-medium">{call.client_id || "-"}</div>
                       <div className="text-white/70">{call.status || "-"}</div>
+                      <div className="text-white/70">
+                        {call.lead_captured ? "Sí" : "No"}
+                      </div>
                       <div className="text-white/70">{call.summary || "-"}</div>
                       <div className="text-white/60">{call.from_number || "-"}</div>
                       <div className="text-white/70">

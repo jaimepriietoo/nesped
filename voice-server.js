@@ -77,6 +77,8 @@ function buildVoiceTwiml(clientId) {
   const cleanBaseUrl = (process.env.BASE_URL || "").replace(/\/+$/, "");
   const streamUrl = `${cleanBaseUrl.replace("https://", "wss://")}/media-stream?client_id=${clientId}`;
 
+  console.log("🌐 STREAM URL:", streamUrl);
+
   return `
 <Response>
   <Connect>
@@ -88,6 +90,9 @@ function buildVoiceTwiml(clientId) {
 
 app.get("/voice", (req, res) => {
   const clientId = req.query.client_id || "demo";
+  console.log("GET /voice");
+  console.log("🏢 Cliente detectado en /voice:", clientId);
+
   const xml = buildVoiceTwiml(clientId);
   res.type("text/xml");
   res.send(xml);
@@ -95,6 +100,9 @@ app.get("/voice", (req, res) => {
 
 app.post("/voice", (req, res) => {
   const clientId = req.query.client_id || "demo";
+  console.log("POST /voice");
+  console.log("🏢 Cliente detectado en /voice:", clientId);
+
   const xml = buildVoiceTwiml(clientId);
   res.type("text/xml");
   res.send(xml);
@@ -185,6 +193,12 @@ wss.on("connection", async (twilioWs, req) => {
           input_audio_format: "g711_ulaw",
           output_audio_format: "g711_ulaw",
           instructions: config.prompt,
+          input_audio_transcription: {
+            model: "gpt-4o-mini-transcribe",
+          },
+          turn_detection: {
+            type: "server_vad",
+          },
           tools: [
             {
               type: "function",
@@ -207,6 +221,8 @@ wss.on("connection", async (twilioWs, req) => {
         },
       })
     );
+
+    console.log("⚙️ session.update enviado");
   });
 
   twilioWs.on("message", async (raw) => {
@@ -218,11 +234,12 @@ wss.on("connection", async (twilioWs, req) => {
         callSid = data.start?.callSid || null;
         fromNumber = data.start?.customParameters?.from || "";
         toNumber = data.start?.customParameters?.to || "";
-        addTranscriptLine(`[SYSTEM] Inicio de llamada`);
+        addTranscriptLine("[SYSTEM] Inicio de llamada");
+        console.log("📞 Stream iniciado:", streamSid);
       }
 
       if (data.event === "media") {
-        if (openAiReady && openaiWs.readyState === WebSocket.OPEN) {
+        if (openaiWs.readyState === WebSocket.OPEN) {
           openaiWs.send(
             JSON.stringify({
               type: "input_audio_buffer.append",
@@ -233,6 +250,7 @@ wss.on("connection", async (twilioWs, req) => {
       }
 
       if (data.event === "stop") {
+        console.log("🔴 Twilio stop recibido");
         if (openaiWs.readyState === WebSocket.OPEN) {
           openaiWs.close();
         }
@@ -246,13 +264,16 @@ wss.on("connection", async (twilioWs, req) => {
     try {
       const event = JSON.parse(raw.toString());
 
+      console.log("OpenAI event:", event.type);
+
       if (event.type === "error") {
-        console.error("❌ OPENAI ERROR:", JSON.stringify(event, null, 2));
+        console.error("❌ OPENAI ERROR COMPLETO:", JSON.stringify(event, null, 2));
         return;
       }
 
       if (event.type === "session.updated") {
         openAiReady = true;
+        console.log("✅ OpenAI listo");
 
         if (!greeted) {
           greeted = true;
@@ -262,10 +283,11 @@ wss.on("connection", async (twilioWs, req) => {
               response: {
                 modalities: ["audio", "text"],
                 instructions:
-                  "Saluda de forma natural, di el nombre de la empresa si procede y pregunta en qué puedes ayudar.",
+                  "Saluda de forma natural en español y pregunta en qué puedes ayudar.",
               },
             })
           );
+          console.log("👋 response.create enviado");
         }
       }
 
@@ -285,10 +307,11 @@ wss.on("connection", async (twilioWs, req) => {
         addTranscriptLine(`[AI] ${event.delta}`);
       }
 
-      if (event.type === "conversation.item.input_audio_transcription.completed") {
-        if (event.transcript) {
-          addTranscriptLine(`[USER] ${event.transcript}`);
-        }
+      if (
+        event.type === "conversation.item.input_audio_transcription.completed" &&
+        event.transcript
+      ) {
+        addTranscriptLine(`[USER] ${event.transcript}`);
       }
 
       if (
@@ -296,6 +319,7 @@ wss.on("connection", async (twilioWs, req) => {
         event.item?.type === "function_call"
       ) {
         const args = JSON.parse(event.item.arguments || "{}");
+        console.log("💾 Guardando lead:", args);
 
         leadCaptured = true;
         callSummary = `Lead capturado: ${args.nombre || "sin nombre"} · ${args.necesidad || "sin necesidad"}`;

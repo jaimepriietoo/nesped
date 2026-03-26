@@ -1,6 +1,8 @@
 import { headers } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
+
+const stripe = getStripe();
 
 function getSupabase() {
   return createClient(

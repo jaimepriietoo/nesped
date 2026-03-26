@@ -1,4 +1,6 @@
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
+
+const stripe = getStripe();
 
 const PRICE_MAP = {
   basic: process.env.STRIPE_PRICE_BASIC,

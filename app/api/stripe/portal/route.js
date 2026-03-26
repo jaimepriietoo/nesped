@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 
 function getSupabase() {
   return createClient(
@@ -10,6 +10,7 @@ function getSupabase() {
 
 export async function POST(req) {
   try {
+    const stripe = getStripe();
     const body = await req.json();
     const { clientId } = body;
 
@@ -47,7 +48,7 @@ export async function POST(req) {
   } catch (error) {
     console.error("Stripe portal error:", error);
     return Response.json(
-      { success: false, message: "Error creando portal de facturación" },
+      { success: false, message: error.message || "Error creando portal de facturación" },
       { status: 500 }
     );
   }

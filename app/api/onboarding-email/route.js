@@ -1,7 +1,8 @@
-import { resend } from "@/lib/resend";
+import { getResend } from "@/lib/resend";
 
 export async function POST(req) {
   try {
+    const resend = getResend();
     const body = await req.json();
 
     const { email, clientName, password, loginUrl } = body;
@@ -21,10 +22,8 @@ export async function POST(req) {
         <div style="font-family: Arial; background:#0a0a0a; color:#fff; padding:32px;">
           <h1>Bienvenido a ${clientName}</h1>
           <p>Tu acceso ya está listo.</p>
-
           <p><strong>Email:</strong> ${email}</p>
           <p><strong>Contraseña:</strong> ${password}</p>
-
           <p style="margin-top:20px;">
             <a href="${loginUrl}" style="background:#fff;color:#000;padding:12px 18px;border-radius:10px;text-decoration:none;">
               Entrar al panel
@@ -42,12 +41,11 @@ export async function POST(req) {
     }
 
     return Response.json({ success: true });
-
   } catch (error) {
     console.error("Email error:", error);
 
     return Response.json(
-      { success: false, message: "Error enviando email" },
+      { success: false, message: error.message || "Error enviando email" },
       { status: 500 }
     );
   }

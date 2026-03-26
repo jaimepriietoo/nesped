@@ -1,5 +1,7 @@
 import { cookies } from "next/headers";
-import { supabase } from "@/lib/supabase";
+import { getSupabase } from "@/lib/supabase";
+
+const supabase = getSupabase();
 
 function mapClient(row) {
   return {

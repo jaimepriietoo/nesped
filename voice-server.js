@@ -1,3 +1,5 @@
+console.log("VOICE SERVER NUEVO - 2026-04-07 - FIX-1");
+
 require("dotenv").config({ path: ".env.local" });
 
 const express = require("express");
@@ -21,23 +23,53 @@ const fallbackTwilioNumber =
 
 const client = twilio(accountSid, authToken);
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const hasSupabase =
+  !!process.env.SUPABASE_URL && !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+const supabase = hasSupabase
+  ? createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    )
+  : null;
+
+if (!hasSupabase) {
+  console.log("⚠️ Supabase desactivado");
+}
 
 app.get("/", (req, res) => {
   res.send("NESPED Voice Server activo");
 });
 
 async function getClientConfig(clientId) {
+  if (!supabase) {
+    return {
+      id: clientId || "demo",
+      name: "Demo",
+      prompt:
+        "Habla en español, de forma natural, breve y clara. Eres un asistente telefónico útil. Responde siempre con voz.",
+      webhook: "",
+      twilioNumber: fallbackTwilioNumber,
+    };
+  }
+
   const { data, error } = await supabase
     .from("clients")
     .select("*")
     .eq("id", clientId)
     .single();
 
-  if (error || !data) return null;
+  if (error || !data) {
+    console.error("❌ Error cargando client config:", error?.message || "sin data");
+    return {
+      id: clientId || "demo",
+      name: "Demo",
+      prompt:
+        "Habla en español, de forma natural, breve y clara. Eres un asistente telefónico útil. Responde siempre con voz.",
+      webhook: "",
+      twilioNumber: fallbackTwilioNumber,
+    };
+  }
 
   return {
     id: data.id,
@@ -120,10 +152,10 @@ wss.on("connection", async (twilioWs, req) => {
   const config = await getClientConfig(clientId);
 
   if (!config) {
-    console.error("❌ Cliente no encontrado en Supabase:", clientId);
-    twilioWs.close();
-    return;
-  }
+  console.error("❌ No hay config, usando cierre defensivo:", clientId);
+  twilioWs.close();
+  return;
+}
 
   let streamSid = null;
   let callSid = null;
@@ -154,32 +186,37 @@ wss.on("connection", async (twilioWs, req) => {
     }
   }
 
-  async function saveCall(status = "completed") {
-    try {
-      const durationSeconds = Math.max(
-        1,
-        Math.round((Date.now() - callStartedAt) / 1000)
-      );
-
-      const transcript = transcriptParts.join("\n").trim();
-
-      await supabase.from("calls").insert({
-        client_id: clientId,
-        call_sid: callSid || null,
-        from_number: fromNumber || "",
-        to_number: toNumber || "",
-        status,
-        summary: callSummary,
-        transcript,
-        lead_captured: leadCaptured,
-        duration_seconds: durationSeconds,
-      });
-
-      console.log("📞 Llamada guardada en Supabase");
-    } catch (err) {
-      console.error("❌ Error guardando llamada:", err.message);
-    }
+ async function saveCall(status = "completed") {
+  if (!supabase) {
+    console.log("⚠️ saveCall omitido porque Supabase está desactivado");
+    return;
   }
+
+  try {
+    const durationSeconds = Math.max(
+      1,
+      Math.round((Date.now() - callStartedAt) / 1000)
+    );
+
+    const transcript = transcriptParts.join("\n").trim();
+
+    await supabase.from("calls").insert({
+      client_id: clientId,
+      call_sid: callSid || null,
+      from_number: fromNumber || "",
+      to_number: toNumber || "",
+      status,
+      summary: callSummary,
+      transcript,
+      lead_captured: leadCaptured,
+      duration_seconds: durationSeconds,
+    });
+
+    console.log("📞 Llamada guardada en Supabase");
+  } catch (err) {
+    console.error("❌ Error guardando llamada:", err.message);
+  }
+}
 
   openaiWs.on("open", () => {
     console.log("🤖 OpenAI conectado para:", config.name);
@@ -197,8 +234,9 @@ wss.on("connection", async (twilioWs, req) => {
             model: "gpt-4o-mini-transcribe",
           },
           turn_detection: {
-            type: "server_vad",
-          },
+  type: "server_vad",
+  create_response: true,
+},
           tools: [
             {
               type: "function",
@@ -239,15 +277,16 @@ wss.on("connection", async (twilioWs, req) => {
       }
 
       if (data.event === "media") {
-        if (openaiWs.readyState === WebSocket.OPEN) {
-          openaiWs.send(
-            JSON.stringify({
-              type: "input_audio_buffer.append",
-              audio: data.media.payload,
-            })
-          );
-        }
-      }
+  if (openaiWs.readyState === WebSocket.OPEN) {
+    console.log("🎤 Audio recibido de Twilio");
+    openaiWs.send(
+      JSON.stringify({
+        type: "input_audio_buffer.append",
+        audio: data.media.payload,
+      })
+    );
+  }
+}
 
       if (data.event === "stop") {
         console.log("🔴 Twilio stop recibido");
@@ -291,17 +330,18 @@ wss.on("connection", async (twilioWs, req) => {
         }
       }
 
-      if (event.type === "response.audio.delta" && event.delta && streamSid) {
-        twilioWs.send(
-          JSON.stringify({
-            event: "media",
-            streamSid,
-            media: {
-              payload: event.delta,
-            },
-          })
-        );
-      }
+    if (event.type === "response.output_audio.delta" && event.delta && streamSid) {
+  twilioWs.send(
+    JSON.stringify({
+      event: "media",
+      streamSid,
+      media: {
+        payload: event.delta,
+      },
+    })
+  );
+  console.log("🔊 Audio enviado a Twilio");
+}
 
       if (event.type === "response.text.delta" && event.delta) {
         addTranscriptLine(`[AI] ${event.delta}`);
@@ -325,7 +365,35 @@ wss.on("connection", async (twilioWs, req) => {
         callSummary = `Lead capturado: ${args.nombre || "sin nombre"} · ${args.necesidad || "sin necesidad"}`;
 
         try {
-          const webhookRes = await fetch(config.webhook, {
+          if (!config.webhook) {
+  console.log("⚠️ Webhook no configurado, se omite guardar lead externo");
+
+  openaiWs.send(
+    JSON.stringify({
+      type: "conversation.item.create",
+      item: {
+        type: "function_call_output",
+        call_id: event.item.call_id,
+        output: JSON.stringify({ ok: true }),
+      },
+    })
+  );
+
+  openaiWs.send(
+    JSON.stringify({
+      type: "response.create",
+      response: {
+        modalities: ["audio", "text"],
+        instructions:
+          "Confirma brevemente que la solicitud ha quedado registrada.",
+      },
+    })
+  );
+
+  return;
+}
+          
+            const webhookRes = await fetch(config.webhook, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",

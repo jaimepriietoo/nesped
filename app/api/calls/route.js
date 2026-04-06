@@ -1,10 +1,9 @@
 import { cookies } from "next/headers";
 import { getSupabase } from "@/lib/supabase";
 
-const supabase = getSupabase();
-
 export async function GET() {
   try {
+    const supabase = getSupabase();
     const cookieStore = await cookies();
     const auth = cookieStore.get("nesped_auth")?.value;
     const clientId = cookieStore.get("nesped_client_id")?.value;

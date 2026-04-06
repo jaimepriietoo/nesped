@@ -1,7 +1,5 @@
 import { getStripe } from "@/lib/stripe";
 
-const stripe = getStripe();
-
 const PRICE_MAP = {
   basic: process.env.STRIPE_PRICE_BASIC,
   pro: process.env.STRIPE_PRICE_PRO,
@@ -10,6 +8,7 @@ const PRICE_MAP = {
 
 export async function POST(req) {
   try {
+    const stripe = getStripe();
     const body = await req.json();
     const { clientId, plan = "pro", email = "" } = body;
 

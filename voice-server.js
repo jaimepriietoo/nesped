@@ -6,7 +6,7 @@ const WebSocket = require("ws");
 const twilio = require("twilio");
 const { createClient } = require("@supabase/supabase-js");
 
-console.log("VOICE SERVER FINAL COMPLETE ANTI-NOISE PRO - 2026-04-07");
+console.log("VOICE SERVER FINAL COMPLETE ANTI-NOISE PRO V2 - 2026-04-07");
 console.log("OPENAI_API_KEY presente:", !!process.env.OPENAI_API_KEY);
 console.log("BASE_URL:", process.env.BASE_URL);
 console.log("PORT:", process.env.PORT);
@@ -78,6 +78,13 @@ RUIDO:
 - No respondas a sonidos sueltos
 - No cambies de tema por ruido
 - Si no has entendido bien, pide repetirlo de forma natural
+- Si no hay una frase clara del usuario, no respondas
+
+RITMO:
+- Espera a que la persona termine claramente
+- No respondas a pausas cortas
+- Si la frase queda a medias, espera
+- No te precipites
 
 CAPTURA DE LEAD:
 Recoge, de forma natural:
@@ -258,12 +265,11 @@ wss.on("connection", async (twilioWs, req) => {
   let closingRequested = false;
   let callSaved = false;
 
-  // ANTI-RUIDO PRO
+  // anti-ruido
   let totalMediaChunks = 0;
   let speechStartChunk = null;
   let lastUtteranceChunks = 0;
   let noiseResponseGuard = false;
-  let assistantSpeaking = false;
   let pendingHangup = null;
 
   const openaiWs = new WebSocket(
@@ -367,37 +373,15 @@ wss.on("connection", async (twilioWs, req) => {
           voice: "alloy",
           input_audio_format: "g711_ulaw",
           output_audio_format: "g711_ulaw",
-          instructions: `
-${config.prompt || getFallbackPrompt()}
-
-REGLAS ANTI-RUIDO:
-- Ignora toses, carraspeos, respiraciones, golpes, ruidos de fondo y sonidos cortos.
-- No respondas a sonidos sueltos.
-- No cambies de tema por ruido.
-- Si no has entendido claramente una frase completa, pide repetirla de forma natural.
-- Si oyes algo confuso o incompleto, di algo breve como: "Perdona, no te he oído bien" o "¿Me lo puedes repetir un momento?".
-- No te precipites al responder.
-- Espera a que la persona haya terminado claramente.
-- No interpretes pausas cortas como final de turno.
-
-ESTILO:
-- Habla como una persona real por teléfono.
-- Usa frases cortas y naturales.
-- No suenes robótico.
-- Usa conectores suaves como "vale", "claro", "genial", "entiendo", "a ver", sin abusar.
-- Si el usuario tose, duda o hay ruido, mantén el hilo de la conversación y no inventes una intención nueva.
-`.trim(),
+          instructions: (config.prompt || getFallbackPrompt()).trim(),
           input_audio_transcription: {
             model: "gpt-4o-mini-transcribe",
           },
           turn_detection: {
-            type: "server_vad",
+            type: "semantic_vad",
+            eagerness: "auto",
             create_response: true,
             interrupt_response: true,
-            threshold: 0.9,
-            prefix_padding_ms: 500,
-            silence_duration_ms: 1200,
-            idle_timeout_ms: 6000,
           },
           tools: [
             {
@@ -522,8 +506,9 @@ ESTILO:
           lastUtteranceChunks = 0;
         }
 
-        // ~20ms por chunk aprox. Menos de 18 chunks ≈ ruido / tos / sonido corto
-        noiseResponseGuard = lastUtteranceChunks < 18;
+        // Muy estricto: ~20ms/chunk. 45 chunks ≈ 900ms.
+        // Por debajo de eso, lo tratamos como tos/ruido/sonido corto.
+        noiseResponseGuard = lastUtteranceChunks < 45;
 
         console.log(
           `🟡 speech_stopped | chunks=${lastUtteranceChunks} | noiseGuard=${noiseResponseGuard}`
@@ -554,7 +539,6 @@ ESTILO:
         } else if (!streamSid) {
           console.log("⚠️ Audio delta recibido pero no hay streamSid todavía");
         } else {
-          assistantSpeaking = true;
           twilioWs.send(
             JSON.stringify({
               event: "media",
@@ -572,23 +556,20 @@ ESTILO:
         event.type === "response.audio.done" ||
         event.type === "response.output_audio.done"
       ) {
-        assistantSpeaking = false;
         console.log("✅ audio done recibido");
       }
 
       if (event.type === "response.done") {
-        assistantSpeaking = false;
         console.log("✅ response.done recibido");
 
         if (closingRequested) {
           pendingHangup = setTimeout(() => {
             endCallSoon();
-          }, 1400);
+          }, 1200);
         }
       }
 
       if (event.type === "response.cancelled") {
-        assistantSpeaking = false;
         console.log("⛔ response.cancelled recibido");
       }
 

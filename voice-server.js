@@ -268,13 +268,14 @@ wss.on("connection", async (twilioWs, req) => {
       const data = JSON.parse(raw.toString());
 
       if (data.event === "start") {
-        streamSid = data.start?.streamSid || null;
-        callSid = data.start?.callSid || null;
-        fromNumber = data.start?.customParameters?.from || "";
-        toNumber = data.start?.customParameters?.to || "";
-        addTranscriptLine("[SYSTEM] Inicio de llamada");
-        console.log("📞 Stream iniciado:", streamSid);
-      }
+  streamSid = data.start?.streamSid || null;
+  callSid = data.start?.callSid || null;
+  fromNumber = data.start?.customParameters?.from || "";
+  toNumber = data.start?.customParameters?.to || "";
+  addTranscriptLine("[SYSTEM] Inicio de llamada");
+  console.log("📞 Stream iniciado:", streamSid);
+  console.log("📞 Call SID:", callSid);
+}
 
       if (data.event === "media") {
   if (openaiWs.readyState === WebSocket.OPEN) {
@@ -310,6 +311,14 @@ wss.on("connection", async (twilioWs, req) => {
         return;
       }
 
+      if (event.type === "response.done") {
+  console.log("✅ response.done recibido");
+}
+
+if (event.type === "response.audio.done" || event.type === "response.output_audio.done") {
+  console.log("✅ audio done recibido");
+}
+
       if (event.type === "session.updated") {
         openAiReady = true;
         console.log("✅ OpenAI listo");
@@ -329,8 +338,12 @@ wss.on("connection", async (twilioWs, req) => {
           console.log("👋 response.create enviado");
         }
       }
-
-    if (event.type === "response.output_audio.delta" && event.delta && streamSid) {
+if (
+  (event.type === "response.audio.delta" ||
+    event.type === "response.output_audio.delta") &&
+  event.delta &&
+  streamSid
+) {
   twilioWs.send(
     JSON.stringify({
       event: "media",

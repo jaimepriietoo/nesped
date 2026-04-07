@@ -31,9 +31,7 @@ function PanelCard({ title, children, right }) {
 }
 
 function Badge({ children, ok = false, warn = false }) {
-  let cls =
-    "bg-white/8 text-white/70 border border-white/10";
-
+  let cls = "bg-white/8 text-white/70 border border-white/10";
   if (ok) cls = "bg-emerald-500/15 text-emerald-300 border border-emerald-500/20";
   if (warn) cls = "bg-amber-500/15 text-amber-300 border border-amber-500/20";
 
@@ -49,6 +47,11 @@ function formatDate(value) {
   return new Date(value).toLocaleString();
 }
 
+function formatDay(value) {
+  if (!value) return "-";
+  return new Date(value).toLocaleDateString();
+}
+
 function formatSeconds(sec) {
   const n = Number(sec || 0);
   if (!n) return "0s";
@@ -58,6 +61,174 @@ function formatSeconds(sec) {
   return s ? `${m}m ${s}s` : `${m}m`;
 }
 
+function getPhoneFromText(text = "") {
+  const match = String(text).match(/(\+?\d[\d\s-]{7,}\d)/);
+  return match ? match[1] : "-";
+}
+
+function getLeadNameFromSummary(summary = "") {
+  const match = String(summary).match(/Lead capturado:\s*([^·]+)/i);
+  return match ? match[1].trim() : "-";
+}
+
+function getNeedFromSummary(summary = "") {
+  const match = String(summary).match(/·\s*(.+)$/);
+  return match ? match[1].trim() : "-";
+}
+
+function MiniBarChart({ title, data, color = "bg-blue-400" }) {
+  const max = Math.max(...data.map((d) => d.value), 1);
+
+  return (
+    <div className="rounded-[24px] border border-white/10 bg-black/20 p-5">
+      <div className="mb-4 text-sm text-white/50">{title}</div>
+      <div className="flex h-48 items-end gap-3">
+        {data.map((item) => {
+          const height = Math.max((item.value / max) * 100, item.value > 0 ? 8 : 2);
+          return (
+            <div key={item.label} className="flex flex-1 flex-col items-center gap-2">
+              <div className="text-xs text-white/45">{item.value}</div>
+              <div className="flex h-36 w-full items-end">
+                <div
+                  className={`w-full rounded-t-xl ${color}`}
+                  style={{ height: `${height}%` }}
+                />
+              </div>
+              <div className="text-[10px] text-white/35">{item.label}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function LeadDrawer({ lead, call, onClose }) {
+  if (!lead) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm">
+      <div className="h-full w-full max-w-2xl overflow-y-auto border-l border-white/10 bg-[#060606] p-6 shadow-2xl shadow-black">
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <div className="text-sm uppercase tracking-[0.2em] text-blue-300">
+              Ficha de lead
+            </div>
+            <h2 className="mt-2 text-3xl font-semibold text-white">
+              {lead.nombre || "Lead sin nombre"}
+            </h2>
+            <div className="mt-2 text-sm text-white/45">
+              Registrado el {formatDate(lead.created_at)}
+            </div>
+          </div>
+
+          <button
+            onClick={onClose}
+            className="rounded-2xl border border-white/15 px-4 py-2 text-sm font-medium text-white hover:bg-white/5"
+          >
+            Cerrar
+          </button>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+            <div className="text-sm text-white/45">Nombre</div>
+            <div className="mt-2 text-lg font-semibold text-white">
+              {lead.nombre || "-"}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+            <div className="text-sm text-white/45">Teléfono</div>
+            <div className="mt-2 text-lg font-semibold text-white">
+              {lead.telefono || "-"}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+            <div className="text-sm text-white/45">Ciudad</div>
+            <div className="mt-2 text-lg font-semibold text-white">
+              {lead.ciudad || "-"}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+            <div className="text-sm text-white/45">Origen</div>
+            <div className="mt-2 text-lg font-semibold text-white">
+              {lead.origen || "-"}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+          <div className="text-sm text-white/45">Necesidad</div>
+          <div className="mt-2 text-base leading-7 text-white/80">
+            {lead.necesidad || "-"}
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+          <div className="text-sm text-white/45">Valoración rápida</div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Badge ok={!!lead.telefono}>Teléfono capturado</Badge>
+            <Badge ok={!!lead.nombre}>Nombre capturado</Badge>
+            <Badge ok={!!lead.necesidad}>Necesidad capturada</Badge>
+          </div>
+        </div>
+
+        <div className="mt-6">
+          <div className="mb-3 text-sm uppercase tracking-[0.2em] text-emerald-300">
+            Llamada asociada
+          </div>
+
+          {call ? (
+            <div className="space-y-4">
+              <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div>
+                    <div className="text-sm text-white/45">Fecha</div>
+                    <div className="mt-2 text-white/80">{formatDate(call.created_at)}</div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-white/45">Duración</div>
+                    <div className="mt-2 text-white/80">
+                      {formatSeconds(call.duration_seconds)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-white/45">Estado</div>
+                    <div className="mt-2">
+                      <Badge ok={(call.status || "") !== "failed"}>
+                        {call.status || "-"}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+                <div className="text-sm text-white/45">Resumen</div>
+                <div className="mt-2 text-white/80">{call.summary || "Sin resumen"}</div>
+              </div>
+
+              <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+                <div className="text-sm text-white/45">Transcripción</div>
+                <pre className="mt-3 whitespace-pre-wrap break-words text-sm leading-7 text-white/70">
+                  {call.transcript || "Sin transcripción"}
+                </pre>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5 text-white/45">
+              No se ha podido asociar una llamada exacta a este lead.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ClientPortalPage() {
   const [dashboard, setDashboard] = useState(null);
   const [calls, setCalls] = useState([]);
@@ -65,6 +236,7 @@ export default function ClientPortalPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [billingLoading, setBillingLoading] = useState(false);
+  const [selectedLead, setSelectedLead] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -151,6 +323,64 @@ export default function ClientPortalPage() {
     };
   }, [dashboard, calls, leads]);
 
+  const chartData = useMemo(() => {
+    const dayMap = new Map();
+
+    calls.forEach((call) => {
+      const day = formatDay(call.created_at);
+      if (!dayMap.has(day)) {
+        dayMap.set(day, { label: day, calls: 0, leads: 0 });
+      }
+      const item = dayMap.get(day);
+      item.calls += 1;
+      if (call.lead_captured) item.leads += 1;
+    });
+
+    const rows = Array.from(dayMap.values()).slice(-7);
+
+    return {
+      callsByDay: rows.map((r) => ({ label: r.label, value: r.calls })),
+      leadsByDay: rows.map((r) => ({ label: r.label, value: r.leads })),
+    };
+  }, [calls]);
+
+  const enrichedLeads = useMemo(() => {
+    if (leads.length > 0) return leads;
+
+    return calls
+      .filter((c) => c.lead_captured)
+      .map((c) => ({
+        id: c.id,
+        created_at: c.created_at,
+        nombre: getLeadNameFromSummary(c.summary),
+        telefono: getPhoneFromText(c.transcript || ""),
+        necesidad: getNeedFromSummary(c.summary),
+        ciudad: "-",
+        origen: "llamada",
+      }));
+  }, [calls, leads]);
+
+  const selectedLeadCall = useMemo(() => {
+    if (!selectedLead) return null;
+
+    return (
+      calls.find((call) => {
+        const sameDate =
+          selectedLead.created_at &&
+          call.created_at &&
+          new Date(selectedLead.created_at).toDateString() ===
+            new Date(call.created_at).toDateString();
+
+        const sameName =
+          selectedLead.nombre &&
+          call.summary &&
+          call.summary.toLowerCase().includes(String(selectedLead.nombre).toLowerCase());
+
+        return sameDate || sameName;
+      }) || null
+    );
+  }, [selectedLead, calls]);
+
   async function openBillingPortal() {
     try {
       setBillingLoading(true);
@@ -212,7 +442,7 @@ export default function ClientPortalPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#030303] text-white p-8">
+      <div className="min-h-screen bg-[#030303] p-8 text-white">
         Cargando portal...
       </div>
     );
@@ -230,12 +460,11 @@ export default function ClientPortalPage() {
               Portal del cliente
             </div>
             <h1 className="mt-2 text-4xl font-semibold tracking-tight md:text-6xl">
-              Control total de llamadas, leads y rendimiento
+              Visión total de llamadas, leads, actividad y rendimiento
             </h1>
             <p className="mt-4 max-w-3xl text-lg leading-8 text-white/60">
-              Aquí puedes ver de forma clara qué está haciendo la IA, cuántos
-              leads se están captando, cómo están funcionando las llamadas y el
-              estado general del servicio.
+              Una vista clara para entender qué hace la IA, qué oportunidades
+              se están generando y cómo está funcionando el sistema comercial.
             </p>
           </div>
 
@@ -294,6 +523,20 @@ export default function ClientPortalPage() {
             title="Más larga"
             value={formatSeconds(metrics.longestCall)}
             subtitle="Máxima duración"
+          />
+        </div>
+
+        <div className="mt-8 grid gap-6 xl:grid-cols-2">
+          <MiniBarChart
+            title="Llamadas por día"
+            data={chartData.callsByDay.length ? chartData.callsByDay : [{ label: "Sin datos", value: 0 }]}
+            color="bg-blue-400"
+          />
+
+          <MiniBarChart
+            title="Leads por día"
+            data={chartData.leadsByDay.length ? chartData.leadsByDay : [{ label: "Sin datos", value: 0 }]}
+            color="bg-emerald-400"
           />
         </div>
 
@@ -358,7 +601,7 @@ export default function ClientPortalPage() {
 
             <PanelCard
               title="Leads capturados"
-              right={<Badge ok>{leads.length} leads</Badge>}
+              right={<Badge ok>{enrichedLeads.length} leads</Badge>}
             >
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
@@ -369,18 +612,18 @@ export default function ClientPortalPage() {
                       <th className="pb-3 pr-4">Teléfono</th>
                       <th className="pb-3 pr-4">Necesidad</th>
                       <th className="pb-3 pr-4">Ciudad</th>
-                      <th className="pb-3 pr-4">Origen</th>
+                      <th className="pb-3 pr-4">Detalle</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {leads.length === 0 ? (
+                    {enrichedLeads.length === 0 ? (
                       <tr>
                         <td colSpan={6} className="py-6 text-white/40">
                           Todavía no hay leads guardados.
                         </td>
                       </tr>
                     ) : (
-                      leads.slice(0, 20).map((lead) => (
+                      enrichedLeads.slice(0, 20).map((lead) => (
                         <tr
                           key={lead.id}
                           className="border-b border-white/5 align-top"
@@ -400,8 +643,13 @@ export default function ClientPortalPage() {
                           <td className="py-4 pr-4 text-white/65">
                             {lead.ciudad || "-"}
                           </td>
-                          <td className="py-4 pr-4 text-white/65">
-                            {lead.origen || "-"}
+                          <td className="py-4 pr-4">
+                            <button
+                              onClick={() => setSelectedLead(lead)}
+                              className="rounded-xl border border-white/15 px-3 py-2 text-xs font-medium text-white hover:bg-white/5"
+                            >
+                              Ver ficha
+                            </button>
                           </td>
                         </tr>
                       ))
@@ -472,8 +720,8 @@ export default function ClientPortalPage() {
                   <span className="font-semibold text-white">
                     {metrics.callsWithoutLead}
                   </span>{" "}
-                  llamadas sin lead capturado, lo que puede usarse para optimizar
-                  prompt, guion o timing.
+                  llamadas sin lead capturado, lo que sirve para optimizar prompt,
+                  guion y captación.
                 </div>
               </div>
             </PanelCard>
@@ -510,6 +758,12 @@ export default function ClientPortalPage() {
           </div>
         </div>
       </main>
+
+      <LeadDrawer
+        lead={selectedLead}
+        call={selectedLeadCall}
+        onClose={() => setSelectedLead(null)}
+      />
     </div>
   );
 }

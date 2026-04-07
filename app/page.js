@@ -1,6 +1,89 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+
+function StatCard({ label, value, glow = "from-blue-500/20 to-white/5" }) {
+  return (
+    <div className={`rounded-3xl border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-black/30 backdrop-blur-xl`}>
+      <div className="text-xs uppercase tracking-[0.18em] text-white/45">
+        {label}
+      </div>
+      <div className="mt-3 text-3xl font-semibold tracking-tight text-white">
+        {value}
+      </div>
+      <div className={`mt-4 h-1 rounded-full bg-gradient-to-r ${glow}`} />
+    </div>
+  );
+}
+
+function FeatureCard({ title, text }) {
+  return (
+    <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6 shadow-xl shadow-black/30 backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:border-white/20 hover:bg-white/[0.06]">
+      <div className="text-xl font-semibold text-white">{title}</div>
+      <p className="mt-3 text-sm leading-7 text-white/60">{text}</p>
+    </div>
+  );
+}
+
+function PricingCard({
+  title,
+  price,
+  subtitle,
+  features,
+  cta,
+  href,
+  highlighted = false,
+}) {
+  return (
+    <div
+      className={`rounded-[30px] border p-7 shadow-2xl backdrop-blur-xl transition duration-300 hover:-translate-y-1 ${
+        highlighted
+          ? "border-white/25 bg-white/[0.08] shadow-white/10"
+          : "border-white/10 bg-white/[0.04] shadow-black/30"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="text-xl font-semibold text-white">{title}</div>
+          <div className="mt-2 text-sm text-white/55">{subtitle}</div>
+        </div>
+        {highlighted ? (
+          <div className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-black">
+            Recomendado
+          </div>
+        ) : null}
+      </div>
+
+      <div className="mt-6 flex items-end gap-2">
+        <div className="text-5xl font-semibold tracking-tight text-white">
+          {price}
+        </div>
+        <div className="pb-2 text-sm text-white/45">/ mes</div>
+      </div>
+
+      <div className="mt-6 space-y-3">
+        {features.map((item) => (
+          <div key={item} className="flex items-start gap-3 text-sm text-white/70">
+            <span className="mt-1 h-2 w-2 rounded-full bg-emerald-400" />
+            <span>{item}</span>
+          </div>
+        ))}
+      </div>
+
+      <Link
+        href={href}
+        className={`mt-8 inline-flex w-full items-center justify-center rounded-2xl px-5 py-3 text-sm font-semibold transition ${
+          highlighted
+            ? "bg-white text-black hover:bg-white/90"
+            : "border border-white/15 text-white hover:bg-white/5"
+        }`}
+      >
+        {cta}
+      </Link>
+    </div>
+  );
+}
 
 export default function NespedLanding() {
   const [clients, setClients] = useState([]);
@@ -93,18 +176,21 @@ export default function NespedLanding() {
     clients.find((client) => client.id === selectedClientId) || clients[0];
 
   return (
-    <div className="min-h-screen bg-[#030303] text-white">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.18),transparent_28%),radial-gradient(circle_at_top_right,rgba(16,185,129,0.14),transparent_24%),radial-gradient(circle_at_bottom,rgba(255,255,255,0.05),transparent_35%)]" />
+    <div className="min-h-screen overflow-x-hidden bg-[#030303] text-white">
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.22),transparent_28%),radial-gradient(circle_at_top_right,rgba(16,185,129,0.14),transparent_24%),radial-gradient(circle_at_bottom,rgba(255,255,255,0.05),transparent_35%)]" />
+      <div className="pointer-events-none fixed inset-0 opacity-30 [background-image:linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] [background-size:36px_36px]" />
 
       <header className="sticky top-0 z-50 border-b border-white/10 bg-black/45 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-black text-lg font-bold shadow-2xl">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-lg font-bold text-black shadow-2xl">
               N
             </div>
             <div>
               <div className="text-lg font-semibold tracking-tight">NESPED</div>
-              <div className="text-xs text-white/45">Enterprise Voice AI Platform</div>
+              <div className="text-xs text-white/45">
+                Enterprise Voice AI Platform
+              </div>
             </div>
           </div>
 
@@ -112,8 +198,11 @@ export default function NespedLanding() {
             <a href="#producto" className="transition hover:text-white">
               Producto
             </a>
-            <a href="#casos" className="transition hover:text-white">
-              Casos
+            <a href="#metricas" className="transition hover:text-white">
+              Métricas
+            </a>
+            <a href="#planes" className="transition hover:text-white">
+              Planes
             </a>
             <a href="#demo" className="transition hover:text-white">
               Demo
@@ -124,12 +213,18 @@ export default function NespedLanding() {
           </nav>
 
           <div className="flex items-center gap-3">
-            <a
-              href="/login"
-              className="rounded-2xl border border-white/15 px-4 py-2 text-sm font-medium transition hover:bg-white hover:text-black"
+            <Link
+              href="/pricing"
+              className="hidden rounded-2xl border border-white/15 px-4 py-2 text-sm font-medium transition hover:bg-white/5 md:inline-flex"
+            >
+              Pricing
+            </Link>
+            <Link
+              href="/portal"
+              className="rounded-2xl bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-white/90"
             >
               Portal clientes
-            </a>
+            </Link>
           </div>
         </div>
       </header>
@@ -144,13 +239,13 @@ export default function NespedLanding() {
               </div>
 
               <h1 className="max-w-4xl text-5xl font-semibold tracking-tight md:text-7xl">
-                Una recepcionista IA que capta clientes por ti.
+                La capa de voz con IA que convierte llamadas en clientes.
               </h1>
 
               <p className="mt-6 max-w-2xl text-lg leading-8 text-white/65 md:text-xl">
-                NESPED permite a empresas automatizar llamadas, captar leads,
-                responder en tiempo real y conectar toda la operación con CRM,
-                flujos y dashboards privados por cliente.
+                NESPED automatiza llamadas, atiende en tiempo real, capta leads,
+                los organiza por cliente y da una visibilidad brutal con portales,
+                métricas y control comercial centralizado.
               </p>
 
               <div className="mt-8 flex flex-wrap gap-4">
@@ -161,25 +256,33 @@ export default function NespedLanding() {
                   Probar llamada en vivo
                 </a>
 
-                <a
-                  href="/login"
+                <Link
+                  href="/portal"
                   className="rounded-2xl border border-white/15 px-6 py-3 text-sm font-semibold transition hover:bg-white/5"
                 >
                   Entrar al portal
-                </a>
+                </Link>
+
+                <Link
+                  href="/pricing"
+                  className="rounded-2xl border border-white/15 px-6 py-3 text-sm font-semibold transition hover:bg-white/5"
+                >
+                  Ver planes
+                </Link>
               </div>
 
               <div className="mt-10 grid max-w-2xl grid-cols-2 gap-4 md:grid-cols-4">
-                {stats.map((item) => (
-                  <div
+                {stats.map((item, index) => (
+                  <StatCard
                     key={item.label}
-                    className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 backdrop-blur"
-                  >
-                    <div className="text-xs text-white/45">{item.label}</div>
-                    <div className="mt-2 text-2xl font-semibold tracking-tight">
-                      {item.value}
-                    </div>
-                  </div>
+                    label={item.label}
+                    value={item.value}
+                    glow={
+                      index % 2 === 0
+                        ? "from-blue-500/30 to-white/5"
+                        : "from-emerald-500/30 to-white/5"
+                    }
+                  />
                 ))}
               </div>
             </div>
@@ -213,7 +316,7 @@ export default function NespedLanding() {
                       <div className="text-sm text-white/45">Multi-cliente</div>
                       <div className="mt-2 text-sm leading-7 text-white/70">
                         Cada empresa tiene su propio prompt, webhook, branding,
-                        usuarios y portal privado.
+                        usuarios, métricas y portal privado.
                       </div>
                     </div>
 
@@ -242,7 +345,15 @@ export default function NespedLanding() {
                       <div className="text-sm text-white/45">Stack</div>
                       <div className="mt-2 text-sm leading-7 text-white/70">
                         OpenAI Realtime · Twilio · Supabase · Vercel · Railway ·
-                        HubSpot · n8n
+                        Stripe · HubSpot · n8n
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/10 bg-gradient-to-r from-blue-500/10 to-emerald-500/10 p-4">
+                      <div className="text-sm text-white/45">Lo que consigue</div>
+                      <div className="mt-2 text-sm leading-7 text-white/80">
+                        Menos llamadas perdidas, más leads cualificados y una
+                        experiencia premium para tus clientes.
                       </div>
                     </div>
                   </div>
@@ -253,31 +364,63 @@ export default function NespedLanding() {
         </section>
 
         <section id="producto" className="mx-auto max-w-7xl px-6 py-8 md:py-14">
+          <div className="mb-8">
+            <div className="text-sm uppercase tracking-[0.2em] text-blue-300">
+              Producto
+            </div>
+            <h2 className="mt-2 text-3xl font-semibold tracking-tight md:text-5xl">
+              Una plataforma de llamadas con IA pensada para impresionar
+            </h2>
+          </div>
+
           <div className="grid gap-5 md:grid-cols-3">
-            {[
-              {
-                title: "Recepcionista IA 24/7",
-                text: "Atiende llamadas en tiempo real con voz natural y evita que se pierdan oportunidades por no responder.",
-              },
-              {
-                title: "Captura y calificación",
-                text: "Recoge nombre, teléfono, necesidad y contexto comercial para que ventas actúe más rápido.",
-              },
-              {
-                title: "Infraestructura multi-cliente",
-                text: "Cada empresa opera con su propia configuración, identidad, usuarios y flujo comercial.",
-              },
-            ].map((card) => (
-              <div
-                key={card.title}
-                className="rounded-[28px] border border-white/10 bg-white/[0.03] p-6 shadow-lg shadow-black/30"
-              >
-                <div className="text-xl font-semibold">{card.title}</div>
-                <p className="mt-3 text-sm leading-7 text-white/60">
-                  {card.text}
-                </p>
+            <FeatureCard
+              title="Recepcionista IA 24/7"
+              text="Atiende llamadas en tiempo real con voz natural y evita perder oportunidades por no responder."
+            />
+            <FeatureCard
+              title="Captura y calificación"
+              text="Recoge nombre, teléfono, necesidad y contexto comercial para que ventas actúe mucho más rápido."
+            />
+            <FeatureCard
+              title="Infraestructura multi-cliente"
+              text="Cada empresa opera con su propia configuración, identidad, usuarios, panel y flujo comercial."
+            />
+          </div>
+        </section>
+
+        <section id="metricas" className="mx-auto max-w-7xl px-6 py-10 md:py-16">
+          <div className="rounded-[34px] border border-white/10 bg-white/[0.03] p-8 shadow-2xl shadow-black/40">
+            <div className="mb-8">
+              <div className="text-sm uppercase tracking-[0.2em] text-emerald-300">
+                Visibilidad
               </div>
-            ))}
+              <h2 className="mt-2 text-3xl font-semibold tracking-tight md:text-5xl">
+                Tu cliente ve una plataforma que lo dice absolutamente todo
+              </h2>
+            </div>
+
+            <div className="grid gap-5 md:grid-cols-4">
+              <StatCard label="Llamadas" value="Tiempo real" />
+              <StatCard label="Leads" value="Cualificados" />
+              <StatCard label="Conversión" value="Por cliente" />
+              <StatCard label="Actividad" value="24/7" />
+            </div>
+
+            <div className="mt-8 grid gap-5 md:grid-cols-3">
+              <FeatureCard
+                title="Resumen por llamada"
+                text="Cada llamada puede mostrar estado, duración, lead capturado, transcripción y resumen comercial."
+              />
+              <FeatureCard
+                title="Métricas por cliente"
+                text="Conversión, llamadas totales, duración media, actividad y visión completa del rendimiento."
+              />
+              <FeatureCard
+                title="Portal premium"
+                text="Una interfaz limpia, potente y visual para que cada cliente diga: esto es serio."
+              />
+            </div>
           </div>
         </section>
 
@@ -293,31 +436,73 @@ export default function NespedLanding() {
             </div>
 
             <div className="grid gap-5 md:grid-cols-3">
-              {[
-                {
-                  title: "Clínicas",
-                  text: "Recepción de pacientes, captura de datos y gestión de solicitudes de cita o tratamiento.",
-                },
-                {
-                  title: "Inmobiliarias",
-                  text: "Filtrado de compradores, propietarios e interesados para priorizar oportunidades reales.",
-                },
-                {
-                  title: "Empresas de servicios",
-                  text: "Atención de incidencias, nuevos leads y pre-cualificación antes de pasar a comercial.",
-                },
-              ].map((item) => (
-                <div
-                  key={item.title}
-                  className="rounded-[24px] border border-white/10 bg-black/20 p-6"
-                >
-                  <div className="text-lg font-semibold">{item.title}</div>
-                  <p className="mt-3 text-sm leading-7 text-white/60">
-                    {item.text}
-                  </p>
-                </div>
-              ))}
+              <FeatureCard
+                title="Clínicas"
+                text="Recepción de pacientes, captura de datos y gestión de solicitudes de cita o tratamiento."
+              />
+              <FeatureCard
+                title="Inmobiliarias"
+                text="Filtrado de compradores, propietarios e interesados para priorizar oportunidades reales."
+              />
+              <FeatureCard
+                title="Empresas de servicios"
+                text="Atención de incidencias, nuevos leads y pre-cualificación antes de pasar a comercial."
+              />
             </div>
+          </div>
+        </section>
+
+        <section id="planes" className="mx-auto max-w-7xl px-6 py-10 md:py-16">
+          <div className="mb-8">
+            <div className="text-sm uppercase tracking-[0.2em] text-emerald-300">
+              Facturación
+            </div>
+            <h2 className="mt-2 text-3xl font-semibold tracking-tight md:text-5xl">
+              Planes para contratar y escalar
+            </h2>
+          </div>
+
+          <div className="grid gap-5 lg:grid-cols-3">
+            <PricingCard
+              title="Starter"
+              price="97€"
+              subtitle="Para validar el sistema"
+              features={[
+                "Recepción IA básica",
+                "Captura de leads",
+                "Dashboard inicial",
+                "Soporte estándar",
+              ]}
+              cta="Empezar"
+              href="/pricing"
+            />
+            <PricingCard
+              title="Pro"
+              price="197€"
+              subtitle="La opción más sólida para vender"
+              highlighted
+              features={[
+                "IA más avanzada",
+                "Portal de cliente",
+                "Métricas y resúmenes",
+                "Integraciones y soporte prioritario",
+              ]}
+              cta="Contratar Pro"
+              href="/pricing"
+            />
+            <PricingCard
+              title="Enterprise"
+              price="Custom"
+              subtitle="Para despliegues potentes"
+              features={[
+                "Multi-cliente avanzado",
+                "Personalización por empresa",
+                "Automatizaciones premium",
+                "Onboarding dedicado",
+              ]}
+              cta="Hablar con ventas"
+              href="/pricing"
+            />
           </div>
         </section>
 
@@ -389,6 +574,11 @@ export default function NespedLanding() {
                     </div>
                   )}
                 </div>
+
+                <div className="mt-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-200">
+                  Demo orientada a mostrar la experiencia real del sistema con
+                  captura de lead, voz natural y flujo comercial.
+                </div>
               </div>
             </div>
           </div>
@@ -404,9 +594,17 @@ export default function NespedLanding() {
                 Portal privado con datos reales
               </h3>
               <p className="mt-4 text-sm leading-7 text-white/60">
-                Cada cliente dispone de su propio portal con branding,
-                métricas, historial de llamadas, leads y estado de actividad.
+                Cada cliente dispone de su propio portal con branding, métricas,
+                historial de llamadas, leads, actividad y facturación.
               </p>
+              <div className="mt-6">
+                <Link
+                  href="/portal"
+                  className="inline-flex rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black hover:bg-white/90"
+                >
+                  Ver portal del cliente
+                </Link>
+              </div>
             </div>
 
             <div className="rounded-[28px] border border-white/10 bg-white/[0.03] p-8">
@@ -417,9 +615,17 @@ export default function NespedLanding() {
                 Admin centralizado de toda la plataforma
               </h3>
               <p className="mt-4 text-sm leading-7 text-white/60">
-                Gestiona clientes, usuarios, prompts, webhooks, llamadas y
-                configuración desde un único panel interno.
+                Gestiona clientes, usuarios, prompts, webhooks, llamadas,
+                facturación y configuración desde un único panel interno.
               </p>
+              <div className="mt-6">
+                <Link
+                  href="/admin/overview"
+                  className="inline-flex rounded-2xl border border-white/15 px-5 py-3 text-sm font-semibold hover:bg-white/5"
+                >
+                  Ir al panel admin
+                </Link>
+              </div>
             </div>
           </div>
         </section>

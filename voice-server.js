@@ -6,7 +6,7 @@ const WebSocket = require("ws");
 const twilio = require("twilio");
 const { createClient } = require("@supabase/supabase-js");
 
-console.log("VOICE SERVER FIX 2 - 2026-04-07");
+console.log("VOICE SERVER FIX 3 - 2026-04-07");
 console.log("OPENAI_API_KEY presente:", !!process.env.OPENAI_API_KEY);
 console.log("BASE_URL:", process.env.BASE_URL);
 console.log("PORT:", process.env.PORT);
@@ -151,6 +151,7 @@ app.post("/voice", (req, res) => {
 });
 
 const wss = new WebSocket.Server({ server, path: "/media-stream" });
+console.log("✅ WebSocket /media-stream listo");
 
 wss.on("connection", async (twilioWs, req) => {
   const url = new URL(req.url, "https://dummy");
@@ -278,8 +279,12 @@ wss.on("connection", async (twilioWs, req) => {
     try {
       const data = JSON.parse(raw.toString());
 
+      if (data.event !== "media") {
+        console.log("Twilio event:", data.event, JSON.stringify(data));
+      }
+
       if (data.event === "start") {
-        streamSid = data.start?.streamSid || null;
+        streamSid = data.start?.streamSid || data.streamSid || null;
         callSid = data.start?.callSid || null;
         fromNumber = data.start?.customParameters?.from || "";
         toNumber = data.start?.customParameters?.to || "";
@@ -289,6 +294,11 @@ wss.on("connection", async (twilioWs, req) => {
       }
 
       if (data.event === "media") {
+        if (!streamSid && data.streamSid) {
+          streamSid = data.streamSid;
+          console.log("📌 streamSid recuperado desde media:", streamSid);
+        }
+
         if (openaiWs.readyState === WebSocket.OPEN) {
           console.log("🎤 Audio recibido de Twilio");
           openaiWs.send(
@@ -341,21 +351,25 @@ wss.on("connection", async (twilioWs, req) => {
       }
 
       if (
-        (event.type === "response.audio.delta" ||
-          event.type === "response.output_audio.delta") &&
-        event.delta &&
-        streamSid
+        event.type === "response.audio.delta" ||
+        event.type === "response.output_audio.delta"
       ) {
-        twilioWs.send(
-          JSON.stringify({
-            event: "media",
-            streamSid,
-            media: {
-              payload: event.delta,
-            },
-          })
-        );
-        console.log("🔊 Audio enviado a Twilio");
+        if (!event.delta) {
+          console.log("⚠️ Audio delta sin payload");
+        } else if (!streamSid) {
+          console.log("⚠️ Audio delta recibido pero no hay streamSid todavía");
+        } else {
+          twilioWs.send(
+            JSON.stringify({
+              event: "media",
+              streamSid,
+              media: {
+                payload: event.delta,
+              },
+            })
+          );
+          console.log("🔊 Audio enviado a Twilio");
+        }
       }
 
       if (

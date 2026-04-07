@@ -6,7 +6,7 @@ const WebSocket = require("ws");
 const twilio = require("twilio");
 const { createClient } = require("@supabase/supabase-js");
 
-console.log("VOICE SERVER FIX 3 - 2026-04-07");
+console.log("VOICE SERVER FINAL COMPLETE - 2026-04-07");
 console.log("OPENAI_API_KEY presente:", !!process.env.OPENAI_API_KEY);
 console.log("BASE_URL:", process.env.BASE_URL);
 console.log("PORT:", process.env.PORT);
@@ -44,47 +44,124 @@ app.get("/", (req, res) => {
   res.send("NESPED Voice Server activo");
 });
 
+function getFallbackPrompt() {
+  return `
+Eres un asistente telefónico humano, natural y profesional. No pareces una IA. Suenas como una persona real hablando por teléfono.
+
+Hablas en español de forma cercana, relajada y natural. Usas frases cortas, tono humano y expresiones reales. Eres fluido, natural y ágil.
+
+Tu objetivo es:
+1. atender la llamada
+2. entender qué necesita el usuario
+3. recoger sus datos si hay interés
+4. cerrar la conversación de forma natural y terminar
+
+ESTILO DE VOZ:
+- Hablas como una persona real
+- Usas expresiones naturales como:
+  "vale, perfecto"
+  "genial"
+  "entiendo"
+  "claro"
+  "sin problema"
+- No hablas demasiado seguido
+- No usas frases largas
+- No explicas de más
+- No suenas formal ni técnico
+- No haces listas largas
+- No das respuestas tipo chatbot
+
+COMPORTAMIENTO:
+- Saluda de forma breve y natural
+- Haz solo una pregunta cada vez
+- No interrumpas
+- Si el usuario tiene interés, recoge los datos rápido y con naturalidad
+- Si no sabes algo, dilo de forma natural y ofrece que el equipo contacte después
+
+CAPTURA DE LEAD:
+Recoge, de forma natural:
+- nombre
+- teléfono
+- necesidad
+
+Opcional:
+- ciudad
+- preferencia
+- urgencia
+
+No pidas todo de golpe.
+
+Cuando ya tengas como mínimo:
+- nombre
+- teléfono
+- necesidad
+
+usa la función guardar_lead.
+
+CIERRE:
+Después de guardar el lead o cerrar la consulta, di una frase breve y natural como:
+- "Perfecto, ya lo tengo todo apuntado, te contactan en breve"
+- "Genial, queda registrado y te dicen algo pronto"
+- "Vale, todo listo, te contactan enseguida"
+
+Después de eso:
+- no hagas más preguntas
+- no alargues la conversación
+- no sigas hablando
+`.trim();
+}
+
 async function getClientConfig(clientId) {
   if (!supabase) {
     return {
       id: clientId || "demo",
-      name: "Demo",
-      prompt:
-        "Habla en español, de forma natural, breve y clara. Eres un asistente telefónico útil. Responde siempre con voz. Saluda al usuario y ayúdale con lo que necesite.",
+      name: "NESPED Demo",
+      prompt: getFallbackPrompt(),
       webhook: "",
       twilioNumber: fallbackTwilioNumber,
     };
   }
 
-  const { data, error } = await supabase
-    .from("clients")
-    .select("*")
-    .eq("id", clientId)
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from("clients")
+      .select("*")
+      .eq("id", clientId)
+      .single();
 
-  if (error || !data) {
-    console.error(
-      "❌ Error cargando client config:",
-      error?.message || "sin data"
-    );
+    if (error || !data) {
+      console.error(
+        "❌ Error cargando client config:",
+        error?.message || "sin data"
+      );
+
+      return {
+        id: clientId || "demo",
+        name: "NESPED Demo",
+        prompt: getFallbackPrompt(),
+        webhook: "",
+        twilioNumber: fallbackTwilioNumber,
+      };
+    }
+
+    return {
+      id: data.id,
+      name: data.name || "Cliente",
+      prompt: data.prompt || getFallbackPrompt(),
+      webhook: data.webhook || "",
+      twilioNumber: data.twilio_number || fallbackTwilioNumber,
+    };
+  } catch (err) {
+    console.error("❌ Excepción cargando client config:", err.message);
 
     return {
       id: clientId || "demo",
-      name: "Demo",
-      prompt:
-        "Habla en español, de forma natural, breve y clara. Eres un asistente telefónico útil. Responde siempre con voz. Saluda al usuario y ayúdale con lo que necesite.",
+      name: "NESPED Demo",
+      prompt: getFallbackPrompt(),
       webhook: "",
       twilioNumber: fallbackTwilioNumber,
     };
   }
-
-  return {
-    id: data.id,
-    name: data.name,
-    prompt: data.prompt || "",
-    webhook: data.webhook || "",
-    twilioNumber: data.twilio_number || fallbackTwilioNumber,
-  };
 }
 
 app.get("/call", async (req, res) => {
@@ -171,12 +248,14 @@ wss.on("connection", async (twilioWs, req) => {
   let streamSid = null;
   let callSid = null;
   let greeted = false;
+  let leadCaptured = false;
   let callStartedAt = Date.now();
   let fromNumber = "";
   let toNumber = "";
-  let leadCaptured = false;
-  let callSummary = "Llamada atendida";
   let transcriptParts = [];
+  let callSummary = "Llamada atendida";
+  let closingRequested = false;
+  let callSaved = false;
 
   const openaiWs = new WebSocket(
     "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
@@ -193,12 +272,15 @@ wss.on("connection", async (twilioWs, req) => {
   function addTranscriptLine(line) {
     if (!line) return;
     transcriptParts.push(line);
-    if (transcriptParts.length > 200) {
-      transcriptParts = transcriptParts.slice(-200);
+    if (transcriptParts.length > 300) {
+      transcriptParts = transcriptParts.slice(-300);
     }
   }
 
   async function saveCall(status = "completed") {
+    if (callSaved) return;
+    callSaved = true;
+
     if (!supabase) {
       console.log("⚠️ saveCall omitido porque Supabase está desactivado");
       return;
@@ -230,6 +312,40 @@ wss.on("connection", async (twilioWs, req) => {
     }
   }
 
+  function requestClosingResponse(text) {
+    if (closingRequested || openaiWs.readyState !== WebSocket.OPEN) return;
+    closingRequested = true;
+
+    openaiWs.send(
+      JSON.stringify({
+        type: "response.create",
+        response: {
+          modalities: ["audio", "text"],
+          instructions: text,
+        },
+      })
+    );
+  }
+
+  function endCallSoon() {
+    console.log("📴 Cerrando llamada...");
+    try {
+      if (twilioWs.readyState === WebSocket.OPEN) {
+        twilioWs.close();
+      }
+    } catch (err) {
+      console.error("❌ Error cerrando Twilio WS:", err.message);
+    }
+
+    try {
+      if (openaiWs.readyState === WebSocket.OPEN) {
+        openaiWs.close();
+      }
+    } catch (err) {
+      console.error("❌ Error cerrando OpenAI WS:", err.message);
+    }
+  }
+
   openaiWs.on("open", () => {
     console.log("🤖 OpenAI conectado para:", config.name);
 
@@ -241,7 +357,7 @@ wss.on("connection", async (twilioWs, req) => {
           voice: "marin",
           input_audio_format: "g711_ulaw",
           output_audio_format: "g711_ulaw",
-          instructions: config.prompt,
+          instructions: config.prompt || getFallbackPrompt(),
           input_audio_transcription: {
             model: "gpt-4o-mini-transcribe",
           },
@@ -253,7 +369,8 @@ wss.on("connection", async (twilioWs, req) => {
             {
               type: "function",
               name: "guardar_lead",
-              description: "Guardar lead en sistema",
+              description:
+                "Guardar un lead cuando ya tengas nombre, teléfono y necesidad del usuario.",
               parameters: {
                 type: "object",
                 properties: {
@@ -312,6 +429,8 @@ wss.on("connection", async (twilioWs, req) => {
 
       if (data.event === "stop") {
         console.log("🔴 Twilio stop recibido");
+        await saveCall(leadCaptured ? "lead_captured" : "completed");
+
         if (openaiWs.readyState === WebSocket.OPEN) {
           openaiWs.close();
         }
@@ -342,7 +461,7 @@ wss.on("connection", async (twilioWs, req) => {
               response: {
                 modalities: ["audio", "text"],
                 instructions:
-                  "Saluda de forma natural en español y pregunta en qué puedes ayudar.",
+                  "Saluda de forma natural, muy humana y breve en español, y pregunta en qué puedes ayudar.",
               },
             })
           );
@@ -381,6 +500,12 @@ wss.on("connection", async (twilioWs, req) => {
 
       if (event.type === "response.done") {
         console.log("✅ response.done recibido");
+
+        if (closingRequested) {
+          setTimeout(() => {
+            endCallSoon();
+          }, 1200);
+        }
       }
 
       if (event.type === "response.text.delta" && event.delta) {
@@ -424,17 +549,9 @@ wss.on("connection", async (twilioWs, req) => {
             })
           );
 
-          openaiWs.send(
-            JSON.stringify({
-              type: "response.create",
-              response: {
-                modalities: ["audio", "text"],
-                instructions:
-                  "Confirma brevemente que la solicitud ha quedado registrada.",
-              },
-            })
+          requestClosingResponse(
+            "Confirma de forma natural y muy breve que ya ha quedado apuntado y que le contactarán en breve. Después termina completamente la conversación."
           );
-
           return;
         }
 
@@ -457,8 +574,8 @@ wss.on("connection", async (twilioWs, req) => {
           });
 
           const webhookText = await webhookRes.text();
-          console.log("📨 n8n status:", webhookRes.status);
-          console.log("📨 n8n response:", webhookText);
+          console.log("📨 webhook status:", webhookRes.status);
+          console.log("📨 webhook response:", webhookText);
 
           openaiWs.send(
             JSON.stringify({
@@ -471,18 +588,26 @@ wss.on("connection", async (twilioWs, req) => {
             })
           );
 
+          requestClosingResponse(
+            "Confirma de forma natural y muy breve que ya ha quedado registrado y que el equipo contactará pronto. Después termina completamente la conversación."
+          );
+        } catch (err) {
+          console.error("❌ Error enviando lead al webhook:", err.message);
+
           openaiWs.send(
             JSON.stringify({
-              type: "response.create",
-              response: {
-                modalities: ["audio", "text"],
-                instructions:
-                  "Confirma que la solicitud ha quedado registrada y que el equipo contactará pronto.",
+              type: "conversation.item.create",
+              item: {
+                type: "function_call_output",
+                call_id: event.item.call_id,
+                output: JSON.stringify({ ok: false }),
               },
             })
           );
-        } catch (err) {
-          console.error("❌ Error enviando lead a n8n:", err.message);
+
+          requestClosingResponse(
+            "Di de forma natural que ya está anotado y que lo revisarán enseguida. Después termina completamente la conversación."
+          );
         }
       }
     } catch (err) {
@@ -492,7 +617,7 @@ wss.on("connection", async (twilioWs, req) => {
 
   twilioWs.on("close", async () => {
     console.log("🔌 Twilio desconectado");
-    await saveCall("completed");
+    await saveCall(leadCaptured ? "lead_captured" : "completed");
 
     if (openaiWs.readyState === WebSocket.OPEN) {
       openaiWs.close();

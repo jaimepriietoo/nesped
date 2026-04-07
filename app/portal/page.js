@@ -4,19 +4,25 @@ import { useEffect, useMemo, useState } from "react";
 
 function StatCard({ title, value, subtitle }) {
   return (
-    <div className="rounded-2xl bg-zinc-900 border border-zinc-800 p-5 shadow-sm">
-      <div className="text-sm text-zinc-400">{title}</div>
-      <div className="mt-2 text-3xl font-semibold text-white">{value}</div>
-      {subtitle ? <div className="mt-1 text-sm text-zinc-500">{subtitle}</div> : null}
+    <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-black/30 backdrop-blur-xl">
+      <div className="text-sm text-white/45">{title}</div>
+      <div className="mt-2 text-3xl font-semibold tracking-tight text-white">
+        {value}
+      </div>
+      {subtitle ? (
+        <div className="mt-2 text-sm text-white/45">{subtitle}</div>
+      ) : null}
     </div>
   );
 }
 
-function SectionCard({ title, right, children }) {
+function PanelCard({ title, children, right }) {
   return (
-    <div className="rounded-2xl bg-zinc-900 border border-zinc-800 p-5 shadow-sm">
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <h2 className="text-lg font-semibold text-white">{title}</h2>
+    <div className="rounded-[30px] border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/30 backdrop-blur-xl">
+      <div className="mb-5 flex items-center justify-between gap-4">
+        <h2 className="text-xl font-semibold tracking-tight text-white">
+          {title}
+        </h2>
         {right}
       </div>
       {children}
@@ -24,16 +30,23 @@ function SectionCard({ title, right, children }) {
   );
 }
 
-function Badge({ ok, children }) {
+function Badge({ children, ok = false, warn = false }) {
+  let cls =
+    "bg-white/8 text-white/70 border border-white/10";
+
+  if (ok) cls = "bg-emerald-500/15 text-emerald-300 border border-emerald-500/20";
+  if (warn) cls = "bg-amber-500/15 text-amber-300 border border-amber-500/20";
+
   return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
-        ok ? "bg-emerald-500/15 text-emerald-300" : "bg-zinc-700 text-zinc-300"
-      }`}
-    >
+    <span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${cls}`}>
       {children}
     </span>
   );
+}
+
+function formatDate(value) {
+  if (!value) return "-";
+  return new Date(value).toLocaleString();
 }
 
 function formatSeconds(sec) {
@@ -45,28 +58,7 @@ function formatSeconds(sec) {
   return s ? `${m}m ${s}s` : `${m}m`;
 }
 
-function formatDate(value) {
-  if (!value) return "-";
-  const d = new Date(value);
-  return d.toLocaleString();
-}
-
-function getPhone(text = "") {
-  const match = String(text).match(/(\+?\d[\d\s-]{7,}\d)/);
-  return match ? match[1] : "-";
-}
-
-function getLeadName(summary = "") {
-  const match = String(summary).match(/Lead capturado:\s*([^·]+)/i);
-  return match ? match[1].trim() : "-";
-}
-
-function getNeed(summary = "") {
-  const match = String(summary).match(/·\s*(.+)$/);
-  return match ? match[1].trim() : "-";
-}
-
-export default function ClientPortalDashboard() {
+export default function ClientPortalPage() {
   const [dashboard, setDashboard] = useState(null);
   const [calls, setCalls] = useState([]);
   const [leads, setLeads] = useState([]);
@@ -75,9 +67,9 @@ export default function ClientPortalDashboard() {
   const [billingLoading, setBillingLoading] = useState(false);
 
   useEffect(() => {
-    let alive = true;
+    let active = true;
 
-    async function load() {
+    async function loadData() {
       try {
         setLoading(true);
         setError("");
@@ -88,86 +80,99 @@ export default function ClientPortalDashboard() {
           fetch("/api/leads", { cache: "no-store" }).then((r) => r.json()),
         ]);
 
-        if (!alive) return;
+        if (!active) return;
 
-        const dashboardJson = dashboardRes.status === "fulfilled" ? dashboardRes.value : null;
-        const callsJson = callsRes.status === "fulfilled" ? callsRes.value : null;
-        const leadsJson = leadsRes.status === "fulfilled" ? leadsRes.value : null;
+        const dashboardJson =
+          dashboardRes.status === "fulfilled" ? dashboardRes.value : null;
+        const callsJson =
+          callsRes.status === "fulfilled" ? callsRes.value : null;
+        const leadsJson =
+          leadsRes.status === "fulfilled" ? leadsRes.value : null;
 
-        setDashboard(dashboardJson);
-        setCalls(Array.isArray(callsJson?.data) ? callsJson.data : dashboardJson?.recentCalls || []);
+        setDashboard(dashboardJson || null);
+        setCalls(Array.isArray(callsJson?.data) ? callsJson.data : []);
         setLeads(Array.isArray(leadsJson?.data) ? leadsJson.data : []);
       } catch (err) {
-        if (!alive) return;
-        setError(err?.message || "Error cargando el panel");
+        if (!active) return;
+        setError(err?.message || "Error cargando el portal.");
       } finally {
-        if (alive) setLoading(false);
+        if (active) setLoading(false);
       }
     }
 
-    load();
+    loadData();
     return () => {
-      alive = false;
+      active = false;
     };
   }, []);
 
   const metrics = useMemo(() => {
-    const recentCalls = Array.isArray(calls) ? calls : [];
-    const totalCalls = Number(dashboard?.metrics?.totalCalls || recentCalls.length || 0);
-    const totalLeads = Number(
-      dashboard?.metrics?.totalLeads || leads.length || recentCalls.filter((c) => c.lead_captured).length || 0
-    );
-    const conversionRate = totalCalls > 0 ? ((totalLeads / totalCalls) * 100).toFixed(1) : "0.0";
-    const avgDuration = totalCalls > 0
-      ? Math.round(
-          recentCalls.reduce((acc, c) => acc + Number(c.duration_seconds || 0), 0) / Math.max(recentCalls.length || 1, 1)
-        )
-      : Number(dashboard?.metrics?.avgDuration || 0);
+    const totalCalls =
+      Number(dashboard?.metrics?.totalCalls) || calls.length || 0;
 
-    const answeredCalls = recentCalls.filter((c) => (c.status || "") !== "failed").length;
-    const missedCalls = Math.max(totalCalls - answeredCalls, 0);
-    const longestCall = recentCalls.reduce((max, c) => Math.max(max, Number(c.duration_seconds || 0)), 0);
+    const totalLeads =
+      Number(dashboard?.metrics?.totalLeads) ||
+      leads.length ||
+      calls.filter((c) => c.lead_captured).length ||
+      0;
+
+    const avgDuration =
+      Number(dashboard?.metrics?.avgDuration) ||
+      (calls.length
+        ? Math.round(
+            calls.reduce(
+              (acc, call) => acc + Number(call.duration_seconds || 0),
+              0
+            ) / calls.length
+          )
+        : 0);
+
+    const conversionRate =
+      totalCalls > 0
+        ? Number(((totalLeads / totalCalls) * 100).toFixed(1))
+        : 0;
+
+    const longestCall = calls.reduce(
+      (max, call) => Math.max(max, Number(call.duration_seconds || 0)),
+      0
+    );
+
+    const callsWithLead = calls.filter((c) => c.lead_captured).length;
+    const callsWithoutLead = Math.max(totalCalls - callsWithLead, 0);
 
     return {
       totalCalls,
       totalLeads,
-      conversionRate,
       avgDuration,
-      answeredCalls,
-      missedCalls,
+      conversionRate,
       longestCall,
+      callsWithLead,
+      callsWithoutLead,
     };
   }, [dashboard, calls, leads]);
 
-  const enrichedLeads = useMemo(() => {
-    if (leads.length > 0) return leads;
-    return calls
-      .filter((c) => c.lead_captured)
-      .map((c) => ({
-        id: c.id,
-        created_at: c.created_at,
-        nombre: getLeadName(c.summary),
-        telefono: getPhone(c.transcript || ""),
-        necesidad: getNeed(c.summary),
-        ciudad: "-",
-        origen: "llamada",
-      }));
-  }, [calls, leads]);
-
-  async function goToBillingPortal() {
+  async function openBillingPortal() {
     try {
       setBillingLoading(true);
+
       const res = await fetch("/api/stripe/portal", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clientId: "demo" }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          clientId: "demo",
+        }),
       });
+
       const json = await res.json();
+
       if (json?.url) {
         window.location.href = json.url;
         return;
       }
-      alert(json?.message || "El portal de facturación todavía no está activo.");
+
+      alert(json?.message || "Stripe portal no está disponible.");
     } catch (err) {
       alert(err?.message || "No se pudo abrir facturación.");
     } finally {
@@ -175,54 +180,78 @@ export default function ClientPortalDashboard() {
     }
   }
 
-  async function startCheckout(plan = "pro") {
+  async function openCheckout(plan = "pro") {
     try {
       setBillingLoading(true);
+
       const res = await fetch("/api/stripe/checkout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clientId: "demo", plan }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          clientId: "demo",
+          plan,
+        }),
       });
+
       const json = await res.json();
+
       if (json?.url) {
         window.location.href = json.url;
         return;
       }
-      alert(json?.message || "El checkout todavía no está activo.");
+
+      alert(json?.message || "Checkout no disponible.");
     } catch (err) {
-      alert(err?.message || "No se pudo abrir el checkout.");
+      alert(err?.message || "No se pudo abrir checkout.");
     } finally {
       setBillingLoading(false);
     }
   }
 
   if (loading) {
-    return <div className="min-h-screen bg-black p-8 text-white">Cargando panel del cliente...</div>;
+    return (
+      <div className="min-h-screen bg-[#030303] text-white p-8">
+        Cargando portal...
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <div className="mx-auto max-w-7xl p-6 md:p-8">
-        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+    <div className="min-h-screen overflow-x-hidden bg-[#030303] text-white">
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.22),transparent_28%),radial-gradient(circle_at_top_right,rgba(16,185,129,0.14),transparent_24%),radial-gradient(circle_at_bottom,rgba(255,255,255,0.05),transparent_35%)]" />
+      <div className="pointer-events-none fixed inset-0 opacity-30 [background-image:linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] [background-size:36px_36px]" />
+
+      <main className="relative mx-auto max-w-7xl px-6 pb-20 pt-14 md:pb-28">
+        <div className="mb-10 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
           <div>
-            <div className="text-sm text-zinc-400">Portal del cliente</div>
-            <h1 className="text-3xl font-bold tracking-tight">Resumen completo de llamadas, leads y facturación</h1>
-            <p className="mt-2 max-w-3xl text-zinc-400">
-              Aquí puedes ver qué está pasando con tus llamadas, qué leads está captando la IA y el estado general del servicio.
+            <div className="text-sm uppercase tracking-[0.2em] text-blue-300">
+              Portal del cliente
+            </div>
+            <h1 className="mt-2 text-4xl font-semibold tracking-tight md:text-6xl">
+              Control total de llamadas, leads y rendimiento
+            </h1>
+            <p className="mt-4 max-w-3xl text-lg leading-8 text-white/60">
+              Aquí puedes ver de forma clara qué está haciendo la IA, cuántos
+              leads se están captando, cómo están funcionando las llamadas y el
+              estado general del servicio.
             </p>
           </div>
+
           <div className="flex flex-wrap gap-3">
             <button
-              onClick={() => startCheckout("pro")}
+              onClick={() => openCheckout("pro")}
               disabled={billingLoading}
-              className="rounded-2xl bg-white px-4 py-2.5 text-sm font-medium text-black transition hover:opacity-90 disabled:opacity-60"
+              className="rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-white/90 disabled:opacity-60"
             >
               {billingLoading ? "Abriendo..." : "Contratar / ampliar plan"}
             </button>
+
             <button
-              onClick={goToBillingPortal}
+              onClick={openBillingPortal}
               disabled={billingLoading}
-              className="rounded-2xl border border-zinc-700 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-900 disabled:opacity-60"
+              className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-semibold transition hover:bg-white/5 disabled:opacity-60"
             >
               Gestionar facturación
             </button>
@@ -230,25 +259,54 @@ export default function ClientPortalDashboard() {
         </div>
 
         {error ? (
-          <div className="mb-6 rounded-2xl border border-red-900 bg-red-950/40 p-4 text-red-200">{error}</div>
+          <div className="mb-6 rounded-2xl border border-red-500/20 bg-red-500/10 px-5 py-4 text-sm text-red-200">
+            {error}
+          </div>
         ) : null}
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6 mb-8">
-          <StatCard title="Llamadas totales" value={metrics.totalCalls} subtitle="Histórico disponible" />
-          <StatCard title="Leads capturados" value={metrics.totalLeads} subtitle="Leads detectados por la IA" />
-          <StatCard title="Conversión" value={`${metrics.conversionRate}%`} subtitle="Leads / llamadas" />
-          <StatCard title="Duración media" value={formatSeconds(metrics.avgDuration)} subtitle="Tiempo por llamada" />
-          <StatCard title="Llamadas atendidas" value={metrics.answeredCalls} subtitle="No fallidas" />
-          <StatCard title="Llamada más larga" value={formatSeconds(metrics.longestCall)} subtitle="Mayor duración registrada" />
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+          <StatCard
+            title="Llamadas totales"
+            value={metrics.totalCalls}
+            subtitle="Histórico registrado"
+          />
+          <StatCard
+            title="Leads capturados"
+            value={metrics.totalLeads}
+            subtitle="Detectados por la IA"
+          />
+          <StatCard
+            title="Conversión"
+            value={`${metrics.conversionRate}%`}
+            subtitle="Leads / llamadas"
+          />
+          <StatCard
+            title="Duración media"
+            value={formatSeconds(metrics.avgDuration)}
+            subtitle="Tiempo medio"
+          />
+          <StatCard
+            title="Con lead"
+            value={metrics.callsWithLead}
+            subtitle="Llamadas útiles"
+          />
+          <StatCard
+            title="Más larga"
+            value={formatSeconds(metrics.longestCall)}
+            subtitle="Máxima duración"
+          />
         </div>
 
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-          <div className="xl:col-span-2 space-y-6">
-            <SectionCard title="Últimas llamadas">
+        <div className="mt-8 grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">
+          <div className="space-y-6">
+            <PanelCard
+              title="Últimas llamadas"
+              right={<Badge ok>{calls.length} registros</Badge>}
+            >
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
                   <thead>
-                    <tr className="border-b border-zinc-800 text-left text-zinc-400">
+                    <tr className="border-b border-white/10 text-left text-white/45">
                       <th className="pb-3 pr-4">Fecha</th>
                       <th className="pb-3 pr-4">Estado</th>
                       <th className="pb-3 pr-4">Lead</th>
@@ -259,31 +317,53 @@ export default function ClientPortalDashboard() {
                   <tbody>
                     {calls.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="py-6 text-zinc-500">Aún no hay llamadas registradas.</td>
+                        <td colSpan={5} className="py-6 text-white/40">
+                          Todavía no hay llamadas registradas.
+                        </td>
                       </tr>
                     ) : (
-                      calls.slice(0, 15).map((call) => (
-                        <tr key={call.id} className="border-b border-zinc-900 align-top">
-                          <td className="py-3 pr-4 text-zinc-300">{formatDate(call.created_at)}</td>
-                          <td className="py-3 pr-4"><Badge ok={(call.status || "") !== "failed"}>{call.status || "-"}</Badge></td>
-                          <td className="py-3 pr-4">
-                            {call.lead_captured ? <Badge ok>Capturado</Badge> : <Badge>No</Badge>}
+                      calls.slice(0, 20).map((call) => (
+                        <tr
+                          key={call.id}
+                          className="border-b border-white/5 align-top"
+                        >
+                          <td className="py-4 pr-4 text-white/75">
+                            {formatDate(call.created_at)}
                           </td>
-                          <td className="py-3 pr-4 text-zinc-300">{formatSeconds(call.duration_seconds)}</td>
-                          <td className="py-3 pr-4 max-w-xl text-zinc-300">{call.summary || "Sin resumen"}</td>
+                          <td className="py-4 pr-4">
+                            <Badge ok={(call.status || "") !== "failed"}>
+                              {call.status || "-"}
+                            </Badge>
+                          </td>
+                          <td className="py-4 pr-4">
+                            {call.lead_captured ? (
+                              <Badge ok>Capturado</Badge>
+                            ) : (
+                              <Badge warn>No capturado</Badge>
+                            )}
+                          </td>
+                          <td className="py-4 pr-4 text-white/75">
+                            {formatSeconds(call.duration_seconds)}
+                          </td>
+                          <td className="max-w-xl py-4 pr-4 text-white/65">
+                            {call.summary || "Sin resumen"}
+                          </td>
                         </tr>
                       ))
                     )}
                   </tbody>
                 </table>
               </div>
-            </SectionCard>
+            </PanelCard>
 
-            <SectionCard title="Leads del cliente" right={<div className="text-sm text-zinc-400">{enrichedLeads.length} registros</div>}>
+            <PanelCard
+              title="Leads capturados"
+              right={<Badge ok>{leads.length} leads</Badge>}
+            >
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
                   <thead>
-                    <tr className="border-b border-zinc-800 text-left text-zinc-400">
+                    <tr className="border-b border-white/10 text-left text-white/45">
                       <th className="pb-3 pr-4">Fecha</th>
                       <th className="pb-3 pr-4">Nombre</th>
                       <th className="pb-3 pr-4">Teléfono</th>
@@ -293,94 +373,143 @@ export default function ClientPortalDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {enrichedLeads.length === 0 ? (
+                    {leads.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="py-6 text-zinc-500">Todavía no hay leads guardados.</td>
+                        <td colSpan={6} className="py-6 text-white/40">
+                          Todavía no hay leads guardados.
+                        </td>
                       </tr>
                     ) : (
-                      enrichedLeads.slice(0, 20).map((lead) => (
-                        <tr key={lead.id} className="border-b border-zinc-900 align-top">
-                          <td className="py-3 pr-4 text-zinc-300">{formatDate(lead.created_at)}</td>
-                          <td className="py-3 pr-4 text-zinc-300">{lead.nombre || "-"}</td>
-                          <td className="py-3 pr-4 text-zinc-300">{lead.telefono || "-"}</td>
-                          <td className="py-3 pr-4 text-zinc-300">{lead.necesidad || "-"}</td>
-                          <td className="py-3 pr-4 text-zinc-300">{lead.ciudad || "-"}</td>
-                          <td className="py-3 pr-4 text-zinc-300">{lead.origen || "-"}</td>
+                      leads.slice(0, 20).map((lead) => (
+                        <tr
+                          key={lead.id}
+                          className="border-b border-white/5 align-top"
+                        >
+                          <td className="py-4 pr-4 text-white/75">
+                            {formatDate(lead.created_at)}
+                          </td>
+                          <td className="py-4 pr-4 text-white/75">
+                            {lead.nombre || "-"}
+                          </td>
+                          <td className="py-4 pr-4 text-white/75">
+                            {lead.telefono || "-"}
+                          </td>
+                          <td className="py-4 pr-4 text-white/65">
+                            {lead.necesidad || "-"}
+                          </td>
+                          <td className="py-4 pr-4 text-white/65">
+                            {lead.ciudad || "-"}
+                          </td>
+                          <td className="py-4 pr-4 text-white/65">
+                            {lead.origen || "-"}
+                          </td>
                         </tr>
                       ))
                     )}
                   </tbody>
                 </table>
               </div>
-            </SectionCard>
+            </PanelCard>
           </div>
 
           <div className="space-y-6">
-            <SectionCard title="Estado del servicio">
-              <div className="space-y-3 text-sm text-zinc-300">
-                <div className="flex items-center justify-between rounded-xl bg-zinc-950 px-4 py-3">
-                  <span>IA activa</span>
-                  <Badge ok>Sí</Badge>
+            <PanelCard title="Estado del servicio">
+              <div className="space-y-3 text-sm">
+                <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+                  <span className="text-white/65">Recepcionista IA</span>
+                  <Badge ok>Activa</Badge>
                 </div>
-                <div className="flex items-center justify-between rounded-xl bg-zinc-950 px-4 py-3">
-                  <span>Captura de leads</span>
-                  <Badge ok>Sí</Badge>
+
+                <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+                  <span className="text-white/65">Captura de leads</span>
+                  <Badge ok>Operativa</Badge>
                 </div>
-                <div className="flex items-center justify-between rounded-xl bg-zinc-950 px-4 py-3">
-                  <span>Facturación</span>
+
+                <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+                  <span className="text-white/65">Portal del cliente</span>
                   <Badge ok>Disponible</Badge>
                 </div>
-                <div className="flex items-center justify-between rounded-xl bg-zinc-950 px-4 py-3">
-                  <span>Llamadas sin lead</span>
-                  <span className="text-zinc-400">{metrics.totalCalls - metrics.totalLeads}</span>
-                </div>
-                <div className="flex items-center justify-between rounded-xl bg-zinc-950 px-4 py-3">
-                  <span>Llamadas perdidas / fallidas</span>
-                  <span className="text-zinc-400">{metrics.missedCalls}</span>
-                </div>
-              </div>
-            </SectionCard>
 
-            <SectionCard title="Facturación y plan actual">
-              <div className="space-y-4 text-sm text-zinc-300">
-                <div className="rounded-xl bg-zinc-950 p-4">
-                  <div className="text-zinc-400">Plan</div>
-                  <div className="mt-1 text-lg font-semibold text-white">Pro</div>
-                  <div className="mt-1 text-zinc-500">Puedes cambiarlo o gestionarlo desde aquí.</div>
+                <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+                  <span className="text-white/65">Facturación</span>
+                  <Badge ok>Integrable</Badge>
                 </div>
-                <button
-                  onClick={goToBillingPortal}
-                  disabled={billingLoading}
-                  className="w-full rounded-2xl border border-zinc-700 px-4 py-3 font-medium hover:bg-zinc-950 disabled:opacity-60"
-                >
-                  {billingLoading ? "Abriendo..." : "Abrir portal de facturación"}
-                </button>
-                <button
-                  onClick={() => startCheckout("enterprise")}
-                  disabled={billingLoading}
-                  className="w-full rounded-2xl bg-white px-4 py-3 font-medium text-black hover:opacity-90 disabled:opacity-60"
-                >
-                  {billingLoading ? "Abriendo..." : "Mejorar a Enterprise"}
-                </button>
               </div>
-            </SectionCard>
+            </PanelCard>
 
-            <SectionCard title="Insights rápidos">
-              <div className="space-y-3 text-sm text-zinc-300">
-                <div className="rounded-xl bg-zinc-950 p-4">
-                  La IA está captando <span className="font-semibold text-white">{metrics.totalLeads}</span> leads de <span className="font-semibold text-white">{metrics.totalCalls}</span> llamadas.
+            <PanelCard title="Insights rápidos">
+              <div className="space-y-3 text-sm text-white/70">
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  La IA ha captado{" "}
+                  <span className="font-semibold text-white">
+                    {metrics.totalLeads}
+                  </span>{" "}
+                  leads de{" "}
+                  <span className="font-semibold text-white">
+                    {metrics.totalCalls}
+                  </span>{" "}
+                  llamadas registradas.
                 </div>
-                <div className="rounded-xl bg-zinc-950 p-4">
-                  La conversión actual es de <span className="font-semibold text-white">{metrics.conversionRate}%</span>.
+
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  La conversión actual es de{" "}
+                  <span className="font-semibold text-white">
+                    {metrics.conversionRate}%
+                  </span>
+                  .
                 </div>
-                <div className="rounded-xl bg-zinc-950 p-4">
-                  La duración media por llamada es de <span className="font-semibold text-white">{formatSeconds(metrics.avgDuration)}</span>.
+
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  La duración media por llamada es de{" "}
+                  <span className="font-semibold text-white">
+                    {formatSeconds(metrics.avgDuration)}
+                  </span>
+                  .
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  Tienes{" "}
+                  <span className="font-semibold text-white">
+                    {metrics.callsWithoutLead}
+                  </span>{" "}
+                  llamadas sin lead capturado, lo que puede usarse para optimizar
+                  prompt, guion o timing.
                 </div>
               </div>
-            </SectionCard>
+            </PanelCard>
+
+            <PanelCard title="Facturación y plan">
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <div className="text-sm text-white/45">Plan actual</div>
+                  <div className="mt-2 text-2xl font-semibold text-white">
+                    Pro
+                  </div>
+                  <div className="mt-2 text-sm text-white/55">
+                    Acceso a captación de leads, resúmenes, métricas y portal.
+                  </div>
+                </div>
+
+                <button
+                  onClick={openBillingPortal}
+                  disabled={billingLoading}
+                  className="w-full rounded-2xl border border-white/15 px-5 py-3 text-sm font-semibold transition hover:bg-white/5 disabled:opacity-60"
+                >
+                  {billingLoading ? "Abriendo..." : "Gestionar facturación"}
+                </button>
+
+                <button
+                  onClick={() => openCheckout("enterprise")}
+                  disabled={billingLoading}
+                  className="w-full rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-white/90 disabled:opacity-60"
+                >
+                  {billingLoading ? "Abriendo..." : "Ampliar a Enterprise"}
+                </button>
+              </div>
+            </PanelCard>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

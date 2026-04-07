@@ -6,7 +6,7 @@ const WebSocket = require("ws");
 const twilio = require("twilio");
 const { createClient } = require("@supabase/supabase-js");
 
-console.log("VOICE SERVER FINAL COMPLETE - 2026-04-07");
+console.log("VOICE SERVER FINAL COMPLETE ANTI-NOISE PRO - 2026-04-07");
 console.log("OPENAI_API_KEY presente:", !!process.env.OPENAI_API_KEY);
 console.log("BASE_URL:", process.env.BASE_URL);
 console.log("PORT:", process.env.PORT);
@@ -48,7 +48,7 @@ function getFallbackPrompt() {
   return `
 Eres un asistente telefónico humano, natural y profesional. No pareces una IA. Suenas como una persona real hablando por teléfono.
 
-Hablas en español de forma cercana, relajada y natural. Usas frases cortas, tono humano y expresiones reales. Eres fluido, natural y ágil.
+Hablas en español de forma cercana, relajada y natural. Usas frases cortas, tono humano y expresiones reales.
 
 Tu objetivo es:
 1. atender la llamada
@@ -56,14 +56,9 @@ Tu objetivo es:
 3. recoger sus datos si hay interés
 4. cerrar la conversación de forma natural y terminar
 
-ESTILO DE VOZ:
+ESTILO:
 - Hablas como una persona real
-- Usas expresiones naturales como:
-  "vale, perfecto"
-  "genial"
-  "entiendo"
-  "claro"
-  "sin problema"
+- Usas expresiones naturales como "vale", "perfecto", "genial", "entiendo", "claro", "sin problema"
 - No hablas demasiado seguido
 - No usas frases largas
 - No explicas de más
@@ -77,6 +72,12 @@ COMPORTAMIENTO:
 - No interrumpas
 - Si el usuario tiene interés, recoge los datos rápido y con naturalidad
 - Si no sabes algo, dilo de forma natural y ofrece que el equipo contacte después
+
+RUIDO:
+- Ignora toses, carraspeos, respiraciones, golpes, ruidos de fondo y sonidos cortos
+- No respondas a sonidos sueltos
+- No cambies de tema por ruido
+- Si no has entendido bien, pide repetirlo de forma natural
 
 CAPTURA DE LEAD:
 Recoge, de forma natural:
@@ -257,6 +258,14 @@ wss.on("connection", async (twilioWs, req) => {
   let closingRequested = false;
   let callSaved = false;
 
+  // ANTI-RUIDO PRO
+  let totalMediaChunks = 0;
+  let speechStartChunk = null;
+  let lastUtteranceChunks = 0;
+  let noiseResponseGuard = false;
+  let assistantSpeaking = false;
+  let pendingHangup = null;
+
   const openaiWs = new WebSocket(
     "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
     {
@@ -329,6 +338,7 @@ wss.on("connection", async (twilioWs, req) => {
 
   function endCallSoon() {
     console.log("📴 Cerrando llamada...");
+
     try {
       if (twilioWs.readyState === WebSocket.OPEN) {
         twilioWs.close();
@@ -354,16 +364,40 @@ wss.on("connection", async (twilioWs, req) => {
         type: "session.update",
         session: {
           modalities: ["audio", "text"],
-          voice: "marin",
+          voice: "alloy",
           input_audio_format: "g711_ulaw",
           output_audio_format: "g711_ulaw",
-          instructions: config.prompt || getFallbackPrompt(),
+          instructions: `
+${config.prompt || getFallbackPrompt()}
+
+REGLAS ANTI-RUIDO:
+- Ignora toses, carraspeos, respiraciones, golpes, ruidos de fondo y sonidos cortos.
+- No respondas a sonidos sueltos.
+- No cambies de tema por ruido.
+- Si no has entendido claramente una frase completa, pide repetirla de forma natural.
+- Si oyes algo confuso o incompleto, di algo breve como: "Perdona, no te he oído bien" o "¿Me lo puedes repetir un momento?".
+- No te precipites al responder.
+- Espera a que la persona haya terminado claramente.
+- No interpretes pausas cortas como final de turno.
+
+ESTILO:
+- Habla como una persona real por teléfono.
+- Usa frases cortas y naturales.
+- No suenes robótico.
+- Usa conectores suaves como "vale", "claro", "genial", "entiendo", "a ver", sin abusar.
+- Si el usuario tose, duda o hay ruido, mantén el hilo de la conversación y no inventes una intención nueva.
+`.trim(),
           input_audio_transcription: {
             model: "gpt-4o-mini-transcribe",
           },
           turn_detection: {
             type: "server_vad",
             create_response: true,
+            interrupt_response: true,
+            threshold: 0.9,
+            prefix_padding_ms: 500,
+            silence_duration_ms: 1200,
+            idle_timeout_ms: 6000,
           },
           tools: [
             {
@@ -411,13 +445,14 @@ wss.on("connection", async (twilioWs, req) => {
       }
 
       if (data.event === "media") {
+        totalMediaChunks += 1;
+
         if (!streamSid && data.streamSid) {
           streamSid = data.streamSid;
           console.log("📌 streamSid recuperado desde media:", streamSid);
         }
 
         if (openaiWs.readyState === WebSocket.OPEN) {
-          console.log("🎤 Audio recibido de Twilio");
           openaiWs.send(
             JSON.stringify({
               type: "input_audio_buffer.append",
@@ -461,7 +496,7 @@ wss.on("connection", async (twilioWs, req) => {
               response: {
                 modalities: ["audio", "text"],
                 instructions:
-                  "Saluda de forma natural, muy humana y breve en español, y pregunta en qué puedes ayudar.",
+                  "Saluda de forma muy natural, breve y humana en español, como una persona real por teléfono, y pregunta en qué puedes ayudar.",
               },
             })
           );
@@ -469,15 +504,57 @@ wss.on("connection", async (twilioWs, req) => {
         }
       }
 
+      if (event.type === "input_audio_buffer.speech_started") {
+        speechStartChunk = totalMediaChunks;
+        noiseResponseGuard = false;
+        console.log("🟢 speech_started");
+
+        if (pendingHangup) {
+          clearTimeout(pendingHangup);
+          pendingHangup = null;
+        }
+      }
+
+      if (event.type === "input_audio_buffer.speech_stopped") {
+        if (speechStartChunk !== null) {
+          lastUtteranceChunks = totalMediaChunks - speechStartChunk;
+        } else {
+          lastUtteranceChunks = 0;
+        }
+
+        // ~20ms por chunk aprox. Menos de 18 chunks ≈ ruido / tos / sonido corto
+        noiseResponseGuard = lastUtteranceChunks < 18;
+
+        console.log(
+          `🟡 speech_stopped | chunks=${lastUtteranceChunks} | noiseGuard=${noiseResponseGuard}`
+        );
+      }
+
+      if (event.type === "response.created" && noiseResponseGuard) {
+        console.log("🚫 Cancelando respuesta por input demasiado corto/ruido");
+        openaiWs.send(
+          JSON.stringify({
+            type: "response.cancel",
+          })
+        );
+        return;
+      }
+
       if (
         event.type === "response.audio.delta" ||
         event.type === "response.output_audio.delta"
       ) {
+        if (noiseResponseGuard) {
+          console.log("🚫 Audio descartado por noiseGuard");
+          return;
+        }
+
         if (!event.delta) {
           console.log("⚠️ Audio delta sin payload");
         } else if (!streamSid) {
           console.log("⚠️ Audio delta recibido pero no hay streamSid todavía");
         } else {
+          assistantSpeaking = true;
           twilioWs.send(
             JSON.stringify({
               event: "media",
@@ -495,17 +572,24 @@ wss.on("connection", async (twilioWs, req) => {
         event.type === "response.audio.done" ||
         event.type === "response.output_audio.done"
       ) {
+        assistantSpeaking = false;
         console.log("✅ audio done recibido");
       }
 
       if (event.type === "response.done") {
+        assistantSpeaking = false;
         console.log("✅ response.done recibido");
 
         if (closingRequested) {
-          setTimeout(() => {
+          pendingHangup = setTimeout(() => {
             endCallSoon();
-          }, 1200);
+          }, 1400);
         }
+      }
+
+      if (event.type === "response.cancelled") {
+        assistantSpeaking = false;
+        console.log("⛔ response.cancelled recibido");
       }
 
       if (event.type === "response.text.delta" && event.delta) {
@@ -550,7 +634,7 @@ wss.on("connection", async (twilioWs, req) => {
           );
 
           requestClosingResponse(
-            "Confirma de forma natural y muy breve que ya ha quedado apuntado y que le contactarán en breve. Después termina completamente la conversación."
+            "Confirma de forma muy natural, breve y humana que ya está apuntado y que le contactarán en breve. Después termina completamente la conversación."
           );
           return;
         }
@@ -589,7 +673,7 @@ wss.on("connection", async (twilioWs, req) => {
           );
 
           requestClosingResponse(
-            "Confirma de forma natural y muy breve que ya ha quedado registrado y que el equipo contactará pronto. Después termina completamente la conversación."
+            "Confirma de forma muy natural, breve y humana que ya está registrado y que el equipo contactará pronto. Después termina completamente la conversación."
           );
         } catch (err) {
           console.error("❌ Error enviando lead al webhook:", err.message);

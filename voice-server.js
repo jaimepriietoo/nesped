@@ -1,5 +1,3 @@
-console.log("VOICE SERVER NUEVO - 2026-04-07 - FIX-1");
-
 require("dotenv").config({ path: ".env.local" });
 
 const express = require("express");
@@ -7,6 +5,11 @@ const http = require("http");
 const WebSocket = require("ws");
 const twilio = require("twilio");
 const { createClient } = require("@supabase/supabase-js");
+
+console.log("VOICE SERVER FIX 2 - 2026-04-07");
+console.log("OPENAI_API_KEY presente:", !!process.env.OPENAI_API_KEY);
+console.log("BASE_URL:", process.env.BASE_URL);
+console.log("PORT:", process.env.PORT);
 
 const app = express();
 app.use(express.urlencoded({ extended: false }));
@@ -47,7 +50,7 @@ async function getClientConfig(clientId) {
       id: clientId || "demo",
       name: "Demo",
       prompt:
-        "Habla en español, de forma natural, breve y clara. Eres un asistente telefónico útil. Responde siempre con voz.",
+        "Habla en español, de forma natural, breve y clara. Eres un asistente telefónico útil. Responde siempre con voz. Saluda al usuario y ayúdale con lo que necesite.",
       webhook: "",
       twilioNumber: fallbackTwilioNumber,
     };
@@ -60,12 +63,16 @@ async function getClientConfig(clientId) {
     .single();
 
   if (error || !data) {
-    console.error("❌ Error cargando client config:", error?.message || "sin data");
+    console.error(
+      "❌ Error cargando client config:",
+      error?.message || "sin data"
+    );
+
     return {
       id: clientId || "demo",
       name: "Demo",
       prompt:
-        "Habla en español, de forma natural, breve y clara. Eres un asistente telefónico útil. Responde siempre con voz.",
+        "Habla en español, de forma natural, breve y clara. Eres un asistente telefónico útil. Responde siempre con voz. Saluda al usuario y ayúdale con lo que necesite.",
       webhook: "",
       twilioNumber: fallbackTwilioNumber,
     };
@@ -107,7 +114,10 @@ app.get("/call", async (req, res) => {
 
 function buildVoiceTwiml(clientId) {
   const cleanBaseUrl = (process.env.BASE_URL || "").replace(/\/+$/, "");
-  const streamUrl = `${cleanBaseUrl.replace("https://", "wss://")}/media-stream?client_id=${clientId}`;
+  const streamUrl = `${cleanBaseUrl.replace(
+    "https://",
+    "wss://"
+  )}/media-stream?client_id=${clientId}`;
 
   console.log("🌐 STREAM URL:", streamUrl);
 
@@ -152,14 +162,13 @@ wss.on("connection", async (twilioWs, req) => {
   const config = await getClientConfig(clientId);
 
   if (!config) {
-  console.error("❌ No hay config, usando cierre defensivo:", clientId);
-  twilioWs.close();
-  return;
-}
+    console.error("❌ No hay config, cerrando conexión:", clientId);
+    twilioWs.close();
+    return;
+  }
 
   let streamSid = null;
   let callSid = null;
-  let openAiReady = false;
   let greeted = false;
   let callStartedAt = Date.now();
   let fromNumber = "";
@@ -178,6 +187,8 @@ wss.on("connection", async (twilioWs, req) => {
     }
   );
 
+  console.log("🔄 Intentando conectar con OpenAI realtime...");
+
   function addTranscriptLine(line) {
     if (!line) return;
     transcriptParts.push(line);
@@ -186,37 +197,37 @@ wss.on("connection", async (twilioWs, req) => {
     }
   }
 
- async function saveCall(status = "completed") {
-  if (!supabase) {
-    console.log("⚠️ saveCall omitido porque Supabase está desactivado");
-    return;
+  async function saveCall(status = "completed") {
+    if (!supabase) {
+      console.log("⚠️ saveCall omitido porque Supabase está desactivado");
+      return;
+    }
+
+    try {
+      const durationSeconds = Math.max(
+        1,
+        Math.round((Date.now() - callStartedAt) / 1000)
+      );
+
+      const transcript = transcriptParts.join("\n").trim();
+
+      await supabase.from("calls").insert({
+        client_id: clientId,
+        call_sid: callSid || null,
+        from_number: fromNumber || "",
+        to_number: toNumber || "",
+        status,
+        summary: callSummary,
+        transcript,
+        lead_captured: leadCaptured,
+        duration_seconds: durationSeconds,
+      });
+
+      console.log("📞 Llamada guardada en Supabase");
+    } catch (err) {
+      console.error("❌ Error guardando llamada:", err.message);
+    }
   }
-
-  try {
-    const durationSeconds = Math.max(
-      1,
-      Math.round((Date.now() - callStartedAt) / 1000)
-    );
-
-    const transcript = transcriptParts.join("\n").trim();
-
-    await supabase.from("calls").insert({
-      client_id: clientId,
-      call_sid: callSid || null,
-      from_number: fromNumber || "",
-      to_number: toNumber || "",
-      status,
-      summary: callSummary,
-      transcript,
-      lead_captured: leadCaptured,
-      duration_seconds: durationSeconds,
-    });
-
-    console.log("📞 Llamada guardada en Supabase");
-  } catch (err) {
-    console.error("❌ Error guardando llamada:", err.message);
-  }
-}
 
   openaiWs.on("open", () => {
     console.log("🤖 OpenAI conectado para:", config.name);
@@ -234,9 +245,9 @@ wss.on("connection", async (twilioWs, req) => {
             model: "gpt-4o-mini-transcribe",
           },
           turn_detection: {
-  type: "server_vad",
-  create_response: true,
-},
+            type: "server_vad",
+            create_response: true,
+          },
           tools: [
             {
               type: "function",
@@ -268,26 +279,26 @@ wss.on("connection", async (twilioWs, req) => {
       const data = JSON.parse(raw.toString());
 
       if (data.event === "start") {
-  streamSid = data.start?.streamSid || null;
-  callSid = data.start?.callSid || null;
-  fromNumber = data.start?.customParameters?.from || "";
-  toNumber = data.start?.customParameters?.to || "";
-  addTranscriptLine("[SYSTEM] Inicio de llamada");
-  console.log("📞 Stream iniciado:", streamSid);
-  console.log("📞 Call SID:", callSid);
-}
+        streamSid = data.start?.streamSid || null;
+        callSid = data.start?.callSid || null;
+        fromNumber = data.start?.customParameters?.from || "";
+        toNumber = data.start?.customParameters?.to || "";
+        addTranscriptLine("[SYSTEM] Inicio de llamada");
+        console.log("📞 Stream iniciado:", streamSid);
+        console.log("📞 Call SID:", callSid);
+      }
 
       if (data.event === "media") {
-  if (openaiWs.readyState === WebSocket.OPEN) {
-    console.log("🎤 Audio recibido de Twilio");
-    openaiWs.send(
-      JSON.stringify({
-        type: "input_audio_buffer.append",
-        audio: data.media.payload,
-      })
-    );
-  }
-}
+        if (openaiWs.readyState === WebSocket.OPEN) {
+          console.log("🎤 Audio recibido de Twilio");
+          openaiWs.send(
+            JSON.stringify({
+              type: "input_audio_buffer.append",
+              audio: data.media.payload,
+            })
+          );
+        }
+      }
 
       if (data.event === "stop") {
         console.log("🔴 Twilio stop recibido");
@@ -303,7 +314,6 @@ wss.on("connection", async (twilioWs, req) => {
   openaiWs.on("message", async (raw) => {
     try {
       const event = JSON.parse(raw.toString());
-
       console.log("OpenAI event:", event.type);
 
       if (event.type === "error") {
@@ -311,16 +321,7 @@ wss.on("connection", async (twilioWs, req) => {
         return;
       }
 
-      if (event.type === "response.done") {
-  console.log("✅ response.done recibido");
-}
-
-if (event.type === "response.audio.done" || event.type === "response.output_audio.done") {
-  console.log("✅ audio done recibido");
-}
-
       if (event.type === "session.updated") {
-        openAiReady = true;
         console.log("✅ OpenAI listo");
 
         if (!greeted) {
@@ -338,25 +339,41 @@ if (event.type === "response.audio.done" || event.type === "response.output_audi
           console.log("👋 response.create enviado");
         }
       }
-if (
-  (event.type === "response.audio.delta" ||
-    event.type === "response.output_audio.delta") &&
-  event.delta &&
-  streamSid
-) {
-  twilioWs.send(
-    JSON.stringify({
-      event: "media",
-      streamSid,
-      media: {
-        payload: event.delta,
-      },
-    })
-  );
-  console.log("🔊 Audio enviado a Twilio");
-}
+
+      if (
+        (event.type === "response.audio.delta" ||
+          event.type === "response.output_audio.delta") &&
+        event.delta &&
+        streamSid
+      ) {
+        twilioWs.send(
+          JSON.stringify({
+            event: "media",
+            streamSid,
+            media: {
+              payload: event.delta,
+            },
+          })
+        );
+        console.log("🔊 Audio enviado a Twilio");
+      }
+
+      if (
+        event.type === "response.audio.done" ||
+        event.type === "response.output_audio.done"
+      ) {
+        console.log("✅ audio done recibido");
+      }
+
+      if (event.type === "response.done") {
+        console.log("✅ response.done recibido");
+      }
 
       if (event.type === "response.text.delta" && event.delta) {
+        addTranscriptLine(`[AI] ${event.delta}`);
+      }
+
+      if (event.type === "response.audio_transcript.delta" && event.delta) {
         addTranscriptLine(`[AI] ${event.delta}`);
       }
 
@@ -375,38 +392,40 @@ if (
         console.log("💾 Guardando lead:", args);
 
         leadCaptured = true;
-        callSummary = `Lead capturado: ${args.nombre || "sin nombre"} · ${args.necesidad || "sin necesidad"}`;
+        callSummary = `Lead capturado: ${args.nombre || "sin nombre"} · ${
+          args.necesidad || "sin necesidad"
+        }`;
+
+        if (!config.webhook) {
+          console.log("⚠️ Webhook no configurado, se omite guardar lead externo");
+
+          openaiWs.send(
+            JSON.stringify({
+              type: "conversation.item.create",
+              item: {
+                type: "function_call_output",
+                call_id: event.item.call_id,
+                output: JSON.stringify({ ok: true }),
+              },
+            })
+          );
+
+          openaiWs.send(
+            JSON.stringify({
+              type: "response.create",
+              response: {
+                modalities: ["audio", "text"],
+                instructions:
+                  "Confirma brevemente que la solicitud ha quedado registrada.",
+              },
+            })
+          );
+
+          return;
+        }
 
         try {
-          if (!config.webhook) {
-  console.log("⚠️ Webhook no configurado, se omite guardar lead externo");
-
-  openaiWs.send(
-    JSON.stringify({
-      type: "conversation.item.create",
-      item: {
-        type: "function_call_output",
-        call_id: event.item.call_id,
-        output: JSON.stringify({ ok: true }),
-      },
-    })
-  );
-
-  openaiWs.send(
-    JSON.stringify({
-      type: "response.create",
-      response: {
-        modalities: ["audio", "text"],
-        instructions:
-          "Confirma brevemente que la solicitud ha quedado registrada.",
-      },
-    })
-  );
-
-  return;
-}
-          
-            const webhookRes = await fetch(config.webhook, {
+          const webhookRes = await fetch(config.webhook, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -471,8 +490,10 @@ if (
     await saveCall("failed");
   });
 
-  openaiWs.on("close", () => {
+  openaiWs.on("close", (code, reason) => {
     console.log("🔌 OpenAI desconectado");
+    console.log("OpenAI close code:", code);
+    console.log("OpenAI close reason:", reason?.toString());
   });
 
   openaiWs.on("error", (err) => {

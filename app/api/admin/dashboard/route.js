@@ -11,46 +11,55 @@ export async function GET() {
   try {
     const supabase = getSupabase();
 
-    const [clientsRes, usersRes, callsRes, leadsRes] = await Promise.all([
-      supabase.from("clients").select("id,plan,billing_status"),
-      supabase.from("users").select("id"),
-      supabase.from("calls").select("id,client_id,status,created_at"),
-      supabase.from("leads").select("id,client_id,created_at"),
-    ]);
+    const { data: calls, error } = await supabase
+      .from("calls")
+      .select("*")
+      .order("created_at", { ascending: false });
 
-    const clients = clientsRes.data || [];
-    const users = usersRes.data || [];
-    const calls = callsRes.data || [];
-    const leads = leadsRes.data || [];
-
-    const callsByClient = {};
-    for (const call of calls) {
-      callsByClient[call.client_id] = (callsByClient[call.client_id] || 0) + 1;
+    if (error) {
+      return Response.json(
+        { success: false, message: error.message },
+        { status: 500 }
+      );
     }
 
-    const leadsByClient = {};
-    for (const lead of leads) {
-      leadsByClient[lead.client_id] = (leadsByClient[lead.client_id] || 0) + 1;
-    }
+    const totalCalls = calls?.length || 0;
+    const totalLeads = (calls || []).filter((c) => c.lead_captured).length;
+    const avgDuration =
+      totalCalls > 0
+        ? Math.round(
+            (calls || []).reduce(
+              (acc, call) => acc + (call.duration_seconds || 0),
+              0
+            ) / totalCalls
+          )
+        : 0;
+
+    const conversionRate =
+      totalCalls > 0 ? Number(((totalLeads / totalCalls) * 100).toFixed(1)) : 0;
+
+    const recentCalls = (calls || []).slice(0, 10).map((call) => ({
+      id: call.id,
+      created_at: call.created_at,
+      status: call.status,
+      summary: call.summary,
+      lead_captured: call.lead_captured,
+      duration_seconds: call.duration_seconds,
+    }));
 
     return Response.json({
       success: true,
-      data: {
-        totals: {
-          clients: clients.length,
-          users: users.length,
-          calls: calls.length,
-          leads: leads.length,
-        },
-        callsByClient,
-        leadsByClient,
-        clients,
+      metrics: {
+        totalCalls,
+        totalLeads,
+        conversionRate,
+        avgDuration,
       },
+      recentCalls,
     });
   } catch (error) {
-    console.error("admin dashboard error:", error);
     return Response.json(
-      { success: false, message: "Error cargando dashboard" },
+      { success: false, message: error.message || "Error cargando dashboard" },
       { status: 500 }
     );
   }

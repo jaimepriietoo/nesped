@@ -6,7 +6,7 @@ const WebSocket = require("ws");
 const twilio = require("twilio");
 const { createClient } = require("@supabase/supabase-js");
 
-console.log("VOICE SERVER FINAL COMPLETE ANTI-NOISE PRO V2 - 2026-04-07");
+console.log("VOICE SERVER FINAL COMPLETE WITH LEADS - 2026-04-07");
 console.log("OPENAI_API_KEY presente:", !!process.env.OPENAI_API_KEY);
 console.log("BASE_URL:", process.env.BASE_URL);
 console.log("PORT:", process.env.PORT);
@@ -265,7 +265,6 @@ wss.on("connection", async (twilioWs, req) => {
   let closingRequested = false;
   let callSaved = false;
 
-  // anti-ruido
   let totalMediaChunks = 0;
   let speechStartChunk = null;
   let lastUtteranceChunks = 0;
@@ -324,6 +323,32 @@ wss.on("connection", async (twilioWs, req) => {
       console.log("📞 Llamada guardada en Supabase");
     } catch (err) {
       console.error("❌ Error guardando llamada:", err.message);
+    }
+  }
+
+  async function saveLeadToSupabase(args) {
+    if (!supabase) {
+      console.log("⚠️ saveLead omitido porque Supabase está desactivado");
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from("leads").insert({
+        client_id: clientId,
+        nombre: args.nombre || "",
+        telefono: args.telefono || "",
+        ciudad: args.ciudad || "",
+        necesidad: args.necesidad || "",
+        origen: `llamada_${clientId}`,
+      });
+
+      if (error) {
+        console.error("❌ Error guardando lead en Supabase:", error.message);
+      } else {
+        console.log("✅ Lead guardado en Supabase");
+      }
+    } catch (err) {
+      console.error("❌ Excepción guardando lead:", err.message);
     }
   }
 
@@ -506,8 +531,6 @@ wss.on("connection", async (twilioWs, req) => {
           lastUtteranceChunks = 0;
         }
 
-        // Muy estricto: ~20ms/chunk. 45 chunks ≈ 900ms.
-        // Por debajo de eso, lo tratamos como tos/ruido/sonido corto.
         noiseResponseGuard = lastUtteranceChunks < 45;
 
         console.log(
@@ -599,6 +622,8 @@ wss.on("connection", async (twilioWs, req) => {
         callSummary = `Lead capturado: ${args.nombre || "sin nombre"} · ${
           args.necesidad || "sin necesidad"
         }`;
+
+        await saveLeadToSupabase(args);
 
         if (!config.webhook) {
           console.log("⚠️ Webhook no configurado, se omite guardar lead externo");

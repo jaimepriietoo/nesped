@@ -2,87 +2,81 @@
 
 import { useEffect, useState } from "react";
 
-function BarChart({ title, data = {} }) {
-  const entries = Object.entries(data);
-  const max = Math.max(...entries.map(([, value]) => value), 1);
+export default function Dashboard() {
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    fetch("/api/admin/dashboard")
+      .then((res) => res.json())
+      .then((json) => setData(json));
+  }, []);
+
+  if (!data) {
+    return <div className="p-6 text-white">Cargando...</div>;
+  }
+
+  const { metrics, recentCalls } = data;
 
   return (
-    <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-6">
-      <div className="mb-5 text-lg font-semibold">{title}</div>
+    <div className="p-6 text-white bg-black min-h-screen">
+      <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
 
-      <div className="space-y-4">
-        {entries.map(([label, value]) => (
-          <div key={label}>
-            <div className="mb-2 flex items-center justify-between text-sm">
-              <span className="text-white/65">{label}</span>
-              <span className="text-white">{value}</span>
-            </div>
-            <div className="h-3 rounded-full bg-white/10">
-              <div
-                className="h-3 rounded-full bg-white"
-                style={{ width: `${(value / max) * 100}%` }}
-              />
-            </div>
-          </div>
-        ))}
+      {/* METRICS */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <Card title="Llamadas" value={metrics.totalCalls} />
+        <Card title="Leads" value={metrics.totalLeads} />
+        <Card title="Conversión" value={`${metrics.conversionRate}%`} />
+        <Card title="Duración media" value={`${metrics.avgDuration}s`} />
+      </div>
+
+      {/* TABLE */}
+      <div className="bg-zinc-900 rounded-xl p-4">
+        <h2 className="text-lg font-semibold mb-4">Últimas llamadas</h2>
+
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-zinc-400">
+              <th className="pb-2">Fecha</th>
+              <th>Lead</th>
+              <th>Duración</th>
+              <th>Resumen</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {recentCalls.map((call) => (
+              <tr key={call.id} className="border-t border-zinc-800">
+                <td className="py-2">
+                  {new Date(call.created_at).toLocaleString()}
+                </td>
+
+                <td>
+                  {call.lead_captured ? (
+                    <span className="text-green-400">Sí</span>
+                  ) : (
+                    <span className="text-red-400">No</span>
+                  )}
+                </td>
+
+                <td>{call.duration_seconds}s</td>
+
+                <td className="max-w-xs truncate">
+                  {call.summary || "Sin resumen"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
 }
 
-export default function AdminOverviewPage() {
-  const [data, setData] = useState(null);
-
-  useEffect(() => {
-    fetch("/api/admin/dashboard", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((json) => setData(json.data || null))
-      .catch(console.error);
-  }, []);
-
+function Card({ title, value }) {
   return (
-    <div className="min-h-screen bg-[#050505] text-white px-6 py-10">
-      <div className="mx-auto max-w-7xl">
-        <h1 className="text-4xl font-semibold">Admin Overview</h1>
-
-        {!data ? (
-          <div className="mt-8 text-white/50">Cargando...</div>
-        ) : (
-          <>
-            <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-4">
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-                <div className="text-white/45">Clientes</div>
-                <div className="mt-2 text-3xl font-semibold">
-                  {data.totals.clients}
-                </div>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-                <div className="text-white/45">Usuarios</div>
-                <div className="mt-2 text-3xl font-semibold">
-                  {data.totals.users}
-                </div>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-                <div className="text-white/45">Llamadas</div>
-                <div className="mt-2 text-3xl font-semibold">
-                  {data.totals.calls}
-                </div>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-                <div className="text-white/45">Leads</div>
-                <div className="mt-2 text-3xl font-semibold">
-                  {data.totals.leads}
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-8 grid gap-5 md:grid-cols-2">
-              <BarChart title="Llamadas por cliente" data={data.callsByClient} />
-              <BarChart title="Leads por cliente" data={data.leadsByClient} />
-            </div>
-          </>
-        )}
-      </div>
+    <div className="bg-zinc-900 p-4 rounded-xl">
+      <div className="text-zinc-400 text-sm">{title}</div>
+      <div className="text-xl font-bold">{value}</div>
     </div>
   );
 }

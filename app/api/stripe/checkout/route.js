@@ -47,7 +47,7 @@ export async function POST(req) {
   } catch (error) {
     console.error("Stripe checkout error:", error);
     return Response.json(
-      { success: false, message: "Error creando checkout" },
+      { success: false, message: error.message || "Error creando checkout" },
       { status: 500 }
     );
   }

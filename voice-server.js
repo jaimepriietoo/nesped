@@ -183,17 +183,52 @@ app.get("/call", async (req, res) => {
     }
 
     const call = await client.calls.create({
-      to: process.env.TU_NUMERO,
-      from: config.twilioNumber || fallbackTwilioNumber,
-      url: `${cleanBaseUrl}/voice?client_id=${clientId}`,
-      method: "POST",
-    });
+  to: process.env.TU_NUMERO,
+  from: config.twilioNumber || fallbackTwilioNumber,
+  url: `${cleanBaseUrl}/voice?client_id=${clientId}`,
+  method: "POST",
+  record: true,
+  recordingStatusCallback: `${cleanBaseUrl}/recording-status?client_id=${clientId}`,
+  recordingStatusCallbackMethod: "POST",
+});
 
     console.log("📞 Llamada iniciada:", call.sid, "cliente:", clientId);
     res.send("Llamada iniciada: " + call.sid);
   } catch (error) {
     console.error("❌ ERROR /call:", error.message);
     res.status(500).send("Error: " + error.message);
+  }
+});
+
+app.post("/recording-status", async (req, res) => {
+  try {
+    const recordingUrl = req.body?.RecordingUrl || "";
+    const callSid = req.body?.CallSid || "";
+    const recordingStatus = req.body?.RecordingStatus || "";
+    const clientId = req.query.client_id || "demo";
+
+    console.log("🎙️ Recording callback:", { recordingUrl, callSid, recordingStatus });
+
+    if (supabase && callSid && recordingUrl) {
+      const { error } = await supabase
+        .from("calls")
+        .update({
+          recording_url: `${recordingUrl}.mp3`,
+        })
+        .eq("call_sid", callSid)
+        .eq("client_id", clientId);
+
+      if (error) {
+        console.error("❌ Error guardando recording_url:", error.message);
+      } else {
+        console.log("✅ recording_url guardada en calls");
+      }
+    }
+
+    res.status(200).send("ok");
+  } catch (error) {
+    console.error("❌ recording-status error:", error.message);
+    res.status(500).send("error");
   }
 });
 

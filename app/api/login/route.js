@@ -61,6 +61,13 @@ export async function POST(req) {
       maxAge: 60 * 60 * 24 * 7,
     });
 
+    cookieStore.set("nesped_user_email", email, {
+  httpOnly: true,
+  sameSite: "lax",
+  secure: true,
+  path: "/",
+});
+
     return Response.json({
       success: true,
       clientId: user.client_id,

@@ -1,27 +1,22 @@
-import { cookies } from "next/headers";
-import { createClient } from "@supabase/supabase-js";
-
-function getSupabase() {
-  return createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
-}
+import { getPortalContext, hasRole } from "@/lib/portal-auth";
 
 export async function PATCH(req) {
   try {
-    const cookieStore = await cookies();
-    const auth = cookieStore.get("nesped_auth")?.value;
-    const clientId = cookieStore.get("nesped_client_id")?.value || "demo";
-
-    if (auth !== "ok" && clientId !== "demo") {
+    const ctx = await getPortalContext();
+    if (!ctx.ok) {
       return Response.json(
-        { success: false, message: "No autorizado" },
+        { success: false, message: ctx.message },
         { status: 401 }
       );
     }
 
-    const supabase = getSupabase();
+    if (!hasRole(ctx.role, ["owner", "admin", "manager", "agent"])) {
+      return Response.json(
+        { success: false, message: "Sin permisos para editar leads" },
+        { status: 403 }
+      );
+    }
+
     const body = await req.json();
 
     const {
@@ -50,11 +45,11 @@ export async function PATCH(req) {
       ...(valor_estimado !== undefined ? { valor_estimado } : {}),
     };
 
-    const { data: updatedLead, error } = await supabase
+    const { data: updatedLead, error } = await ctx.supabase
       .from("leads")
       .update(changes)
       .eq("id", leadId)
-      .eq("client_id", clientId)
+      .eq("client_id", ctx.clientId)
       .select()
       .single();
 
@@ -65,28 +60,25 @@ export async function PATCH(req) {
       );
     }
 
-    await supabase.from("audit_logs").insert({
-      client_id: clientId,
+    await ctx.supabase.from("audit_logs").insert({
+      client_id: ctx.clientId,
       entity_type: "lead",
       entity_id: leadId,
       action: "updated",
-      actor: "portal_user",
+      actor: ctx.currentUser?.full_name || ctx.userEmail || "portal_user",
       changes,
     });
 
-    await supabase.from("lead_events").insert({
+    await ctx.supabase.from("lead_events").insert({
       lead_id: leadId,
-      client_id: clientId,
+      client_id: ctx.clientId,
       type: "lead_updated",
       title: "Lead actualizado desde el portal",
-      description: "Se han modificado campos del lead desde el portal del cliente.",
+      description: "Se han modificado campos del lead desde el portal.",
       meta: changes,
     });
 
-    return Response.json({
-      success: true,
-      data: updatedLead,
-    });
+    return Response.json({ success: true, data: updatedLead });
   } catch (error) {
     return Response.json(
       { success: false, message: error.message || "Error actualizando lead" },

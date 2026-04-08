@@ -1,12 +1,4 @@
-import { cookies } from "next/headers";
-import { createClient } from "@supabase/supabase-js";
-
-function getSupabase() {
-  return createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
-}
+import { getPortalContext } from "@/lib/portal-auth";
 
 function predictCloseProbability(lead) {
   const score = Number(lead.score || 0);
@@ -80,18 +72,13 @@ function buildAutoInsights(calls = [], leads = []) {
 
 export async function GET() {
   try {
-    const cookieStore = await cookies();
-    const auth = cookieStore.get("nesped_auth")?.value;
-    const clientId = cookieStore.get("nesped_client_id")?.value || "demo";
-
-    if (auth !== "ok" && clientId !== "demo") {
+    const ctx = await getPortalContext();
+    if (!ctx.ok) {
       return Response.json(
-        { success: false, message: "No autorizado" },
+        { success: false, message: ctx.message },
         { status: 401 }
       );
     }
-
-    const supabase = getSupabase();
 
     const [
       clientRes,
@@ -104,15 +91,15 @@ export async function GET() {
       benchmarkRes,
       auditRes,
     ] = await Promise.all([
-      supabase.from("clients").select("*").eq("id", clientId).single(),
-      supabase.from("client_settings").select("*").eq("client_id", clientId).maybeSingle(),
-      supabase.from("portal_users").select("*").eq("client_id", clientId).order("created_at", { ascending: true }),
-      supabase.from("leads").select("*").eq("client_id", clientId).order("created_at", { ascending: false }),
-      supabase.from("calls").select("*").eq("client_id", clientId).order("created_at", { ascending: false }),
-      supabase.from("alerts").select("*").eq("client_id", clientId).order("created_at", { ascending: false }).limit(20),
-      supabase.from("ai_insights").select("*").eq("client_id", clientId).order("created_at", { ascending: false }).limit(20),
-      supabase.from("performance_snapshots").select("*").eq("client_id", clientId).order("created_at", { ascending: false }).limit(30),
-      supabase.from("audit_logs").select("*").eq("client_id", clientId).order("created_at", { ascending: false }).limit(30),
+      ctx.supabase.from("clients").select("*").eq("id", ctx.clientId).single(),
+      ctx.supabase.from("client_settings").select("*").eq("client_id", ctx.clientId).maybeSingle(),
+      ctx.supabase.from("portal_users").select("*").eq("client_id", ctx.clientId).order("created_at", { ascending: true }),
+      ctx.supabase.from("leads").select("*").eq("client_id", ctx.clientId).order("created_at", { ascending: false }),
+      ctx.supabase.from("calls").select("*").eq("client_id", ctx.clientId).order("created_at", { ascending: false }),
+      ctx.supabase.from("alerts").select("*").eq("client_id", ctx.clientId).order("created_at", { ascending: false }).limit(20),
+      ctx.supabase.from("ai_insights").select("*").eq("client_id", ctx.clientId).order("created_at", { ascending: false }).limit(20),
+      ctx.supabase.from("performance_snapshots").select("*").eq("client_id", ctx.clientId).order("created_at", { ascending: false }).limit(30),
+      ctx.supabase.from("audit_logs").select("*").eq("client_id", ctx.clientId).order("created_at", { ascending: false }).limit(30),
     ]);
 
     if (clientRes.error) {
@@ -209,6 +196,8 @@ export async function GET() {
 
     return Response.json({
       success: true,
+      currentUser: ctx.currentUser,
+      currentRole: ctx.role,
       client,
       settings,
       users,

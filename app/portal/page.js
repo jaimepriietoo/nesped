@@ -92,7 +92,21 @@ function MiniBarChart({ title, data, color = "bg-blue-400" }) {
   );
 }
 
-function LeadDrawer({ lead, events, call, users, onClose, onSave }) {
+function LeadDrawer({
+  lead,
+  events,
+  notes,
+  comments,
+  reminders,
+  call,
+  users,
+  canEdit,
+  onClose,
+  onSave,
+  onAddNote,
+  onAddComment,
+  onAddReminder,
+}) {
   const [form, setForm] = useState({
     status: lead?.status || "new",
     owner: lead?.owner || "",
@@ -101,6 +115,11 @@ function LeadDrawer({ lead, events, call, users, onClose, onSave }) {
     ultima_accion: lead?.ultima_accion || "",
     valor_estimado: lead?.valor_estimado || "",
   });
+
+  const [noteBody, setNoteBody] = useState("");
+  const [commentBody, setCommentBody] = useState("");
+  const [reminderTitle, setReminderTitle] = useState("");
+  const [reminderAt, setReminderAt] = useState("");
 
   useEffect(() => {
     setForm({
@@ -111,13 +130,17 @@ function LeadDrawer({ lead, events, call, users, onClose, onSave }) {
       ultima_accion: lead?.ultima_accion || "",
       valor_estimado: lead?.valor_estimado || "",
     });
+    setNoteBody("");
+    setCommentBody("");
+    setReminderTitle("");
+    setReminderAt("");
   }, [lead]);
 
   if (!lead) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-sm">
-      <div className="h-full w-full max-w-4xl overflow-y-auto border-l border-white/10 bg-[#060606] p-6 shadow-2xl shadow-black">
+      <div className="h-full w-full max-w-5xl overflow-y-auto border-l border-white/10 bg-[#060606] p-6 shadow-2xl shadow-black">
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <div className="text-sm uppercase tracking-[0.2em] text-blue-300">Ficha de lead</div>
@@ -171,9 +194,10 @@ function LeadDrawer({ lead, events, call, users, onClose, onSave }) {
           <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
             <label className="text-sm text-white/45">Estado</label>
             <select
+              disabled={!canEdit}
               value={form.status}
               onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
-              className="mt-2 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
+              className="mt-2 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white disabled:opacity-50"
             >
               {["new", "contacted", "qualified", "won", "lost"].map((st) => (
                 <option key={st} value={st}>
@@ -186,9 +210,10 @@ function LeadDrawer({ lead, events, call, users, onClose, onSave }) {
           <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
             <label className="text-sm text-white/45">Owner</label>
             <select
+              disabled={!canEdit}
               value={form.owner}
               onChange={(e) => setForm((f) => ({ ...f, owner: e.target.value }))}
-              className="mt-2 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
+              className="mt-2 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white disabled:opacity-50"
             >
               <option value="">Sin asignar</option>
               {users.map((u) => (
@@ -202,37 +227,41 @@ function LeadDrawer({ lead, events, call, users, onClose, onSave }) {
           <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
             <label className="text-sm text-white/45">Valor estimado (€)</label>
             <input
+              disabled={!canEdit}
               value={form.valor_estimado}
               onChange={(e) => setForm((f) => ({ ...f, valor_estimado: e.target.value }))}
-              className="mt-2 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
+              className="mt-2 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white disabled:opacity-50"
             />
           </div>
 
           <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
             <label className="text-sm text-white/45">Última acción</label>
             <input
+              disabled={!canEdit}
               value={form.ultima_accion}
               onChange={(e) => setForm((f) => ({ ...f, ultima_accion: e.target.value }))}
-              className="mt-2 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
+              className="mt-2 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white disabled:opacity-50"
             />
           </div>
 
           <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5 md:col-span-2">
             <label className="text-sm text-white/45">Próxima acción</label>
             <input
+              disabled={!canEdit}
               value={form.proxima_accion}
               onChange={(e) => setForm((f) => ({ ...f, proxima_accion: e.target.value }))}
-              className="mt-2 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
+              className="mt-2 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white disabled:opacity-50"
             />
           </div>
 
           <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5 md:col-span-2">
-            <label className="text-sm text-white/45">Notas</label>
+            <label className="text-sm text-white/45">Notas del lead</label>
             <textarea
+              disabled={!canEdit}
               value={form.notes}
               onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
               rows={4}
-              className="mt-2 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
+              className="mt-2 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white disabled:opacity-50"
             />
           </div>
         </div>
@@ -252,101 +281,242 @@ function LeadDrawer({ lead, events, call, users, onClose, onSave }) {
             Copiar teléfono
           </button>
 
-          <button
-            onClick={() =>
-              setForm((f) => ({
-                ...f,
-                status: "contacted",
-                ultima_accion: "Marcado como contactado desde el portal",
-              }))
-            }
-            className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-semibold text-white hover:bg-white/5"
-          >
-            Marcar como contactado
-          </button>
+          {canEdit ? (
+            <>
+              <button
+                onClick={() =>
+                  setForm((f) => ({
+                    ...f,
+                    status: "contacted",
+                    ultima_accion: "Marcado como contactado desde el portal",
+                  }))
+                }
+                className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-semibold text-white hover:bg-white/5"
+              >
+                Marcar como contactado
+              </button>
 
-          <button
-            onClick={() => onSave(lead.id, form)}
-            className="rounded-2xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-black hover:bg-emerald-400"
-          >
-            Guardar cambios
-          </button>
+              <button
+                onClick={() => onSave(lead.id, form)}
+                className="rounded-2xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-black hover:bg-emerald-400"
+              >
+                Guardar cambios
+              </button>
+            </>
+          ) : null}
         </div>
 
-        <div className="mt-8">
-          <div className="mb-3 text-sm uppercase tracking-[0.2em] text-emerald-300">Timeline</div>
-          <div className="space-y-3">
-            {events.length === 0 ? (
-              <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5 text-white/45">
-                No hay eventos todavía.
-              </div>
-            ) : (
-              events.map((e) => (
-                <div key={e.id} className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
-                  <div className="text-xs text-white/45">{formatDate(e.created_at)}</div>
-                  <div className="mt-2 text-lg font-semibold text-white">{e.title}</div>
-                  <div className="mt-2 text-sm leading-7 text-white/70">{e.description || "-"}</div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        <div className="mt-8">
-          <div className="mb-3 text-sm uppercase tracking-[0.2em] text-blue-300">Llamada asociada</div>
-
-          {call ? (
-            <div className="space-y-4">
-              <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div>
-                    <div className="text-sm text-white/45">Fecha</div>
-                    <div className="mt-2 text-white/80">{formatDate(call.created_at)}</div>
+        <div className="mt-8 grid gap-6 xl:grid-cols-2">
+          <div className="space-y-6">
+            <PanelCard title="Timeline">
+              <div className="space-y-3">
+                {events.length === 0 ? (
+                  <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5 text-white/45">
+                    No hay eventos todavía.
                   </div>
-                  <div>
-                    <div className="text-sm text-white/45">Duración</div>
-                    <div className="mt-2 text-white/80">{formatSeconds(call.duration_seconds)}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-white/45">Estado</div>
-                    <div className="mt-2">
-                      <Badge color="blue">{call.status || "-"}</Badge>
+                ) : (
+                  events.map((e) => (
+                    <div key={e.id} className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+                      <div className="text-xs text-white/45">{formatDate(e.created_at)}</div>
+                      <div className="mt-2 text-lg font-semibold text-white">{e.title}</div>
+                      <div className="mt-2 text-sm leading-7 text-white/70">{e.description || "-"}</div>
                     </div>
-                  </div>
-                </div>
+                  ))
+                )}
               </div>
+            </PanelCard>
 
-              <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
-                <div className="text-sm text-white/45">Resumen</div>
-                <div className="mt-2 text-white/80">{call.summary || "-"}</div>
-              </div>
-
-              <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
-                <div className="text-sm text-white/45">Resumen largo</div>
-                <div className="mt-2 text-white/70">{call.summary_long || "-"}</div>
-              </div>
-
-              {call.recording_url ? (
-                <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
-                  <div className="text-sm text-white/45">Grabación</div>
-                  <audio controls className="mt-3 w-full">
-                    <source src={call.recording_url} />
-                  </audio>
+            <PanelCard title="Notas internas">
+              {canEdit ? (
+                <div className="mb-4 space-y-3">
+                  <textarea
+                    value={noteBody}
+                    onChange={(e) => setNoteBody(e.target.value)}
+                    rows={3}
+                    placeholder="Añadir nota interna..."
+                    className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
+                  />
+                  <button
+                    onClick={() => {
+                      if (!noteBody.trim()) return;
+                      onAddNote(lead.id, noteBody);
+                      setNoteBody("");
+                    }}
+                    className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black"
+                  >
+                    Añadir nota
+                  </button>
                 </div>
               ) : null}
 
-              <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
-                <div className="text-sm text-white/45">Transcripción</div>
-                <pre className="mt-3 whitespace-pre-wrap break-words text-sm leading-7 text-white/70">
-                  {call.transcript || "Sin transcripción"}
-                </pre>
+              <div className="space-y-3">
+                {notes.length === 0 ? (
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-white/45">
+                    Sin notas.
+                  </div>
+                ) : (
+                  notes.map((n) => (
+                    <div key={n.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="font-medium text-white">{n.author || "Usuario"}</div>
+                        <div className="text-xs text-white/45">{formatDate(n.created_at)}</div>
+                      </div>
+                      <div className="mt-2 text-sm text-white/70">{n.body}</div>
+                    </div>
+                  ))
+                )}
               </div>
-            </div>
-          ) : (
-            <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5 text-white/45">
-              No se ha podido asociar una llamada exacta.
-            </div>
-          )}
+            </PanelCard>
+
+            <PanelCard title="Comentarios internos">
+              {canEdit ? (
+                <div className="mb-4 space-y-3">
+                  <textarea
+                    value={commentBody}
+                    onChange={(e) => setCommentBody(e.target.value)}
+                    rows={3}
+                    placeholder="Añadir comentario..."
+                    className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
+                  />
+                  <button
+                    onClick={() => {
+                      if (!commentBody.trim()) return;
+                      onAddComment(lead.id, commentBody);
+                      setCommentBody("");
+                    }}
+                    className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black"
+                  >
+                    Añadir comentario
+                  </button>
+                </div>
+              ) : null}
+
+              <div className="space-y-3">
+                {comments.length === 0 ? (
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-white/45">
+                    Sin comentarios.
+                  </div>
+                ) : (
+                  comments.map((c) => (
+                    <div key={c.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="font-medium text-white">{c.author || "Usuario"}</div>
+                        <div className="text-xs text-white/45">{formatDate(c.created_at)}</div>
+                      </div>
+                      <div className="mt-2 text-sm text-white/70">{c.body}</div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </PanelCard>
+          </div>
+
+          <div className="space-y-6">
+            <PanelCard title="Recordatorios">
+              {canEdit ? (
+                <div className="mb-4 grid gap-3">
+                  <input
+                    value={reminderTitle}
+                    onChange={(e) => setReminderTitle(e.target.value)}
+                    placeholder="Título del recordatorio"
+                    className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
+                  />
+                  <input
+                    type="datetime-local"
+                    value={reminderAt}
+                    onChange={(e) => setReminderAt(e.target.value)}
+                    className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
+                  />
+                  <button
+                    onClick={() => {
+                      if (!reminderTitle.trim() || !reminderAt) return;
+                      onAddReminder(lead.id, reminderTitle, reminderAt, form.owner);
+                      setReminderTitle("");
+                      setReminderAt("");
+                    }}
+                    className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black"
+                  >
+                    Añadir recordatorio
+                  </button>
+                </div>
+              ) : null}
+
+              <div className="space-y-3">
+                {reminders.length === 0 ? (
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-white/45">
+                    Sin recordatorios.
+                  </div>
+                ) : (
+                  reminders.map((r) => (
+                    <div key={r.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <div className="font-medium text-white">{r.title}</div>
+                      <div className="mt-1 text-sm text-white/55">{formatDate(r.remind_at)}</div>
+                      <div className="mt-2 text-sm text-white/70">Asignado a: {r.assigned_to || "-"}</div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </PanelCard>
+
+            <PanelCard title="Llamada asociada">
+              {call ? (
+                <div className="space-y-4">
+                  <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <div>
+                        <div className="text-sm text-white/45">Fecha</div>
+                        <div className="mt-2 text-white/80">{formatDate(call.created_at)}</div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-white/45">Duración</div>
+                        <div className="mt-2 text-white/80">{formatSeconds(call.duration_seconds)}</div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-white/45">Estado</div>
+                        <div className="mt-2">
+                          <Badge color="blue">{call.status || "-"}</Badge>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+                    <div className="text-sm text-white/45">Resumen</div>
+                    <div className="mt-2 text-white/80">{call.summary || "-"}</div>
+                  </div>
+
+                  <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+                    <div className="text-sm text-white/45">Resumen largo</div>
+                    <div className="mt-2 text-white/70">{call.summary_long || "-"}</div>
+                  </div>
+
+                  {call.recording_url ? (
+                    <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+                      <div className="text-sm text-white/45">Grabación</div>
+                      <audio controls className="mt-3 w-full">
+                        <source src={call.recording_url} />
+                      </audio>
+                    </div>
+                  ) : (
+                    <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5 text-white/45">
+                      No hay grabación guardada todavía.
+                    </div>
+                  )}
+
+                  <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+                    <div className="text-sm text-white/45">Transcripción</div>
+                    <pre className="mt-3 whitespace-pre-wrap break-words text-sm leading-7 text-white/70">
+                      {call.transcript || "Sin transcripción"}
+                    </pre>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5 text-white/45">
+                  No se ha podido asociar una llamada exacta.
+                </div>
+              )}
+            </PanelCard>
+          </div>
         </div>
       </div>
     </div>
@@ -357,7 +527,17 @@ export default function ClientPortalPage() {
   const [data, setData] = useState(null);
   const [selectedLead, setSelectedLead] = useState(null);
   const [leadEvents, setLeadEvents] = useState([]);
+  const [leadNotes, setLeadNotes] = useState([]);
+  const [leadComments, setLeadComments] = useState([]);
+  const [leadReminders, setLeadReminders] = useState([]);
   const [billingLoading, setBillingLoading] = useState(false);
+  const [brandingForm, setBrandingForm] = useState(null);
+  const [newUser, setNewUser] = useState({
+    full_name: "",
+    email: "",
+    role: "agent",
+    phone: "",
+  });
 
   const [filters, setFilters] = useState({
     search: "",
@@ -369,29 +549,47 @@ export default function ClientPortalPage() {
 
   useEffect(() => {
     loadOverview();
+    const interval = setInterval(loadOverview, 15000);
+    return () => clearInterval(interval);
   }, []);
 
   async function loadOverview() {
     const res = await fetch("/api/portal/overview", { cache: "no-store" });
     const json = await res.json();
     setData(json);
+    if (json?.client) {
+      setBrandingForm({
+        brand_name: json.client.brand_name || json.client.name || "",
+        brand_logo_url: json.client.brand_logo_url || "",
+        primary_color: json.client.primary_color || "#ffffff",
+        secondary_color: json.client.secondary_color || "#030303",
+        owner_email: json.client.owner_email || "",
+        industry: json.client.industry || "",
+      });
+    }
   }
 
   async function openLead(lead) {
     setSelectedLead(lead);
-    const res = await fetch(`/api/lead-events?lead_id=${lead.id}`, { cache: "no-store" });
-    const json = await res.json();
-    setLeadEvents(Array.isArray(json.data) ? json.data : []);
+
+    const [eventsRes, notesRes, commentsRes, remindersRes] = await Promise.all([
+      fetch(`/api/lead-events?lead_id=${lead.id}`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`/api/lead-notes?lead_id=${lead.id}`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`/api/lead-comments?lead_id=${lead.id}`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`/api/lead-reminders?lead_id=${lead.id}`, { cache: "no-store" }).then((r) => r.json()),
+    ]);
+
+    setLeadEvents(eventsRes.data || []);
+    setLeadNotes(notesRes.data || []);
+    setLeadComments(commentsRes.data || []);
+    setLeadReminders(remindersRes.data || []);
   }
 
   async function saveLeadChanges(leadId, changes) {
     const res = await fetch("/api/leads/update", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        leadId,
-        ...changes,
-      }),
+      body: JSON.stringify({ leadId, ...changes }),
     });
 
     const json = await res.json();
@@ -401,11 +599,81 @@ export default function ClientPortalPage() {
     }
 
     await loadOverview();
-    const updated = json.data;
-    setSelectedLead(updated);
-    const eventsRes = await fetch(`/api/lead-events?lead_id=${updated.id}`, { cache: "no-store" });
-    const eventsJson = await eventsRes.json();
-    setLeadEvents(Array.isArray(eventsJson.data) ? eventsJson.data : []);
+    const updatedLead = json.data;
+    setSelectedLead(updatedLead);
+    await openLead(updatedLead);
+  }
+
+  async function addNote(leadId, body) {
+    const res = await fetch("/api/lead-notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lead_id: leadId, body }),
+    });
+    const json = await res.json();
+    if (!json.success) {
+      alert(json.message || "No se pudo crear la nota.");
+      return;
+    }
+    if (selectedLead) await openLead(selectedLead);
+  }
+
+  async function addComment(leadId, body) {
+    const res = await fetch("/api/lead-comments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lead_id: leadId, body }),
+    });
+    const json = await res.json();
+    if (!json.success) {
+      alert(json.message || "No se pudo crear el comentario.");
+      return;
+    }
+    if (selectedLead) await openLead(selectedLead);
+  }
+
+  async function addReminder(leadId, title, remind_at, assigned_to) {
+    const res = await fetch("/api/lead-reminders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lead_id: leadId, title, remind_at, assigned_to }),
+    });
+    const json = await res.json();
+    if (!json.success) {
+      alert(json.message || "No se pudo crear el recordatorio.");
+      return;
+    }
+    if (selectedLead) await openLead(selectedLead);
+  }
+
+  async function saveBranding() {
+    const res = await fetch("/api/portal/branding/update", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(brandingForm),
+    });
+    const json = await res.json();
+    if (!json.success) {
+      alert(json.message || "No se pudo guardar branding.");
+      return;
+    }
+    await loadOverview();
+    alert("Branding actualizado.");
+  }
+
+  async function createUser() {
+    const res = await fetch("/api/portal/users/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newUser),
+    });
+    const json = await res.json();
+    if (!json.success) {
+      alert(json.message || "No se pudo crear el usuario.");
+      return;
+    }
+    setNewUser({ full_name: "", email: "", role: "agent", phone: "" });
+    await loadOverview();
   }
 
   async function openBillingPortal() {
@@ -442,12 +710,10 @@ export default function ClientPortalPage() {
       });
 
       const json = await res.json();
-
       if (json?.url) {
         window.location.href = json.url;
         return;
       }
-
       alert(json?.message || "Checkout no disponible.");
     } catch (err) {
       alert(err?.message || "No se pudo abrir checkout.");
@@ -456,7 +722,7 @@ export default function ClientPortalPage() {
     }
   }
 
-  async function exportCsv() {
+  function exportCsv() {
     window.location.href = "/api/leads/export";
   }
 
@@ -464,6 +730,19 @@ export default function ClientPortalPage() {
     const res = await fetch("/api/weekly-report/send", { method: "POST" });
     const json = await res.json();
     alert(json.success ? "Resumen semanal enviado." : json.message || "No se pudo enviar.");
+  }
+
+  async function sendDailyReport() {
+    const res = await fetch("/api/daily-report/send", { method: "POST" });
+    const json = await res.json();
+    alert(json.success ? "Resumen diario enviado." : json.message || "No se pudo enviar.");
+  }
+
+  async function runNightly() {
+    const res = await fetch("/api/nightly", { method: "POST" });
+    const json = await res.json();
+    alert(json.success ? "Nightly ejecutado." : json.message || "No se pudo ejecutar.");
+    await loadOverview();
   }
 
   const filteredLeads = useMemo(() => {
@@ -525,6 +804,10 @@ export default function ClientPortalPage() {
   const metrics = data.metrics || {};
   const pipeline = data.pipeline || {};
   const rankings = data.rankings || { bestDays: [], bestHours: [] };
+  const currentRole = data.currentRole || "viewer";
+
+  const canEdit = ["owner", "admin", "manager", "agent"].includes(currentRole);
+  const canAdmin = ["owner", "admin"].includes(currentRole);
 
   const chartCalls = rankings.bestDays.length
     ? rankings.bestDays.map((d) => ({ label: d.label, value: d.calls }))
@@ -533,6 +816,25 @@ export default function ClientPortalPage() {
   const chartLeads = rankings.bestDays.length
     ? rankings.bestDays.map((d) => ({ label: d.label, value: d.leads }))
     : [{ label: "Sin datos", value: 0 }];
+
+  function onDragStart(ev, leadId) {
+    ev.dataTransfer.setData("leadId", leadId);
+  }
+
+  async function onDropStatus(ev, status) {
+    ev.preventDefault();
+    if (!canEdit) return;
+    const leadId = ev.dataTransfer.getData("leadId");
+    if (!leadId) return;
+    await saveLeadChanges(leadId, {
+      status,
+      ultima_accion: `Estado cambiado a ${status} con drag & drop`,
+    });
+  }
+
+  function onDragOver(ev) {
+    ev.preventDefault();
+  }
 
   return (
     <div
@@ -564,10 +866,10 @@ export default function ClientPortalPage() {
                 {client.brand_name || client.name || "Portal Enterprise"}
               </div>
               <h1 className="mt-2 text-4xl font-semibold tracking-tight md:text-6xl">
-                Inteligencia comercial de llamadas y leads
+                Control operativo y comercial en tiempo real
               </h1>
               <p className="mt-4 max-w-3xl text-lg leading-8 text-white/60">
-                Métricas, pipeline, alertas, benchmark, equipo, insights y control operativo completo.
+                Pipeline, insights, equipo, alertas, branding, notas, recordatorios y más.
               </p>
             </div>
           </div>
@@ -597,55 +899,75 @@ export default function ClientPortalPage() {
             </button>
 
             <button
+              onClick={sendDailyReport}
+              className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-semibold hover:bg-white/5"
+            >
+              Enviar diario
+            </button>
+
+            <button
               onClick={sendWeeklyReport}
               className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-semibold hover:bg-white/5"
             >
-              Enviar resumen semanal
+              Enviar semanal
+            </button>
+
+            <button
+              onClick={runNightly}
+              className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-semibold hover:bg-white/5"
+            >
+              Ejecutar nightly
             </button>
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+        <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
           <StatCard title="Llamadas" value={metrics.totalCalls || 0} subtitle="Histórico total" />
           <StatCard title="Leads" value={metrics.totalLeads || 0} subtitle="Capturados" />
           <StatCard title="Conversión" value={`${metrics.conversionRate || 0}%`} subtitle="Leads / llamadas" />
           <StatCard title="Duración media" value={formatSeconds(metrics.avgDuration || 0)} subtitle="Tiempo por llamada" />
           <StatCard title="Score medio" value={metrics.avgLeadScore || 0} subtitle="Calidad media" />
-          <StatCard title="Ingresos potenciales" value={`${Number(metrics.totalPotentialRevenue || 0).toFixed(0)}€`} subtitle="Estimación actual" />
+          <StatCard title="Ingresos potenciales" value={`${Number(metrics.totalPotentialRevenue || 0).toFixed(0)}€`} subtitle="Estimación" />
         </div>
 
-        <div className="mt-8 grid gap-6 xl:grid-cols-2">
+        <div className="mb-8 grid gap-6 xl:grid-cols-2">
           <MiniBarChart title="Llamadas por día" data={chartCalls} color="bg-blue-400" />
           <MiniBarChart title="Leads por día" data={chartLeads} color="bg-emerald-400" />
         </div>
 
-        <div className="mt-8 grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">
+        <div className="grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">
           <div className="space-y-6">
-            <PanelCard
-              title="Pipeline CRM"
-              right={<Badge color="green">{filteredLeads.length} leads filtrados</Badge>}
-            >
+            <PanelCard title="Pipeline visual tipo CRM" right={<Badge color="green">{filteredLeads.length} leads</Badge>}>
               <div className="grid gap-4 md:grid-cols-5">
                 {["new", "contacted", "qualified", "won", "lost"].map((st) => (
-                  <div key={st} className="rounded-[24px] border border-white/10 bg-black/20 p-4">
+                  <div
+                    key={st}
+                    onDrop={(e) => onDropStatus(e, st)}
+                    onDragOver={onDragOver}
+                    className="rounded-[24px] border border-white/10 bg-black/20 p-4"
+                  >
                     <div className="mb-3 flex items-center justify-between">
                       <div className="font-semibold capitalize text-white">{st}</div>
                       <Badge color="blue">{pipeline[st] || 0}</Badge>
                     </div>
+
                     <div className="space-y-3">
                       {filteredLeads
                         .filter((lead) => (lead.status || "new") === st)
-                        .slice(0, 4)
+                        .slice(0, 6)
                         .map((lead) => (
                           <button
                             key={lead.id}
+                            draggable={canEdit}
+                            onDragStart={(e) => onDragStart(e, lead.id)}
                             onClick={() => openLead(lead)}
                             className="w-full rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-left hover:bg-white/[0.07]"
                           >
                             <div className="font-medium text-white">{lead.nombre || "Sin nombre"}</div>
                             <div className="mt-1 text-xs text-white/50">{lead.necesidad || "-"}</div>
-                            <div className="mt-2">
+                            <div className="mt-2 flex flex-wrap gap-2">
                               <Badge color={getScoreColor(lead.score)}>Score {lead.score || 0}</Badge>
+                              <Badge color="green">{lead.predicted_close_probability || 0}%</Badge>
                             </div>
                           </button>
                         ))}
@@ -725,7 +1047,7 @@ export default function ClientPortalPage() {
                         </td>
                       </tr>
                     ) : (
-                      filteredLeads.slice(0, 40).map((lead) => (
+                      filteredLeads.slice(0, 50).map((lead) => (
                         <tr key={lead.id} className="border-b border-white/5 align-top">
                           <td className="py-4 pr-4 text-white/75">{formatDate(lead.created_at)}</td>
                           <td className="py-4 pr-4 text-white/75">{lead.nombre || "-"}</td>
@@ -763,17 +1085,19 @@ export default function ClientPortalPage() {
                                 Copiar
                               </button>
 
-                              <button
-                                onClick={() =>
-                                  saveLeadChanges(lead.id, {
-                                    status: "contacted",
-                                    ultima_accion: "Marcado como contactado desde tabla",
-                                  })
-                                }
-                                className="rounded-xl border border-white/15 px-3 py-2 text-xs font-medium text-white hover:bg-white/5"
-                              >
-                                Contactado
-                              </button>
+                              {canEdit ? (
+                                <button
+                                  onClick={() =>
+                                    saveLeadChanges(lead.id, {
+                                      status: "contacted",
+                                      ultima_accion: "Marcado como contactado desde tabla",
+                                    })
+                                  }
+                                  className="rounded-xl border border-white/15 px-3 py-2 text-xs font-medium text-white hover:bg-white/5"
+                                >
+                                  Contactado
+                                </button>
+                              ) : null}
                             </div>
                           </td>
                         </tr>
@@ -829,6 +1153,17 @@ export default function ClientPortalPage() {
           </div>
 
           <div className="space-y-6">
+            <PanelCard title="Actividad en tiempo real" right={<Badge color="green">Auto refresh</Badge>}>
+              <div className="space-y-3 text-sm text-white/70">
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  El portal se actualiza automáticamente cada {data.settings?.realtime_refresh_seconds || 15} segundos.
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  Últimos cambios registrados: {auditLogs.length}
+                </div>
+              </div>
+            </PanelCard>
+
             <PanelCard title="Equipo comercial" right={<Badge color="purple">{users.length}</Badge>}>
               <div className="space-y-3">
                 {users.length === 0 ? (
@@ -849,6 +1184,45 @@ export default function ClientPortalPage() {
                   ))
                 )}
               </div>
+
+              {canAdmin ? (
+                <div className="mt-6 space-y-3 border-t border-white/10 pt-6">
+                  <div className="text-sm text-white/45">Crear usuario</div>
+                  <input
+                    value={newUser.full_name}
+                    onChange={(e) => setNewUser((u) => ({ ...u, full_name: e.target.value }))}
+                    placeholder="Nombre completo"
+                    className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
+                  />
+                  <input
+                    value={newUser.email}
+                    onChange={(e) => setNewUser((u) => ({ ...u, email: e.target.value }))}
+                    placeholder="Email"
+                    className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
+                  />
+                  <select
+                    value={newUser.role}
+                    onChange={(e) => setNewUser((u) => ({ ...u, role: e.target.value }))}
+                    className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
+                  >
+                    {["owner", "admin", "manager", "agent", "viewer"].map((role) => (
+                      <option key={role} value={role}>{role}</option>
+                    ))}
+                  </select>
+                  <input
+                    value={newUser.phone}
+                    onChange={(e) => setNewUser((u) => ({ ...u, phone: e.target.value }))}
+                    placeholder="Teléfono"
+                    className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
+                  />
+                  <button
+                    onClick={createUser}
+                    className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black"
+                  >
+                    Crear usuario
+                  </button>
+                </div>
+              ) : null}
             </PanelCard>
 
             <PanelCard title="Objetivos mensuales" right={<Badge color="green">Activos</Badge>}>
@@ -866,7 +1240,7 @@ export default function ClientPortalPage() {
                   </div>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <div className="text-white/45">Valor de operación por defecto</div>
+                  <div className="text-white/45">Valor de operación</div>
                   <div className="mt-2 text-2xl font-semibold text-white">
                     {settings.default_deal_value || 250}€
                   </div>
@@ -903,13 +1277,71 @@ export default function ClientPortalPage() {
                     Aún no hay insights.
                   </div>
                 ) : (
-                  insights.slice(0, 8).map((insight) => (
-                    <div key={insight.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  insights.slice(0, 8).map((insight, idx) => (
+                    <div key={insight.id || idx} className="rounded-2xl border border-white/10 bg-black/20 p-4">
                       <div className="font-medium text-white">{insight.title}</div>
                       <div className="mt-2 text-sm text-white/65">{insight.body}</div>
                     </div>
                   ))
                 )}
+              </div>
+            </PanelCard>
+
+            <PanelCard title="Branding del cliente" right={<Badge color="blue">{currentRole}</Badge>}>
+              <div className="space-y-3">
+                <input
+                  disabled={!canAdmin}
+                  value={brandingForm?.brand_name || ""}
+                  onChange={(e) => setBrandingForm((f) => ({ ...f, brand_name: e.target.value }))}
+                  placeholder="Brand name"
+                  className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white disabled:opacity-50"
+                />
+                <input
+                  disabled={!canAdmin}
+                  value={brandingForm?.brand_logo_url || ""}
+                  onChange={(e) => setBrandingForm((f) => ({ ...f, brand_logo_url: e.target.value }))}
+                  placeholder="Logo URL"
+                  className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white disabled:opacity-50"
+                />
+                <div className="grid grid-cols-2 gap-3">
+                  <input
+                    disabled={!canAdmin}
+                    value={brandingForm?.primary_color || ""}
+                    onChange={(e) => setBrandingForm((f) => ({ ...f, primary_color: e.target.value }))}
+                    placeholder="Primary color"
+                    className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white disabled:opacity-50"
+                  />
+                  <input
+                    disabled={!canAdmin}
+                    value={brandingForm?.secondary_color || ""}
+                    onChange={(e) => setBrandingForm((f) => ({ ...f, secondary_color: e.target.value }))}
+                    placeholder="Secondary color"
+                    className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white disabled:opacity-50"
+                  />
+                </div>
+                <input
+                  disabled={!canAdmin}
+                  value={brandingForm?.owner_email || ""}
+                  onChange={(e) => setBrandingForm((f) => ({ ...f, owner_email: e.target.value }))}
+                  placeholder="Owner email"
+                  className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white disabled:opacity-50"
+                />
+                <input
+                  disabled={!canAdmin}
+                  value={brandingForm?.industry || ""}
+                  onChange={(e) => setBrandingForm((f) => ({ ...f, industry: e.target.value }))}
+                  placeholder="Industria"
+                  className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white disabled:opacity-50"
+                />
+
+                {canAdmin ? (
+                  <button
+                    onClick={saveBranding}
+                    className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black"
+                  >
+                    Guardar branding
+                  </button>
+                ) : null}
               </div>
             </PanelCard>
 
@@ -962,34 +1394,6 @@ export default function ClientPortalPage() {
                 )}
               </div>
             </PanelCard>
-
-            <PanelCard title="Facturación y plan">
-              <div className="space-y-4">
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <div className="text-sm text-white/45">Plan actual</div>
-                  <div className="mt-2 text-2xl font-semibold text-white">Pro</div>
-                  <div className="mt-2 text-sm text-white/55">
-                    Portal premium, pipeline, insights, exportación y analítica.
-                  </div>
-                </div>
-
-                <button
-                  onClick={openBillingPortal}
-                  disabled={billingLoading}
-                  className="w-full rounded-2xl border border-white/15 px-5 py-3 text-sm font-semibold hover:bg-white/5 disabled:opacity-60"
-                >
-                  {billingLoading ? "Abriendo..." : "Gestionar facturación"}
-                </button>
-
-                <button
-                  onClick={() => openCheckout("enterprise")}
-                  disabled={billingLoading}
-                  className="w-full rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black hover:bg-white/90 disabled:opacity-60"
-                >
-                  {billingLoading ? "Abriendo..." : "Ampliar a Enterprise"}
-                </button>
-              </div>
-            </PanelCard>
           </div>
         </div>
       </main>
@@ -997,13 +1401,40 @@ export default function ClientPortalPage() {
       <LeadDrawer
         lead={selectedLead}
         events={leadEvents}
-        call={selectedLeadCall}
-        users={users}
+        notes={leadNotes}
+        comments={leadComments}
+        reminders={leadReminders}
+        call={
+          selectedLead
+            ? (data.calls || []).find((call) => {
+                const sameDate =
+                  selectedLead.created_at &&
+                  call.created_at &&
+                  new Date(selectedLead.created_at).toDateString() ===
+                    new Date(call.created_at).toDateString();
+
+                const sameName =
+                  selectedLead.nombre &&
+                  call.summary &&
+                  call.summary.toLowerCase().includes(String(selectedLead.nombre).toLowerCase());
+
+                return sameDate || sameName;
+              }) || null
+            : null
+        }
+        users={data.users || []}
+        canEdit={canEdit}
         onClose={() => {
           setSelectedLead(null);
           setLeadEvents([]);
+          setLeadNotes([]);
+          setLeadComments([]);
+          setLeadReminders([]);
         }}
         onSave={saveLeadChanges}
+        onAddNote={addNote}
+        onAddComment={addComment}
+        onAddReminder={addReminder}
       />
     </div>
   );

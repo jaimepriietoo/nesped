@@ -1,12 +1,4 @@
-import { cookies } from "next/headers";
-import { createClient } from "@supabase/supabase-js";
-
-function getSupabase() {
-  return createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
-}
+import { getPortalContext } from "@/lib/portal-auth";
 
 function escapeCsv(value) {
   const str = String(value ?? "");
@@ -18,20 +10,15 @@ function escapeCsv(value) {
 
 export async function GET() {
   try {
-    const cookieStore = await cookies();
-    const auth = cookieStore.get("nesped_auth")?.value;
-    const clientId = cookieStore.get("nesped_client_id")?.value || "demo";
-
-    if (auth !== "ok" && clientId !== "demo") {
+    const ctx = await getPortalContext();
+    if (!ctx.ok) {
       return new Response("No autorizado", { status: 401 });
     }
 
-    const supabase = getSupabase();
-
-    const { data: leads, error } = await supabase
+    const { data: leads, error } = await ctx.supabase
       .from("leads")
       .select("*")
-      .eq("client_id", clientId)
+      .eq("client_id", ctx.clientId)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -64,7 +51,7 @@ export async function GET() {
       status: 200,
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="leads-${clientId}.csv"`,
+        "Content-Disposition": `attachment; filename="leads-${ctx.clientId}.csv"`,
       },
     });
   } catch (error) {

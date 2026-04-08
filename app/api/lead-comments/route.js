@@ -21,11 +21,11 @@ export async function GET(req) {
     }
 
     const { data, error } = await ctx.supabase
-      .from("lead_reminders")
+      .from("lead_comments")
       .select("*")
       .eq("lead_id", leadId)
       .eq("client_id", ctx.clientId)
-      .order("remind_at", { ascending: true });
+      .order("created_at", { ascending: false });
 
     if (error) {
       return Response.json(
@@ -37,7 +37,7 @@ export async function GET(req) {
     return Response.json({ success: true, data: data || [] });
   } catch (error) {
     return Response.json(
-      { success: false, message: error.message || "Error cargando recordatorios", data: [] },
+      { success: false, message: error.message || "Error cargando comentarios", data: [] },
       { status: 500 }
     );
   }
@@ -55,15 +55,15 @@ export async function POST(req) {
 
     if (!hasRole(ctx.role, ["owner", "admin", "manager", "agent"])) {
       return Response.json(
-        { success: false, message: "Sin permisos para crear recordatorios" },
+        { success: false, message: "Sin permisos para comentar" },
         { status: 403 }
       );
     }
 
     const body = await req.json();
-    const { lead_id, title, remind_at, assigned_to = "" } = body;
+    const { lead_id, body: commentBody } = body;
 
-    if (!lead_id || !title || !remind_at) {
+    if (!lead_id || !commentBody) {
       return Response.json(
         { success: false, message: "Faltan datos obligatorios" },
         { status: 400 }
@@ -71,13 +71,12 @@ export async function POST(req) {
     }
 
     const { data, error } = await ctx.supabase
-      .from("lead_reminders")
+      .from("lead_comments")
       .insert({
         lead_id,
         client_id: ctx.clientId,
-        assigned_to,
-        title,
-        remind_at,
+        author: ctx.currentUser?.full_name || ctx.userEmail || "portal_user",
+        body: commentBody,
       })
       .select()
       .single();
@@ -92,16 +91,16 @@ export async function POST(req) {
     await ctx.supabase.from("lead_events").insert({
       lead_id,
       client_id: ctx.clientId,
-      type: "reminder_created",
-      title: "Recordatorio creado",
-      description: `${title} · ${new Date(remind_at).toLocaleString()}`,
-      meta: { assigned_to },
+      type: "comment_added",
+      title: "Comentario interno añadido",
+      description: commentBody,
+      meta: { author: ctx.currentUser?.full_name || ctx.userEmail || "portal_user" },
     });
 
     return Response.json({ success: true, data });
   } catch (error) {
     return Response.json(
-      { success: false, message: error.message || "Error creando recordatorio" },
+      { success: false, message: error.message || "Error creando comentario" },
       { status: 500 }
     );
   }

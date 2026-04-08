@@ -2,81 +2,69 @@
 
 import { useEffect, useState } from "react";
 
-export default function Dashboard() {
-  const [data, setData] = useState(null);
-
-  useEffect(() => {
-    fetch("/api/admin/dashboard")
-      .then((res) => res.json())
-      .then((json) => setData(json));
-  }, []);
-
-  if (!data) {
-    return <div className="p-6 text-white">Cargando...</div>;
-  }
-
-  const { metrics, recentCalls } = data;
-
+function Card({ title, value }) {
   return (
-    <div className="p-6 text-white bg-black min-h-screen">
-      <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
-
-      {/* METRICS */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <Card title="Llamadas" value={metrics.totalCalls} />
-        <Card title="Leads" value={metrics.totalLeads} />
-        <Card title="Conversión" value={`${metrics.conversionRate}%`} />
-        <Card title="Duración media" value={`${metrics.avgDuration}s`} />
-      </div>
-
-      {/* TABLE */}
-      <div className="bg-zinc-900 rounded-xl p-4">
-        <h2 className="text-lg font-semibold mb-4">Últimas llamadas</h2>
-
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-zinc-400">
-              <th className="pb-2">Fecha</th>
-              <th>Lead</th>
-              <th>Duración</th>
-              <th>Resumen</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {recentCalls.map((call) => (
-              <tr key={call.id} className="border-t border-zinc-800">
-                <td className="py-2">
-                  {new Date(call.created_at).toLocaleString()}
-                </td>
-
-                <td>
-                  {call.lead_captured ? (
-                    <span className="text-green-400">Sí</span>
-                  ) : (
-                    <span className="text-red-400">No</span>
-                  )}
-                </td>
-
-                <td>{call.duration_seconds}s</td>
-
-                <td className="max-w-xs truncate">
-                  {call.summary || "Sin resumen"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5 text-white">
+      <div className="text-sm text-white/45">{title}</div>
+      <div className="mt-2 text-3xl font-semibold">{value}</div>
     </div>
   );
 }
 
-function Card({ title, value }) {
+export default function AdminOverview() {
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    fetch("/api/admin/super-dashboard", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((json) => setData(json));
+  }, []);
+
+  if (!data) {
+    return <div className="min-h-screen bg-black p-8 text-white">Cargando admin...</div>;
+  }
+
   return (
-    <div className="bg-zinc-900 p-4 rounded-xl">
-      <div className="text-zinc-400 text-sm">{title}</div>
-      <div className="text-xl font-bold">{value}</div>
+    <div className="min-h-screen bg-black p-8 text-white">
+      <div className="mb-8">
+        <div className="text-sm uppercase tracking-[0.2em] text-blue-300">Admin SaaS</div>
+        <h1 className="mt-2 text-4xl font-semibold">Control multi-cliente</h1>
+      </div>
+
+      <div className="mb-8 grid gap-4 md:grid-cols-4">
+        <Card title="Clientes" value={data.metrics.totalClients} />
+        <Card title="Llamadas" value={data.metrics.totalCalls} />
+        <Card title="Leads" value={data.metrics.totalLeads} />
+        <Card title="Usuarios" value={data.metrics.totalUsers} />
+      </div>
+
+      <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
+        <h2 className="mb-4 text-2xl font-semibold">Clientes</h2>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/10 text-left text-white/45">
+                <th className="pb-3 pr-4">Cliente</th>
+                <th className="pb-3 pr-4">Llamadas</th>
+                <th className="pb-3 pr-4">Leads</th>
+                <th className="pb-3 pr-4">Conversión</th>
+                <th className="pb-3 pr-4">Usuarios</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.clients.map((client) => (
+                <tr key={client.client_id} className="border-b border-white/5">
+                  <td className="py-4 pr-4">{client.client_name}</td>
+                  <td className="py-4 pr-4">{client.total_calls}</td>
+                  <td className="py-4 pr-4">{client.total_leads}</td>
+                  <td className="py-4 pr-4">{client.conversion}%</td>
+                  <td className="py-4 pr-4">{client.users}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

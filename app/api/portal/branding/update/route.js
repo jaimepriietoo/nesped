@@ -1,6 +1,6 @@
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
 
-export async function POST(req) {
+export async function PATCH(req) {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -12,30 +12,32 @@ export async function POST(req) {
 
     if (!hasRole(ctx.role, ["owner", "admin"])) {
       return Response.json(
-        { success: false, message: "Sin permisos para crear usuarios" },
+        { success: false, message: "Sin permisos para editar branding" },
         { status: 403 }
       );
     }
 
     const body = await req.json();
-    const { full_name, email, role = "agent", phone = "" } = body;
-
-    if (!full_name || !email) {
-      return Response.json(
-        { success: false, message: "Faltan datos obligatorios" },
-        { status: 400 }
-      );
-    }
+    const {
+      brand_name,
+      brand_logo_url,
+      primary_color,
+      secondary_color,
+      owner_email,
+      industry,
+    } = body;
 
     const { data, error } = await ctx.supabase
-      .from("portal_users")
-      .insert({
-        client_id: ctx.clientId,
-        full_name,
-        email,
-        role,
-        phone,
+      .from("clients")
+      .update({
+        brand_name,
+        brand_logo_url,
+        primary_color,
+        secondary_color,
+        owner_email,
+        industry,
       })
+      .eq("id", ctx.clientId)
       .select()
       .single();
 
@@ -48,17 +50,17 @@ export async function POST(req) {
 
     await ctx.supabase.from("audit_logs").insert({
       client_id: ctx.clientId,
-      entity_type: "user",
-      entity_id: data.id,
-      action: "created",
+      entity_type: "client",
+      entity_id: ctx.clientId,
+      action: "branding_updated",
       actor: ctx.currentUser?.full_name || ctx.userEmail || "portal_user",
-      changes: { full_name, email, role, phone },
+      changes: body,
     });
 
     return Response.json({ success: true, data });
   } catch (error) {
     return Response.json(
-      { success: false, message: error.message || "Error creando usuario" },
+      { success: false, message: error.message || "Error actualizando branding" },
       { status: 500 }
     );
   }

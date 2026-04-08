@@ -6,7 +6,7 @@ const WebSocket = require("ws");
 const twilio = require("twilio");
 const { createClient } = require("@supabase/supabase-js");
 
-console.log("VOICE SERVER FINAL COMPLETE WITH LEADS - 2026-04-07");
+console.log("VOICE SERVER ENTERPRISE FINAL - 2026-04-07");
 console.log("OPENAI_API_KEY presente:", !!process.env.OPENAI_API_KEY);
 console.log("BASE_URL:", process.env.BASE_URL);
 console.log("PORT:", process.env.PORT);
@@ -286,8 +286,8 @@ wss.on("connection", async (twilioWs, req) => {
   function addTranscriptLine(line) {
     if (!line) return;
     transcriptParts.push(line);
-    if (transcriptParts.length > 300) {
-      transcriptParts = transcriptParts.slice(-300);
+    if (transcriptParts.length > 400) {
+      transcriptParts = transcriptParts.slice(-400);
     }
   }
 
@@ -318,6 +318,14 @@ wss.on("connection", async (twilioWs, req) => {
         transcript,
         lead_captured: leadCaptured,
         duration_seconds: durationSeconds,
+        ai_spoke: true,
+        call_outcome: leadCaptured
+          ? "lead_captured"
+          : "completed_without_lead",
+        detected_intent: leadCaptured ? "captacion" : "consulta",
+        summary_long: transcript
+          ? `Resumen automático: ${callSummary}. Transcripción disponible para análisis.`
+          : callSummary,
       });
 
       console.log("📞 Llamada guardada en Supabase");
@@ -329,26 +337,112 @@ wss.on("connection", async (twilioWs, req) => {
   async function saveLeadToSupabase(args) {
     if (!supabase) {
       console.log("⚠️ saveLead omitido porque Supabase está desactivado");
-      return;
+      return null;
     }
 
     try {
-      const { error } = await supabase.from("leads").insert({
-        client_id: clientId,
-        nombre: args.nombre || "",
-        telefono: args.telefono || "",
-        ciudad: args.ciudad || "",
-        necesidad: args.necesidad || "",
-        origen: `llamada_${clientId}`,
-      });
+      const nombre = args.nombre || "";
+      const telefono = args.telefono || "";
+      const ciudad = args.ciudad || "";
+      const necesidad = args.necesidad || "";
+      const preferencia = args.preferencia || "";
+
+      let score = 0;
+
+      try {
+        const { data: scoreValue, error: scoreError } = await supabase.rpc(
+          "calculate_lead_score",
+          {
+            p_nombre: nombre,
+            p_telefono: telefono,
+            p_necesidad: necesidad,
+            p_ciudad: ciudad || null,
+          }
+        );
+
+        if (!scoreError && typeof scoreValue === "number") {
+          score = scoreValue;
+        }
+      } catch (err) {
+        console.error("❌ Error calculando score:", err.message);
+      }
+
+      const interes =
+        score >= 80 ? "alto" : score >= 50 ? "medio" : "bajo";
+
+      const tags = [
+        "llamada_ia",
+        necesidad ? "necesidad_detectada" : null,
+        ciudad ? `ciudad:${ciudad}` : null,
+        preferencia ? `preferencia:${preferencia}` : null,
+        interes ? `interes:${interes}` : null,
+      ].filter(Boolean);
+
+      const resumen = [
+        nombre ? `${nombre}` : "Lead sin nombre",
+        necesidad ? `necesita ${necesidad}` : null,
+        ciudad ? `en ${ciudad}` : null,
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+      const { data: insertedLead, error } = await supabase
+        .from("leads")
+        .insert({
+          client_id: clientId,
+          nombre,
+          telefono,
+          ciudad,
+          necesidad,
+          origen: `llamada_${clientId}`,
+          fuente: "llamada_ia",
+          score,
+          status: "new",
+          tags,
+          ultima_accion: "Lead capturado por la IA en llamada",
+          proxima_accion: "Contactar al lead lo antes posible",
+          interes,
+          resumen,
+          notes: preferencia || null,
+        })
+        .select()
+        .single();
 
       if (error) {
         console.error("❌ Error guardando lead en Supabase:", error.message);
-      } else {
-        console.log("✅ Lead guardado en Supabase");
+        return null;
       }
+
+      console.log("✅ Lead guardado en Supabase");
+
+      try {
+        const { error: eventError } = await supabase.from("lead_events").insert({
+          lead_id: insertedLead.id,
+          client_id: clientId,
+          type: "lead_created",
+          title: "Lead creado automáticamente",
+          description: `Lead capturado por llamada. Nombre: ${nombre || "-"} · Teléfono: ${telefono || "-"} · Necesidad: ${necesidad || "-"}`,
+          meta: {
+            origen: `llamada_${clientId}`,
+            score,
+            interes,
+            preferencia,
+          },
+        });
+
+        if (eventError) {
+          console.error("❌ Error guardando evento de lead:", eventError.message);
+        } else {
+          console.log("✅ Evento de lead guardado");
+        }
+      } catch (err) {
+        console.error("❌ Excepción guardando evento de lead:", err.message);
+      }
+
+      return insertedLead;
     } catch (err) {
       console.error("❌ Excepción guardando lead:", err.message);
+      return null;
     }
   }
 
@@ -619,11 +713,15 @@ wss.on("connection", async (twilioWs, req) => {
         console.log("💾 Guardando lead:", args);
 
         leadCaptured = true;
-        callSummary = `Lead capturado: ${args.nombre || "sin nombre"} · ${
-          args.necesidad || "sin necesidad"
-        }`;
 
-        await saveLeadToSupabase(args);
+        const insertedLead = await saveLeadToSupabase(args);
+
+        const leadName = args.nombre || "sin nombre";
+        const leadNeed = args.necesidad || "sin necesidad";
+        const leadScore = insertedLead?.score ?? 0;
+        const leadInterest = insertedLead?.interes || "medio";
+
+        callSummary = `Lead capturado: ${leadName} · ${leadNeed} · score ${leadScore} · interés ${leadInterest}`;
 
         if (!config.webhook) {
           console.log("⚠️ Webhook no configurado, se omite guardar lead externo");
@@ -660,6 +758,8 @@ wss.on("connection", async (twilioWs, req) => {
               preferencia: args.preferencia || "",
               origen: `llamada_${clientId}`,
               cliente: clientId,
+              score: leadScore,
+              interes: leadInterest,
             }),
           });
 

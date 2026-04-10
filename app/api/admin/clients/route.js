@@ -10,7 +10,7 @@ function getSupabase() {
 function mapClient(row) {
   return {
     id: row.id,
-    name: row.name,
+    name: row.name || "",
     prompt: row.prompt || "",
     type: row.type || "",
     status: row.status || "Activo",
@@ -18,15 +18,28 @@ function mapClient(row) {
     logoText: row.logo_text || "",
     webhook: row.webhook || "",
     twilioNumber: row.twilio_number || "",
+    twilio_number: row.twilio_number || "",
     plan: row.plan || "",
     callsLimit: row.calls_limit || 0,
+    calls_limit: row.calls_limit || 0,
+
+    owner_email: row.owner_email || "",
+    brand_name: row.brand_name || row.name || "",
+    brand_logo_url: row.brand_logo_url || "",
+    primary_color: row.primary_color || "#ffffff",
+    secondary_color: row.secondary_color || "#030303",
+    industry: row.industry || "",
+    is_active: row.is_active !== false,
+
     theme: {
       accent: row.accent || "bg-blue-500/20",
       accentText: row.accent_text || "text-blue-300",
       button: row.button || "bg-white text-black hover:bg-white/90",
       badge: row.badge || "bg-emerald-500/15 text-emerald-300",
     },
+
     createdAt: row.created_at || null,
+    created_at: row.created_at || null,
   };
 }
 
@@ -76,13 +89,22 @@ export async function POST(req) {
     const id = body.id?.trim();
     const name = body.name?.trim();
     const prompt = body.prompt || "";
-    const email = body.email?.trim() || "";
+    const email = body.email?.trim() || body.owner_email?.trim() || "";
+
     const type = body.type || "";
     const status = body.status || "Activo";
     const tagline = body.tagline || "";
-    const logoText = body.logoText || "";
+    const logoText = body.logoText || body.logo_text || "";
     const webhook = body.webhook || "";
-    const twilioNumber = body.twilioNumber || "";
+    const twilioNumber = body.twilioNumber || body.twilio_number || "";
+
+    const ownerEmail = body.owner_email?.trim() || "";
+    const brandName = body.brand_name || name || "";
+    const brandLogoUrl = body.brand_logo_url || "";
+    const primaryColor = body.primary_color || "#ffffff";
+    const secondaryColor = body.secondary_color || "#030303";
+    const industry = body.industry || "";
+    const isActive = body.is_active !== false;
 
     if (!id || !name) {
       return Response.json(
@@ -110,28 +132,36 @@ export async function POST(req) {
       );
     }
 
+    const insertPayload = {
+      id,
+      name,
+      prompt,
+      type,
+      status,
+      tagline,
+      logo_text: logoText,
+      webhook,
+      twilio_number: twilioNumber,
+      plan: "pro",
+      calls_limit: 300,
+      accent: "bg-blue-500/20",
+      accent_text: "text-blue-300",
+      button: "bg-white text-black hover:bg-white/90",
+      badge: "bg-emerald-500/15 text-emerald-300",
+      created_at: new Date().toISOString(),
+
+      owner_email: ownerEmail,
+      brand_name: brandName,
+      brand_logo_url: brandLogoUrl,
+      primary_color: primaryColor,
+      secondary_color: secondaryColor,
+      industry,
+      is_active: isActive,
+    };
+
     const { data, error } = await supabase
       .from("clients")
-      .insert([
-        {
-          id,
-          name,
-          prompt,
-          type,
-          status,
-          tagline,
-          logo_text: logoText,
-          webhook,
-          twilio_number: twilioNumber,
-          plan: "pro",
-          calls_limit: 300,
-          accent: "bg-blue-500/20",
-          accent_text: "text-blue-300",
-          button: "bg-white text-black hover:bg-white/90",
-          badge: "bg-emerald-500/15 text-emerald-300",
-          created_at: new Date().toISOString(),
-        },
-      ])
+      .insert([insertPayload])
       .select()
       .single();
 
@@ -143,6 +173,20 @@ export async function POST(req) {
         },
         { status: 500 }
       );
+    }
+
+    const settingsPayload = {
+      client_id: id,
+      weekly_report_email: ownerEmail || null,
+      daily_report_email: ownerEmail || null,
+    };
+
+    const { error: settingsError } = await supabase
+      .from("client_settings")
+      .upsert(settingsPayload, { onConflict: "client_id" });
+
+    if (settingsError) {
+      console.error("Error creando client_settings:", settingsError.message);
     }
 
     if (email) {
@@ -211,9 +255,17 @@ export async function PATCH(req) {
     const type = body.type || "";
     const status = body.status || "Activo";
     const tagline = body.tagline || "";
-    const logoText = body.logoText || "";
+    const logoText = body.logoText || body.logo_text || "";
     const webhook = body.webhook || "";
-    const twilioNumber = body.twilioNumber || "";
+    const twilioNumber = body.twilioNumber || body.twilio_number || "";
+
+    const ownerEmail = body.owner_email?.trim() || "";
+    const brandName = body.brand_name || name || "";
+    const brandLogoUrl = body.brand_logo_url || "";
+    const primaryColor = body.primary_color || "#ffffff";
+    const secondaryColor = body.secondary_color || "#030303";
+    const industry = body.industry || "";
+    const isActive = body.is_active !== false;
 
     if (!id) {
       return Response.json(
@@ -225,18 +277,28 @@ export async function PATCH(req) {
       );
     }
 
+    const updatePayload = {
+      name,
+      prompt,
+      type,
+      status,
+      tagline,
+      logo_text: logoText,
+      webhook,
+      twilio_number: twilioNumber,
+
+      owner_email: ownerEmail,
+      brand_name: brandName,
+      brand_logo_url: brandLogoUrl,
+      primary_color: primaryColor,
+      secondary_color: secondaryColor,
+      industry,
+      is_active: isActive,
+    };
+
     const { data, error } = await supabase
       .from("clients")
-      .update({
-        name,
-        prompt,
-        type,
-        status,
-        tagline,
-        logo_text: logoText,
-        webhook,
-        twilio_number: twilioNumber,
-      })
+      .update(updatePayload)
       .eq("id", id)
       .select()
       .single();
@@ -249,6 +311,20 @@ export async function PATCH(req) {
         },
         { status: 500 }
       );
+    }
+
+    const settingsPayload = {
+      client_id: id,
+      weekly_report_email: ownerEmail || null,
+      daily_report_email: ownerEmail || null,
+    };
+
+    const { error: settingsError } = await supabase
+      .from("client_settings")
+      .upsert(settingsPayload, { onConflict: "client_id" });
+
+    if (settingsError) {
+      console.error("Error actualizando client_settings:", settingsError.message);
     }
 
     return Response.json({

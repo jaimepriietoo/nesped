@@ -183,14 +183,14 @@ app.get("/call", async (req, res) => {
     }
 
     const call = await client.calls.create({
-  to: process.env.TU_NUMERO,
-  from: config.twilioNumber || fallbackTwilioNumber,
-  url: `${cleanBaseUrl}/voice?client_id=${clientId}`,
-  method: "POST",
-  record: true,
-  recordingStatusCallback: `${cleanBaseUrl}/recording-status?client_id=${clientId}`,
-  recordingStatusCallbackMethod: "POST",
-});
+      to: process.env.TU_NUMERO,
+      from: config.twilioNumber || fallbackTwilioNumber,
+      url: `${cleanBaseUrl}/voice?client_id=${clientId}`,
+      method: "POST",
+      record: true,
+      recordingStatusCallback: `${cleanBaseUrl}/recording-status?client_id=${clientId}`,
+      recordingStatusCallbackMethod: "POST",
+    });
 
     console.log("📞 Llamada iniciada:", call.sid, "cliente:", clientId);
     res.send("Llamada iniciada: " + call.sid);
@@ -512,7 +512,7 @@ wss.on("connection", async (twilioWs, req) => {
         openaiWs.close();
       }
     } catch (err) {
-      console.error("❌ Error cerrando OpenAI WS:", err.message);
+        console.error("❌ Error cerrando OpenAI WS:", err.message);
     }
   }
 

@@ -101,11 +101,14 @@ function LeadDrawer({
   call,
   users,
   canEdit,
+  sendingSms,
   onClose,
   onSave,
   onAddNote,
   onAddComment,
   onAddReminder,
+  onGenerateNextStep,
+  onSendFollowupSms,
 }) {
   const [form, setForm] = useState({
     status: lead?.status || "new",
@@ -188,6 +191,11 @@ function LeadDrawer({
         <div className="mt-4 rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
           <div className="text-sm text-white/45">Necesidad</div>
           <div className="mt-2 text-white/80">{lead.necesidad || "-"}</div>
+        </div>
+
+        <div className="mt-4 rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+          <div className="text-sm text-white/45">Siguiente paso IA</div>
+          <div className="mt-2 text-white/80">{lead.next_step_ai || "-"}</div>
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -294,6 +302,21 @@ function LeadDrawer({
                 className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-semibold text-white hover:bg-white/5"
               >
                 Marcar como contactado
+              </button>
+
+              <button
+                onClick={() => onGenerateNextStep(lead)}
+                className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-semibold text-white hover:bg-white/5"
+              >
+                Generar siguiente paso IA
+              </button>
+
+              <button
+                onClick={() => onSendFollowupSms(lead)}
+                disabled={sendingSms}
+                className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-semibold text-white hover:bg-white/5 disabled:opacity-60"
+              >
+                {sendingSms ? "Enviando..." : "Enviar SMS follow-up"}
               </button>
 
               <button
@@ -531,6 +554,7 @@ export default function ClientPortalPage() {
   const [leadComments, setLeadComments] = useState([]);
   const [leadReminders, setLeadReminders] = useState([]);
   const [billingLoading, setBillingLoading] = useState(false);
+  const [sendingSms, setSendingSms] = useState(false);
   const [brandingForm, setBrandingForm] = useState(null);
   const [newUser, setNewUser] = useState({
     full_name: "",
@@ -644,6 +668,72 @@ export default function ClientPortalPage() {
       return;
     }
     if (selectedLead) await openLead(selectedLead);
+  }
+
+  async function generateNextStep(lead) {
+    try {
+      const res = await fetch("/api/ai/next-step", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          leadId: lead.id,
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!json.success) {
+        alert(json.message || "No se pudo generar el siguiente paso.");
+        return;
+      }
+
+      alert("Siguiente paso generado.");
+      await loadOverview();
+      await openLead(json.data);
+    } catch (err) {
+      console.error(err);
+      alert("Error generando siguiente paso.");
+    }
+  }
+
+  async function sendFollowupSms(lead) {
+    try {
+      setSendingSms(true);
+
+      const message =
+        lead.next_step_ai ||
+        `Hola ${lead.nombre || ""}, te escribimos para continuar con tu solicitud. Cuando quieras te ayudamos con el siguiente paso.`;
+
+      const res = await fetch("/api/followup/sms", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          leadId: lead.id,
+          to: lead.telefono,
+          message,
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!json.success) {
+        alert(json.message || "No se pudo enviar el SMS.");
+        return;
+      }
+
+      alert("SMS enviado correctamente.");
+      await loadOverview();
+      await openLead(lead);
+    } catch (err) {
+      console.error(err);
+      alert("Error enviando SMS.");
+    } finally {
+      setSendingSms(false);
+    }
   }
 
   async function saveBranding() {
@@ -768,27 +858,6 @@ export default function ClientPortalPage() {
     });
   }, [data, filters]);
 
-  const selectedLeadCall = useMemo(() => {
-    if (!selectedLead) return null;
-
-    return (
-      (data?.calls || []).find((call) => {
-        const sameDate =
-          selectedLead.created_at &&
-          call.created_at &&
-          new Date(selectedLead.created_at).toDateString() ===
-            new Date(call.created_at).toDateString();
-
-        const sameName =
-          selectedLead.nombre &&
-          call.summary &&
-          call.summary.toLowerCase().includes(String(selectedLead.nombre).toLowerCase());
-
-        return sameDate || sameName;
-      }) || null
-    );
-  }, [selectedLead, data]);
-
   if (!data) {
     return <div className="min-h-screen bg-[#030303] p-8 text-white">Cargando portal...</div>;
   }
@@ -799,7 +868,6 @@ export default function ClientPortalPage() {
   const calls = data.calls || [];
   const alerts = data.alerts || [];
   const insights = data.insights || [];
-  const benchmarks = data.benchmarks || [];
   const auditLogs = data.auditLogs || [];
   const metrics = data.metrics || {};
   const pipeline = data.pipeline || {};
@@ -1424,6 +1492,7 @@ export default function ClientPortalPage() {
         }
         users={data.users || []}
         canEdit={canEdit}
+        sendingSms={sendingSms}
         onClose={() => {
           setSelectedLead(null);
           setLeadEvents([]);
@@ -1435,6 +1504,8 @@ export default function ClientPortalPage() {
         onAddNote={addNote}
         onAddComment={addComment}
         onAddReminder={addReminder}
+        onGenerateNextStep={generateNextStep}
+        onSendFollowupSms={sendFollowupSms}
       />
     </div>
   );

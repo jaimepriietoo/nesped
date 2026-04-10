@@ -46,11 +46,6 @@ function formatDate(value) {
   return new Date(value).toLocaleString();
 }
 
-function formatDay(value) {
-  if (!value) return "-";
-  return new Date(value).toLocaleDateString();
-}
-
 function formatSeconds(sec) {
   const n = Number(sec || 0);
   if (!n) return "0s";
@@ -92,6 +87,27 @@ function MiniBarChart({ title, data, color = "bg-blue-400" }) {
   );
 }
 
+function renderTemplateText(templateText, lead, clientBrand) {
+  if (!templateText) return "";
+  return String(templateText)
+    .replace(/\{\{nombre\}\}/gi, lead?.nombre || "")
+    .replace(/\{\{telefono\}\}/gi, lead?.telefono || "")
+    .replace(/\{\{necesidad\}\}/gi, lead?.necesidad || "")
+    .replace(/\{\{empresa\}\}/gi, clientBrand || "");
+}
+
+function normalizePhoneForWhatsApp(phone) {
+  if (!phone) return "";
+  return String(phone).replace(/[^\d+]/g, "").replace(/^\+/, "");
+}
+
+function getDefaultOutreachMessage(lead, clientBrand) {
+  return (
+    lead?.next_step_ai ||
+    `Hola ${lead?.nombre || ""}, te escribimos de ${clientBrand || "nuestro equipo"} para continuar con tu solicitud.`
+  );
+}
+
 function LeadDrawer({
   lead,
   events,
@@ -102,6 +118,9 @@ function LeadDrawer({
   users,
   canEdit,
   sendingSms,
+  smsTemplates,
+  whatsappTemplates,
+  clientBrand,
   onClose,
   onSave,
   onAddNote,
@@ -124,6 +143,10 @@ function LeadDrawer({
   const [reminderTitle, setReminderTitle] = useState("");
   const [reminderAt, setReminderAt] = useState("");
 
+  const [selectedSmsTemplateId, setSelectedSmsTemplateId] = useState("");
+  const [selectedWhatsappTemplateId, setSelectedWhatsappTemplateId] = useState("");
+  const [outreachMessage, setOutreachMessage] = useState("");
+
   useEffect(() => {
     setForm({
       status: lead?.status || "new",
@@ -137,9 +160,56 @@ function LeadDrawer({
     setCommentBody("");
     setReminderTitle("");
     setReminderAt("");
-  }, [lead]);
+
+    const defaultSms = smsTemplates?.[0]?.id || "";
+    const defaultWa = whatsappTemplates?.[0]?.id || "";
+    setSelectedSmsTemplateId(defaultSms);
+    setSelectedWhatsappTemplateId(defaultWa);
+
+    if (lead) {
+      setOutreachMessage(getDefaultOutreachMessage(lead, clientBrand));
+    } else {
+      setOutreachMessage("");
+    }
+  }, [lead, smsTemplates, whatsappTemplates, clientBrand]);
 
   if (!lead) return null;
+
+  const selectedSmsTemplate =
+    (smsTemplates || []).find((t) => t.id === selectedSmsTemplateId) || null;
+
+  const selectedWhatsappTemplate =
+    (whatsappTemplates || []).find((t) => t.id === selectedWhatsappTemplateId) || null;
+
+  function applySmsTemplate() {
+    const text = renderTemplateText(selectedSmsTemplate?.text, lead, clientBrand);
+    setOutreachMessage(text || outreachMessage);
+  }
+
+  function applyWhatsappTemplate() {
+    const text = renderTemplateText(selectedWhatsappTemplate?.text, lead, clientBrand);
+    setOutreachMessage(text || outreachMessage);
+  }
+
+  async function copyMessage() {
+    try {
+      await navigator.clipboard.writeText(outreachMessage || "");
+      alert("Mensaje copiado.");
+    } catch (err) {
+      console.error(err);
+      alert("No se pudo copiar el mensaje.");
+    }
+  }
+
+  function openWhatsApp() {
+    const phone = normalizePhoneForWhatsApp(lead.telefono);
+    if (!phone) {
+      alert("Este lead no tiene teléfono válido.");
+      return;
+    }
+    const text = encodeURIComponent(outreachMessage || "");
+    window.open(`https://wa.me/${phone}?text=${text}`, "_blank");
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-sm">
@@ -164,6 +234,8 @@ function LeadDrawer({
           <Badge color="blue">{lead.status || "new"}</Badge>
           <Badge color="purple">{lead.interes || "medio"}</Badge>
           <Badge color="green">Predicción {lead.predicted_close_probability || 0}%</Badge>
+          {lead.followup_sms_sent ? <Badge color="yellow">SMS enviado</Badge> : null}
+          {lead.owner ? <Badge color="default">Owner: {lead.owner}</Badge> : null}
           {(lead.tags || []).map((tag, i) => (
             <Badge key={i}>{tag}</Badge>
           ))}
@@ -312,14 +384,6 @@ function LeadDrawer({
               </button>
 
               <button
-                onClick={() => onSendFollowupSms(lead)}
-                disabled={sendingSms}
-                className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-semibold text-white hover:bg-white/5 disabled:opacity-60"
-              >
-                {sendingSms ? "Enviando..." : "Enviar SMS follow-up"}
-              </button>
-
-              <button
                 onClick={() => onSave(lead.id, form)}
                 className="rounded-2xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-black hover:bg-emerald-400"
               >
@@ -435,6 +499,106 @@ function LeadDrawer({
           </div>
 
           <div className="space-y-6">
+            <PanelCard title="Follow-up comercial">
+              <div className="space-y-4">
+                <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+                  <div className="mb-3 text-sm text-white/45">Template SMS</div>
+                  <div className="flex flex-col gap-3">
+                    <select
+                      value={selectedSmsTemplateId}
+                      onChange={(e) => setSelectedSmsTemplateId(e.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
+                    >
+                      <option value="">Selecciona template SMS</option>
+                      {(smsTemplates || []).map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      onClick={applySmsTemplate}
+                      className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-semibold text-white hover:bg-white/5"
+                    >
+                      Aplicar template SMS
+                    </button>
+                  </div>
+                </div>
+
+                <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+                  <div className="mb-3 text-sm text-white/45">Template WhatsApp</div>
+                  <div className="flex flex-col gap-3">
+                    <select
+                      value={selectedWhatsappTemplateId}
+                      onChange={(e) => setSelectedWhatsappTemplateId(e.target.value)}
+                      className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
+                    >
+                      <option value="">Selecciona template WhatsApp</option>
+                      {(whatsappTemplates || []).map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      onClick={applyWhatsappTemplate}
+                      className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-semibold text-white hover:bg-white/5"
+                    >
+                      Aplicar template WhatsApp
+                    </button>
+                  </div>
+                </div>
+
+                <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+                  <div className="text-sm text-white/45">Mensaje</div>
+                  <textarea
+                    value={outreachMessage}
+                    onChange={(e) => setOutreachMessage(e.target.value)}
+                    rows={6}
+                    className="mt-3 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
+                    placeholder="Escribe o genera aquí tu mensaje de follow-up"
+                  />
+
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <button
+                      onClick={() => setOutreachMessage(getDefaultOutreachMessage(lead, clientBrand))}
+                      className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-semibold text-white hover:bg-white/5"
+                    >
+                      Reset mensaje
+                    </button>
+
+                    <button
+                      onClick={copyMessage}
+                      className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-semibold text-white hover:bg-white/5"
+                    >
+                      Copiar mensaje
+                    </button>
+
+                    {canEdit ? (
+                      <button
+                        onClick={() =>
+                          onSendFollowupSms(lead, outreachMessage, selectedSmsTemplateId)
+                        }
+                        disabled={sendingSms}
+                        className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-semibold text-white hover:bg-white/5 disabled:opacity-60"
+                      >
+                        {sendingSms ? "Enviando..." : "Enviar SMS"}
+                      </button>
+                    ) : null}
+
+                    <button
+                      onClick={openWhatsApp}
+                      className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black hover:bg-white/90"
+                    >
+                      Abrir WhatsApp
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </PanelCard>
+
             <PanelCard title="Recordatorios">
               {canEdit ? (
                 <div className="mb-4 grid gap-3">
@@ -698,11 +862,12 @@ export default function ClientPortalPage() {
     }
   }
 
-  async function sendFollowupSms(lead) {
+  async function sendFollowupSms(lead, messageOverride = "", templateId = null) {
     try {
       setSendingSms(true);
 
       const message =
+        messageOverride ||
         lead.next_step_ai ||
         `Hola ${lead.nombre || ""}, te escribimos para continuar con tu solicitud. Cuando quieras te ayudamos con el siguiente paso.`;
 
@@ -715,6 +880,7 @@ export default function ClientPortalPage() {
           leadId: lead.id,
           to: lead.telefono,
           message,
+          templateId,
         }),
       });
 
@@ -727,13 +893,47 @@ export default function ClientPortalPage() {
 
       alert("SMS enviado correctamente.");
       await loadOverview();
-      await openLead(lead);
+      await openLead(json.data || lead);
     } catch (err) {
       console.error(err);
       alert("Error enviando SMS.");
     } finally {
       setSendingSms(false);
     }
+  }
+
+  function openLeadWhatsApp(lead) {
+    const phone = normalizePhoneForWhatsApp(lead.telefono);
+    if (!phone) {
+      alert("Este lead no tiene teléfono válido.");
+      return;
+    }
+
+    const baseTemplate =
+      (data?.whatsappTemplates || [])[0]?.text ||
+      `Hola {{nombre}}, te escribimos de {{empresa}} para continuar con tu solicitud.`;
+
+    const text = renderTemplateText(
+      baseTemplate,
+      lead,
+      data?.client?.brand_name || data?.client?.name || "nuestro equipo"
+    );
+
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank");
+  }
+
+  async function quickSmsFromTable(lead) {
+    const template =
+      (data?.smsTemplates || [])[0]?.text ||
+      `Hola {{nombre}}, te escribimos de {{empresa}} para continuar con tu solicitud.`;
+
+    const message = renderTemplateText(
+      template,
+      lead,
+      data?.client?.brand_name || data?.client?.name || "nuestro equipo"
+    );
+
+    await sendFollowupSms(lead, message, (data?.smsTemplates || [])[0]?.id || null);
   }
 
   async function saveBranding() {
@@ -872,6 +1072,8 @@ export default function ClientPortalPage() {
   const metrics = data.metrics || {};
   const pipeline = data.pipeline || {};
   const rankings = data.rankings || { bestDays: [], bestHours: [] };
+  const smsTemplates = data.smsTemplates || [];
+  const whatsappTemplates = data.whatsappTemplates || [];
   const currentRole = data.currentRole || "viewer";
 
   const canEdit = ["owner", "admin", "manager", "agent"].includes(currentRole);
@@ -985,6 +1187,48 @@ export default function ClientPortalPage() {
               className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-semibold hover:bg-white/5"
             >
               Ejecutar nightly
+            </button>
+          </div>
+        </div>
+
+        <div className="mb-6 rounded-[30px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-black/20">
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => {
+                if (!filteredLeads.length) return;
+                openLead(filteredLeads[0]);
+              }}
+              className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black hover:bg-white/90"
+            >
+              Abrir primer lead
+            </button>
+
+            <button
+              onClick={() => {
+                const hotLead = filteredLeads.find((l) => Number(l.score || 0) >= 80);
+                if (!hotLead) {
+                  alert("No hay leads calientes con los filtros actuales.");
+                  return;
+                }
+                openLead(hotLead);
+              }}
+              className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-semibold text-white hover:bg-white/5"
+            >
+              Ir al lead más caliente
+            </button>
+
+            <button
+              onClick={() => {
+                const unassigned = filteredLeads.find((l) => !l.owner);
+                if (!unassigned) {
+                  alert("No hay leads sin owner con los filtros actuales.");
+                  return;
+                }
+                openLead(unassigned);
+              }}
+              className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-semibold text-white hover:bg-white/5"
+            >
+              Revisar lead sin owner
             </button>
           </div>
         </div>
@@ -1104,13 +1348,14 @@ export default function ClientPortalPage() {
                       <th className="pb-3 pr-4">Score</th>
                       <th className="pb-3 pr-4">Estado</th>
                       <th className="pb-3 pr-4">Predicción</th>
+                      <th className="pb-3 pr-4">Flags</th>
                       <th className="pb-3 pr-4">Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredLeads.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="py-6 text-white/40">
+                        <td colSpan={9} className="py-6 text-white/40">
                           No hay leads con esos filtros.
                         </td>
                       </tr>
@@ -1129,6 +1374,12 @@ export default function ClientPortalPage() {
                           </td>
                           <td className="py-4 pr-4">
                             <Badge color="green">{lead.predicted_close_probability || 0}%</Badge>
+                          </td>
+                          <td className="py-4 pr-4">
+                            <div className="flex flex-wrap gap-2">
+                              {lead.followup_sms_sent ? <Badge color="yellow">SMS</Badge> : null}
+                              {lead.owner ? <Badge color="default">Owner</Badge> : <Badge color="red">Sin owner</Badge>}
+                            </div>
                           </td>
                           <td className="py-4 pr-4">
                             <div className="flex flex-wrap gap-2">
@@ -1153,18 +1404,35 @@ export default function ClientPortalPage() {
                                 Copiar
                               </button>
 
+                              <button
+                                onClick={() => openLeadWhatsApp(lead)}
+                                className="rounded-xl border border-white/15 px-3 py-2 text-xs font-medium text-white hover:bg-white/5"
+                              >
+                                WhatsApp
+                              </button>
+
                               {canEdit ? (
-                                <button
-                                  onClick={() =>
-                                    saveLeadChanges(lead.id, {
-                                      status: "contacted",
-                                      ultima_accion: "Marcado como contactado desde tabla",
-                                    })
-                                  }
-                                  className="rounded-xl border border-white/15 px-3 py-2 text-xs font-medium text-white hover:bg-white/5"
-                                >
-                                  Contactado
-                                </button>
+                                <>
+                                  <button
+                                    onClick={() => quickSmsFromTable(lead)}
+                                    disabled={sendingSms}
+                                    className="rounded-xl border border-white/15 px-3 py-2 text-xs font-medium text-white hover:bg-white/5 disabled:opacity-60"
+                                  >
+                                    SMS
+                                  </button>
+
+                                  <button
+                                    onClick={() =>
+                                      saveLeadChanges(lead.id, {
+                                        status: "contacted",
+                                        ultima_accion: "Marcado como contactado desde tabla",
+                                      })
+                                    }
+                                    className="rounded-xl border border-white/15 px-3 py-2 text-xs font-medium text-white hover:bg-white/5"
+                                  >
+                                    Contactado
+                                  </button>
+                                </>
                               ) : null}
                             </div>
                           </td>
@@ -1493,6 +1761,9 @@ export default function ClientPortalPage() {
         users={data.users || []}
         canEdit={canEdit}
         sendingSms={sendingSms}
+        smsTemplates={smsTemplates}
+        whatsappTemplates={whatsappTemplates}
+        clientBrand={client.brand_name || client.name || "nuestro equipo"}
         onClose={() => {
           setSelectedLead(null);
           setLeadEvents([]);

@@ -720,6 +720,7 @@ export default function ClientPortalPage() {
   const [billingLoading, setBillingLoading] = useState(false);
   const [sendingSms, setSendingSms] = useState(false);
   const [brandingForm, setBrandingForm] = useState(null);
+  const [selectedLeadIds, setSelectedLeadIds] = useState([]);
   const [newUser, setNewUser] = useState({
     full_name: "",
     email: "",
@@ -730,6 +731,7 @@ export default function ClientPortalPage() {
   const [filters, setFilters] = useState({
     search: "",
     status: "all",
+    owner: "all",
     minScore: "0",
     from: "",
     to: "",
@@ -936,6 +938,65 @@ export default function ClientPortalPage() {
     await sendFollowupSms(lead, message, (data?.smsTemplates || [])[0]?.id || null);
   }
 
+  function toggleLeadSelection(leadId) {
+    setSelectedLeadIds((prev) =>
+      prev.includes(leadId)
+        ? prev.filter((id) => id !== leadId)
+        : [...prev, leadId]
+    );
+  }
+
+  function clearLeadSelection() {
+    setSelectedLeadIds([]);
+  }
+
+  async function bulkMarkContacted() {
+    if (!selectedLeadIds.length) {
+      alert("No has seleccionado ningún lead.");
+      return;
+    }
+
+    for (const leadId of selectedLeadIds) {
+      await saveLeadChanges(leadId, {
+        status: "contacted",
+        ultima_accion: "Marcado como contactado en acción masiva",
+      });
+    }
+
+    clearLeadSelection();
+    alert("Leads marcados como contactados.");
+  }
+
+  function bulkOpenWhatsapp() {
+    if (!selectedLeadIds.length) {
+      alert("No has seleccionado ningún lead.");
+      return;
+    }
+
+    const lead = (data?.leads || []).find((l) => l.id === selectedLeadIds[0]);
+    if (!lead) {
+      alert("No se encontró el lead.");
+      return;
+    }
+
+    openLeadWhatsApp(lead);
+  }
+
+  async function bulkSendSms() {
+    if (!selectedLeadIds.length) {
+      alert("No has seleccionado ningún lead.");
+      return;
+    }
+
+    const lead = (data?.leads || []).find((l) => l.id === selectedLeadIds[0]);
+    if (!lead) {
+      alert("No se encontró el lead.");
+      return;
+    }
+
+    await quickSmsFromTable(lead);
+  }
+
   async function saveBranding() {
     const res = await fetch("/api/portal/branding/update", {
       method: "PATCH",
@@ -1041,6 +1102,12 @@ export default function ClientPortalPage() {
     return leads.filter((lead) => {
       const score = Number(lead.score || 0);
       const statusOk = filters.status === "all" ? true : lead.status === filters.status;
+      const ownerOk =
+        filters.owner === "all"
+          ? true
+          : filters.owner === "unassigned"
+          ? !lead.owner
+          : lead.owner === filters.owner;
       const scoreOk = score >= Number(filters.minScore || 0);
 
       const q = filters.search.toLowerCase();
@@ -1054,7 +1121,7 @@ export default function ClientPortalPage() {
       const fromOk = filters.from ? created >= new Date(filters.from).getTime() : true;
       const toOk = filters.to ? created <= new Date(filters.to + "T23:59:59").getTime() : true;
 
-      return statusOk && scoreOk && searchOk && fromOk && toOk;
+      return statusOk && ownerOk && scoreOk && searchOk && fromOk && toOk;
     });
   }, [data, filters]);
 
@@ -1086,6 +1153,26 @@ export default function ClientPortalPage() {
   const chartLeads = rankings.bestDays.length
     ? rankings.bestDays.map((d) => ({ label: d.label, value: d.leads }))
     : [{ label: "Sin datos", value: 0 }];
+
+  const leadsByOwner = users.map((user) => {
+    const ownedLeads = (data?.leads || []).filter((lead) => lead.owner === user.full_name);
+    const won = ownedLeads.filter((lead) => lead.status === "won").length;
+    const qualified = ownedLeads.filter((lead) => lead.status === "qualified").length;
+    const revenue = ownedLeads.reduce(
+      (acc, lead) => acc + Number(lead.valor_estimado || settings.default_deal_value || 0),
+      0
+    );
+
+    return {
+      id: user.id,
+      full_name: user.full_name,
+      role: user.role,
+      leads: ownedLeads.length,
+      won,
+      qualified,
+      revenue,
+    };
+  });
 
   function onDragStart(ev, leadId) {
     ev.dataTransfer.setData("leadId", leadId);
@@ -1191,6 +1278,31 @@ export default function ClientPortalPage() {
           </div>
         </div>
 
+        <div className="mb-8 grid gap-4 md:grid-cols-3">
+          <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+            <div className="text-sm text-white/45">Plan actual</div>
+            <div className="mt-2 text-2xl font-semibold text-white">
+              {client.plan || "pro"}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+            <div className="text-sm text-white/45">Límite de llamadas</div>
+            <div className="mt-2 text-2xl font-semibold text-white">
+              {client.calls_limit || client.callsLimit || 0}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+            <div className="text-sm text-white/45">Estado cliente</div>
+            <div className="mt-2">
+              <Badge color={client.is_active === false ? "red" : "green"}>
+                {client.is_active === false ? "Inactivo" : "Activo"}
+              </Badge>
+            </div>
+          </div>
+        </div>
+
         <div className="mb-6 rounded-[30px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-black/20">
           <div className="flex flex-wrap gap-3">
             <button
@@ -1260,7 +1372,20 @@ export default function ClientPortalPage() {
                   >
                     <div className="mb-3 flex items-center justify-between">
                       <div className="font-semibold capitalize text-white">{st}</div>
-                      <Badge color="blue">{pipeline[st] || 0}</Badge>
+                      <div className="flex flex-col items-end gap-1">
+                        <Badge color="blue">{pipeline[st] || 0}</Badge>
+                        <div className="text-[10px] text-white/35">
+                          {filteredLeads
+                            .filter((lead) => (lead.status || "new") === st)
+                            .reduce(
+                              (acc, lead) =>
+                                acc + Number(lead.valor_estimado || settings.default_deal_value || 0),
+                              0
+                            )
+                            .toFixed(0)}
+                          €
+                        </div>
+                      </div>
                     </div>
 
                     <div className="space-y-3">
@@ -1290,7 +1415,7 @@ export default function ClientPortalPage() {
             </PanelCard>
 
             <PanelCard title="Leads capturados">
-              <div className="mb-4 grid gap-3 md:grid-cols-5">
+              <div className="mb-4 grid gap-3 md:grid-cols-6">
                 <input
                   placeholder="Buscar nombre, teléfono o necesidad"
                   value={filters.search}
@@ -1309,6 +1434,20 @@ export default function ClientPortalPage() {
                   <option value="qualified">qualified</option>
                   <option value="won">won</option>
                   <option value="lost">lost</option>
+                </select>
+
+                <select
+                  value={filters.owner}
+                  onChange={(e) => setFilters((f) => ({ ...f, owner: e.target.value }))}
+                  className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
+                >
+                  <option value="all">Todos los owners</option>
+                  <option value="unassigned">Sin owner</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.full_name}>
+                      {u.full_name}
+                    </option>
+                  ))}
                 </select>
 
                 <select
@@ -1337,10 +1476,46 @@ export default function ClientPortalPage() {
                 </div>
               </div>
 
+              <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="text-sm text-white/60">
+                  Seleccionados: <span className="font-semibold text-white">{selectedLeadIds.length}</span>
+                </div>
+
+                <button
+                  onClick={bulkMarkContacted}
+                  className="rounded-xl border border-white/15 px-3 py-2 text-xs font-medium text-white hover:bg-white/5"
+                >
+                  Marcar contactados
+                </button>
+
+                <button
+                  onClick={bulkSendSms}
+                  disabled={sendingSms}
+                  className="rounded-xl border border-white/15 px-3 py-2 text-xs font-medium text-white hover:bg-white/5 disabled:opacity-60"
+                >
+                  {sendingSms ? "Enviando..." : "SMS al primero"}
+                </button>
+
+                <button
+                  onClick={bulkOpenWhatsapp}
+                  className="rounded-xl border border-white/15 px-3 py-2 text-xs font-medium text-white hover:bg-white/5"
+                >
+                  WhatsApp al primero
+                </button>
+
+                <button
+                  onClick={clearLeadSelection}
+                  className="rounded-xl border border-white/15 px-3 py-2 text-xs font-medium text-white hover:bg-white/5"
+                >
+                  Limpiar selección
+                </button>
+              </div>
+
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
                   <thead>
                     <tr className="border-b border-white/10 text-left text-white/45">
+                      <th className="pb-3 pr-4">Sel</th>
                       <th className="pb-3 pr-4">Fecha</th>
                       <th className="pb-3 pr-4">Nombre</th>
                       <th className="pb-3 pr-4">Teléfono</th>
@@ -1355,13 +1530,20 @@ export default function ClientPortalPage() {
                   <tbody>
                     {filteredLeads.length === 0 ? (
                       <tr>
-                        <td colSpan={9} className="py-6 text-white/40">
+                        <td colSpan={10} className="py-6 text-white/40">
                           No hay leads con esos filtros.
                         </td>
                       </tr>
                     ) : (
                       filteredLeads.slice(0, 50).map((lead) => (
                         <tr key={lead.id} className="border-b border-white/5 align-top">
+                          <td className="py-4 pr-4">
+                            <input
+                              type="checkbox"
+                              checked={selectedLeadIds.includes(lead.id)}
+                              onChange={() => toggleLeadSelection(lead.id)}
+                            />
+                          </td>
                           <td className="py-4 pr-4 text-white/75">{formatDate(lead.created_at)}</td>
                           <td className="py-4 pr-4 text-white/75">{lead.nombre || "-"}</td>
                           <td className="py-4 pr-4 text-white/75">{lead.telefono || "-"}</td>
@@ -1559,6 +1741,43 @@ export default function ClientPortalPage() {
                   </button>
                 </div>
               ) : null}
+            </PanelCard>
+
+            <PanelCard title="Dashboard comercial" right={<Badge color="green">Equipo</Badge>}>
+              <div className="space-y-3">
+                {leadsByOwner.length === 0 ? (
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-white/45">
+                    No hay usuarios suficientes para mostrar rendimiento.
+                  </div>
+                ) : (
+                  leadsByOwner.map((row) => (
+                    <div key={row.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="font-medium text-white">{row.full_name}</div>
+                          <div className="text-sm text-white/50">{row.role}</div>
+                        </div>
+                        <Badge color="blue">{row.leads} leads</Badge>
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
+                        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                          <div className="text-white/45">Qualified</div>
+                          <div className="mt-1 font-semibold text-white">{row.qualified}</div>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                          <div className="text-white/45">Won</div>
+                          <div className="mt-1 font-semibold text-white">{row.won}</div>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                          <div className="text-white/45">Revenue</div>
+                          <div className="mt-1 font-semibold text-white">{row.revenue.toFixed(0)}€</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </PanelCard>
 
             <PanelCard title="Objetivos mensuales" right={<Badge color="green">Activos</Badge>}>

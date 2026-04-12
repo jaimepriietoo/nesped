@@ -48,11 +48,11 @@ function formatDate(value) {
 
 function formatSeconds(sec) {
   const n = Number(sec || 0);
-  if (!n) return "0s";
-  if (n < 60) return `${n}s`;
+  if (!n) return "0 s";
+  if (n < 60) return `${n} s`;
   const m = Math.floor(n / 60);
   const s = n % 60;
-  return s ? `${m}m ${s}s` : `${m}m`;
+  return s ? `${m} min ${s} s` : `${m} min`;
 }
 
 function getScoreColor(score) {
@@ -60,6 +60,25 @@ function getScoreColor(score) {
   if (n >= 80) return "green";
   if (n >= 50) return "yellow";
   return "red";
+}
+
+function getInterestColor(interest) {
+  const value = String(interest || "").toLowerCase();
+  if (value === "alto") return "green";
+  if (value === "medio") return "yellow";
+  if (value === "bajo") return "red";
+  return "default";
+}
+
+function getStatusLabel(status) {
+  const map = {
+    new: "Nuevo",
+    contacted: "Contactado",
+    qualified: "Cualificado",
+    won: "Ganado",
+    lost: "Perdido",
+  };
+  return map[status] || status || "Nuevo";
 }
 
 function MiniBarChart({ title, data, color = "bg-blue-400" }) {
@@ -216,7 +235,7 @@ function LeadDrawer({
       <div className="h-full w-full max-w-5xl overflow-y-auto border-l border-white/10 bg-[#060606] p-6 shadow-2xl shadow-black">
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
-            <div className="text-sm uppercase tracking-[0.2em] text-blue-300">Ficha de lead</div>
+            <div className="text-sm uppercase tracking-[0.2em] text-blue-300">Ficha del lead</div>
             <h2 className="mt-2 text-3xl font-semibold text-white">{lead.nombre || "Lead sin nombre"}</h2>
             <div className="mt-2 text-sm text-white/45">Registrado el {formatDate(lead.created_at)}</div>
           </div>
@@ -230,12 +249,11 @@ function LeadDrawer({
         </div>
 
         <div className="mb-6 flex flex-wrap gap-2">
-          <Badge color={getScoreColor(lead.score)}>Score {lead.score || 0}</Badge>
-          <Badge color="blue">{lead.status || "new"}</Badge>
-          <Badge color="purple">{lead.interes || "medio"}</Badge>
+          <Badge color={getScoreColor(lead.score)}>Puntuación {lead.score || 0}</Badge>
+          <Badge color="blue">{getStatusLabel(lead.status)}</Badge>
+          <Badge color={getInterestColor(lead.interes)}>{lead.interes || "medio"}</Badge>
           <Badge color="green">Predicción {lead.predicted_close_probability || 0}%</Badge>
           {lead.followup_sms_sent ? <Badge color="yellow">SMS enviado</Badge> : null}
-          {lead.owner ? <Badge color="default">Owner: {lead.owner}</Badge> : null}
           {(lead.tags || []).map((tag, i) => (
             <Badge key={i}>{tag}</Badge>
           ))}
@@ -266,7 +284,7 @@ function LeadDrawer({
         </div>
 
         <div className="mt-4 rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
-          <div className="text-sm text-white/45">Siguiente paso IA</div>
+          <div className="text-sm text-white/45">Siguiente paso con IA</div>
           <div className="mt-2 text-white/80">{lead.next_step_ai || "-"}</div>
         </div>
 
@@ -279,16 +297,22 @@ function LeadDrawer({
               onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
               className="mt-2 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white disabled:opacity-50"
             >
-              {["new", "contacted", "qualified", "won", "lost"].map((st) => (
-                <option key={st} value={st}>
-                  {st}
+              {[
+                { value: "new", label: "Nuevo" },
+                { value: "contacted", label: "Contactado" },
+                { value: "qualified", label: "Cualificado" },
+                { value: "won", label: "Ganado" },
+                { value: "lost", label: "Perdido" },
+              ].map((st) => (
+                <option key={st.value} value={st.value}>
+                  {st.label}
                 </option>
               ))}
             </select>
           </div>
 
           <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
-            <label className="text-sm text-white/45">Owner</label>
+            <label className="text-sm text-white/45">Responsable</label>
             <select
               disabled={!canEdit}
               value={form.owner}
@@ -380,7 +404,7 @@ function LeadDrawer({
                 onClick={() => onGenerateNextStep(lead)}
                 className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-semibold text-white hover:bg-white/5"
               >
-                Generar siguiente paso IA
+                Generar siguiente paso con IA
               </button>
 
               <button
@@ -395,7 +419,7 @@ function LeadDrawer({
 
         <div className="mt-8 grid gap-6 xl:grid-cols-2">
           <div className="space-y-6">
-            <PanelCard title="Timeline">
+            <PanelCard title="Historial">
               <div className="space-y-3">
                 {events.length === 0 ? (
                   <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5 text-white/45">
@@ -499,17 +523,17 @@ function LeadDrawer({
           </div>
 
           <div className="space-y-6">
-            <PanelCard title="Follow-up comercial">
+            <PanelCard title="Seguimiento comercial">
               <div className="space-y-4">
                 <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
-                  <div className="mb-3 text-sm text-white/45">Template SMS</div>
+                  <div className="mb-3 text-sm text-white/45">Plantilla de SMS</div>
                   <div className="flex flex-col gap-3">
                     <select
                       value={selectedSmsTemplateId}
                       onChange={(e) => setSelectedSmsTemplateId(e.target.value)}
                       className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
                     >
-                      <option value="">Selecciona template SMS</option>
+                      <option value="">Selecciona plantilla SMS</option>
                       {(smsTemplates || []).map((template) => (
                         <option key={template.id} value={template.id}>
                           {template.name}
@@ -521,20 +545,20 @@ function LeadDrawer({
                       onClick={applySmsTemplate}
                       className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-semibold text-white hover:bg-white/5"
                     >
-                      Aplicar template SMS
+                      Aplicar plantilla SMS
                     </button>
                   </div>
                 </div>
 
                 <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
-                  <div className="mb-3 text-sm text-white/45">Template WhatsApp</div>
+                  <div className="mb-3 text-sm text-white/45">Plantilla de WhatsApp</div>
                   <div className="flex flex-col gap-3">
                     <select
                       value={selectedWhatsappTemplateId}
                       onChange={(e) => setSelectedWhatsappTemplateId(e.target.value)}
                       className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
                     >
-                      <option value="">Selecciona template WhatsApp</option>
+                      <option value="">Selecciona plantilla de WhatsApp</option>
                       {(whatsappTemplates || []).map((template) => (
                         <option key={template.id} value={template.id}>
                           {template.name}
@@ -546,7 +570,7 @@ function LeadDrawer({
                       onClick={applyWhatsappTemplate}
                       className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-semibold text-white hover:bg-white/5"
                     >
-                      Aplicar template WhatsApp
+                      Aplicar plantilla de WhatsApp
                     </button>
                   </div>
                 </div>
@@ -558,7 +582,7 @@ function LeadDrawer({
                     onChange={(e) => setOutreachMessage(e.target.value)}
                     rows={6}
                     className="mt-3 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
-                    placeholder="Escribe o genera aquí tu mensaje de follow-up"
+                    placeholder="Escribe o genera aquí tu mensaje de seguimiento"
                   />
 
                   <div className="mt-4 flex flex-wrap gap-3">
@@ -566,7 +590,7 @@ function LeadDrawer({
                       onClick={() => setOutreachMessage(getDefaultOutreachMessage(lead, clientBrand))}
                       className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-semibold text-white hover:bg-white/5"
                     >
-                      Reset mensaje
+                      Restablecer mensaje
                     </button>
 
                     <button
@@ -732,6 +756,8 @@ export default function ClientPortalPage() {
     search: "",
     status: "all",
     owner: "all",
+    interes: "all",
+    ciudad: "all",
     minScore: "0",
     from: "",
     to: "",
@@ -956,15 +982,22 @@ export default function ClientPortalPage() {
       return;
     }
 
-    for (const leadId of selectedLeadIds) {
-      await saveLeadChanges(leadId, {
-        status: "contacted",
-        ultima_accion: "Marcado como contactado en acción masiva",
-      });
-    }
+    try {
+      await Promise.all(
+        selectedLeadIds.map((leadId) =>
+          saveLeadChanges(leadId, {
+            status: "contacted",
+            ultima_accion: "Marcado como contactado en acción masiva",
+          })
+        )
+      );
 
-    clearLeadSelection();
-    alert("Leads marcados como contactados.");
+      clearLeadSelection();
+      alert("Leads marcados como contactados.");
+    } catch (err) {
+      console.error(err);
+      alert("No se pudieron actualizar todos los leads.");
+    }
   }
 
   function bulkOpenWhatsapp() {
@@ -973,13 +1006,24 @@ export default function ClientPortalPage() {
       return;
     }
 
-    const lead = (data?.leads || []).find((l) => l.id === selectedLeadIds[0]);
-    if (!lead) {
-      alert("No se encontró el lead.");
-      return;
-    }
+    const leads = (data?.leads || []).filter((l) => selectedLeadIds.includes(l.id));
 
-    openLeadWhatsApp(lead);
+    leads.forEach((lead) => {
+      const phone = normalizePhoneForWhatsApp(lead.telefono);
+      if (!phone) return;
+
+      const template =
+        (data?.whatsappTemplates || [])[0]?.text ||
+        `Hola {{nombre}}, te escribimos de {{empresa}} para continuar con tu solicitud.`;
+
+      const text = renderTemplateText(
+        template,
+        lead,
+        data?.client?.brand_name || data?.client?.name || "nuestro equipo"
+      );
+
+      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank");
+    });
   }
 
   async function bulkSendSms() {
@@ -988,13 +1032,49 @@ export default function ClientPortalPage() {
       return;
     }
 
-    const lead = (data?.leads || []).find((l) => l.id === selectedLeadIds[0]);
-    if (!lead) {
-      alert("No se encontró el lead.");
-      return;
-    }
+    try {
+      setSendingSms(true);
 
-    await quickSmsFromTable(lead);
+      const leads = (data?.leads || []).filter((l) => selectedLeadIds.includes(l.id));
+
+      for (const lead of leads) {
+        const template =
+          (data?.smsTemplates || [])[0]?.text ||
+          `Hola {{nombre}}, te escribimos de {{empresa}} para continuar con tu solicitud.`;
+
+        const message = renderTemplateText(
+          template,
+          lead,
+          data?.client?.brand_name || data?.client?.name || "nuestro equipo"
+        );
+
+        const res = await fetch("/api/followup/sms", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            leadId: lead.id,
+            to: lead.telefono,
+            message,
+          }),
+        });
+
+        const json = await res.json();
+        if (!json.success) {
+          console.error("Error en lead", lead.id, json.message);
+        }
+      }
+
+      clearLeadSelection();
+      await loadOverview();
+      alert("SMS enviados a todos los seleccionados.");
+    } catch (err) {
+      console.error(err);
+      alert("Error en el envío masivo.");
+    } finally {
+      setSendingSms(false);
+    }
   }
 
   async function saveBranding() {
@@ -1005,7 +1085,7 @@ export default function ClientPortalPage() {
     });
     const json = await res.json();
     if (!json.success) {
-      alert(json.message || "No se pudo guardar branding.");
+      alert(json.message || "No se pudo guardar el branding.");
       return;
     }
     await loadOverview();
@@ -1040,9 +1120,9 @@ export default function ClientPortalPage() {
         window.location.href = json.url;
         return;
       }
-      alert(json?.message || "Stripe portal no está disponible.");
+      alert(json?.message || "El portal de Stripe no está disponible.");
     } catch (err) {
-      alert(err?.message || "No se pudo abrir facturación.");
+      alert(err?.message || "No se pudo abrir la facturación.");
     } finally {
       setBillingLoading(false);
     }
@@ -1065,9 +1145,9 @@ export default function ClientPortalPage() {
         window.location.href = json.url;
         return;
       }
-      alert(json?.message || "Checkout no disponible.");
+      alert(json?.message || "El checkout no está disponible.");
     } catch (err) {
-      alert(err?.message || "No se pudo abrir checkout.");
+      alert(err?.message || "No se pudo abrir el checkout.");
     } finally {
       setBillingLoading(false);
     }
@@ -1092,9 +1172,13 @@ export default function ClientPortalPage() {
   async function runNightly() {
     const res = await fetch("/api/nightly", { method: "POST" });
     const json = await res.json();
-    alert(json.success ? "Nightly ejecutado." : json.message || "No se pudo ejecutar.");
+    alert(json.success ? "Proceso nocturno ejecutado." : json.message || "No se pudo ejecutar.");
     await loadOverview();
   }
+
+  const availableCities = useMemo(() => {
+    return [...new Set((data?.leads || []).map((lead) => lead.ciudad).filter(Boolean))];
+  }, [data]);
 
   const filteredLeads = useMemo(() => {
     const leads = data?.leads || [];
@@ -1108,6 +1192,9 @@ export default function ClientPortalPage() {
           : filters.owner === "unassigned"
           ? !lead.owner
           : lead.owner === filters.owner;
+      const interestOk =
+        filters.interes === "all" ? true : String(lead.interes || "").toLowerCase() === filters.interes;
+      const cityOk = filters.ciudad === "all" ? true : lead.ciudad === filters.ciudad;
       const scoreOk = score >= Number(filters.minScore || 0);
 
       const q = filters.search.toLowerCase();
@@ -1121,7 +1208,7 @@ export default function ClientPortalPage() {
       const fromOk = filters.from ? created >= new Date(filters.from).getTime() : true;
       const toOk = filters.to ? created <= new Date(filters.to + "T23:59:59").getTime() : true;
 
-      return statusOk && ownerOk && scoreOk && searchOk && fromOk && toOk;
+      return statusOk && ownerOk && interestOk && cityOk && scoreOk && searchOk && fromOk && toOk;
     });
   }, [data, filters]);
 
@@ -1174,6 +1261,10 @@ export default function ClientPortalPage() {
     };
   });
 
+  const totalSelectedValue = (data?.leads || [])
+    .filter((lead) => selectedLeadIds.includes(lead.id))
+    .reduce((acc, lead) => acc + Number(lead.valor_estimado || settings.default_deal_value || 0), 0);
+
   function onDragStart(ev, leadId) {
     ev.dataTransfer.setData("leadId", leadId);
   }
@@ -1185,7 +1276,7 @@ export default function ClientPortalPage() {
     if (!leadId) return;
     await saveLeadChanges(leadId, {
       status,
-      ultima_accion: `Estado cambiado a ${status} con drag & drop`,
+      ultima_accion: `Estado cambiado a ${getStatusLabel(status)} con arrastrar y soltar`,
     });
   }
 
@@ -1220,7 +1311,7 @@ export default function ClientPortalPage() {
 
             <div>
               <div className="text-sm uppercase tracking-[0.2em]" style={{ color: client.primary_color || "#93c5fd" }}>
-                {client.brand_name || client.name || "Portal Enterprise"}
+                {client.brand_name || client.name || "Portal empresarial"}
               </div>
               <h1 className="mt-2 text-4xl font-semibold tracking-tight md:text-6xl">
                 Control operativo y comercial en tiempo real
@@ -1237,7 +1328,7 @@ export default function ClientPortalPage() {
               disabled={billingLoading}
               className="rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black hover:bg-white/90 disabled:opacity-60"
             >
-              {billingLoading ? "Abriendo..." : "Contratar / ampliar plan"}
+              {billingLoading ? "Abriendo..." : "Contratar o ampliar plan"}
             </button>
 
             <button
@@ -1273,7 +1364,7 @@ export default function ClientPortalPage() {
               onClick={runNightly}
               className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-semibold hover:bg-white/5"
             >
-              Ejecutar nightly
+              Ejecutar proceso nocturno
             </button>
           </div>
         </div>
@@ -1294,7 +1385,7 @@ export default function ClientPortalPage() {
           </div>
 
           <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
-            <div className="text-sm text-white/45">Estado cliente</div>
+            <div className="text-sm text-white/45">Estado del cliente</div>
             <div className="mt-2">
               <Badge color={client.is_active === false ? "red" : "green"}>
                 {client.is_active === false ? "Inactivo" : "Activo"}
@@ -1333,14 +1424,14 @@ export default function ClientPortalPage() {
               onClick={() => {
                 const unassigned = filteredLeads.find((l) => !l.owner);
                 if (!unassigned) {
-                  alert("No hay leads sin owner con los filtros actuales.");
+                  alert("No hay leads sin responsable con los filtros actuales.");
                   return;
                 }
                 openLead(unassigned);
               }}
               className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-semibold text-white hover:bg-white/5"
             >
-              Revisar lead sin owner
+              Revisar lead sin responsable
             </button>
           </div>
         </div>
@@ -1348,9 +1439,9 @@ export default function ClientPortalPage() {
         <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
           <StatCard title="Llamadas" value={metrics.totalCalls || 0} subtitle="Histórico total" />
           <StatCard title="Leads" value={metrics.totalLeads || 0} subtitle="Capturados" />
-          <StatCard title="Conversión" value={`${metrics.conversionRate || 0}%`} subtitle="Leads / llamadas" />
+          <StatCard title="Conversión" value={`${metrics.conversionRate || 0}%`} subtitle="Leads por llamadas" />
           <StatCard title="Duración media" value={formatSeconds(metrics.avgDuration || 0)} subtitle="Tiempo por llamada" />
-          <StatCard title="Score medio" value={metrics.avgLeadScore || 0} subtitle="Calidad media" />
+          <StatCard title="Puntuación media" value={metrics.avgLeadScore || 0} subtitle="Calidad media" />
           <StatCard title="Ingresos potenciales" value={`${Number(metrics.totalPotentialRevenue || 0).toFixed(0)}€`} subtitle="Estimación" />
         </div>
 
@@ -1371,7 +1462,7 @@ export default function ClientPortalPage() {
                     className="rounded-[24px] border border-white/10 bg-black/20 p-4"
                   >
                     <div className="mb-3 flex items-center justify-between">
-                      <div className="font-semibold capitalize text-white">{st}</div>
+                      <div className="font-semibold text-white">{getStatusLabel(st)}</div>
                       <div className="flex flex-col items-end gap-1">
                         <Badge color="blue">{pipeline[st] || 0}</Badge>
                         <div className="text-[10px] text-white/35">
@@ -1403,7 +1494,7 @@ export default function ClientPortalPage() {
                             <div className="font-medium text-white">{lead.nombre || "Sin nombre"}</div>
                             <div className="mt-1 text-xs text-white/50">{lead.necesidad || "-"}</div>
                             <div className="mt-2 flex flex-wrap gap-2">
-                              <Badge color={getScoreColor(lead.score)}>Score {lead.score || 0}</Badge>
+                              <Badge color={getScoreColor(lead.score)}>Puntuación {lead.score || 0}</Badge>
                               <Badge color="green">{lead.predicted_close_probability || 0}%</Badge>
                             </div>
                           </button>
@@ -1415,7 +1506,7 @@ export default function ClientPortalPage() {
             </PanelCard>
 
             <PanelCard title="Leads capturados">
-              <div className="mb-4 grid gap-3 md:grid-cols-6">
+              <div className="mb-4 grid gap-3 md:grid-cols-8">
                 <input
                   placeholder="Buscar nombre, teléfono o necesidad"
                   value={filters.search}
@@ -1429,11 +1520,11 @@ export default function ClientPortalPage() {
                   className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
                 >
                   <option value="all">Todos los estados</option>
-                  <option value="new">new</option>
-                  <option value="contacted">contacted</option>
-                  <option value="qualified">qualified</option>
-                  <option value="won">won</option>
-                  <option value="lost">lost</option>
+                  <option value="new">Nuevo</option>
+                  <option value="contacted">Contactado</option>
+                  <option value="qualified">Cualificado</option>
+                  <option value="won">Ganado</option>
+                  <option value="lost">Perdido</option>
                 </select>
 
                 <select
@@ -1441,11 +1532,35 @@ export default function ClientPortalPage() {
                   onChange={(e) => setFilters((f) => ({ ...f, owner: e.target.value }))}
                   className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
                 >
-                  <option value="all">Todos los owners</option>
-                  <option value="unassigned">Sin owner</option>
+                  <option value="all">Todos los responsables</option>
+                  <option value="unassigned">Sin responsable</option>
                   {users.map((u) => (
                     <option key={u.id} value={u.full_name}>
                       {u.full_name}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={filters.interes}
+                  onChange={(e) => setFilters((f) => ({ ...f, interes: e.target.value }))}
+                  className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
+                >
+                  <option value="all">Todos los intereses</option>
+                  <option value="alto">Alto</option>
+                  <option value="medio">Medio</option>
+                  <option value="bajo">Bajo</option>
+                </select>
+
+                <select
+                  value={filters.ciudad}
+                  onChange={(e) => setFilters((f) => ({ ...f, ciudad: e.target.value }))}
+                  className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
+                >
+                  <option value="all">Todas las ciudades</option>
+                  {availableCities.map((city) => (
+                    <option key={city} value={city}>
+                      {city}
                     </option>
                   ))}
                 </select>
@@ -1455,12 +1570,12 @@ export default function ClientPortalPage() {
                   onChange={(e) => setFilters((f) => ({ ...f, minScore: e.target.value }))}
                   className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
                 >
-                  <option value="0">Score desde 0</option>
-                  <option value="50">Score desde 50</option>
-                  <option value="80">Score desde 80</option>
+                  <option value="0">Puntuación desde 0</option>
+                  <option value="50">Puntuación desde 50</option>
+                  <option value="80">Puntuación desde 80</option>
                 </select>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-3 md:col-span-2">
                   <input
                     type="date"
                     value={filters.from}
@@ -1481,11 +1596,16 @@ export default function ClientPortalPage() {
                   Seleccionados: <span className="font-semibold text-white">{selectedLeadIds.length}</span>
                 </div>
 
+                <div className="text-sm text-white/60">
+                  Valor total seleccionado:{" "}
+                  <span className="font-semibold text-white">{totalSelectedValue}€</span>
+                </div>
+
                 <button
                   onClick={bulkMarkContacted}
                   className="rounded-xl border border-white/15 px-3 py-2 text-xs font-medium text-white hover:bg-white/5"
                 >
-                  Marcar contactados
+                  Marcar como contactados
                 </button>
 
                 <button
@@ -1493,14 +1613,14 @@ export default function ClientPortalPage() {
                   disabled={sendingSms}
                   className="rounded-xl border border-white/15 px-3 py-2 text-xs font-medium text-white hover:bg-white/5 disabled:opacity-60"
                 >
-                  {sendingSms ? "Enviando..." : "SMS al primero"}
+                  {sendingSms ? "Enviando SMS masivo..." : "Enviar SMS a seleccionados"}
                 </button>
 
                 <button
                   onClick={bulkOpenWhatsapp}
                   className="rounded-xl border border-white/15 px-3 py-2 text-xs font-medium text-white hover:bg-white/5"
                 >
-                  WhatsApp al primero
+                  Abrir WhatsApp seleccionados
                 </button>
 
                 <button
@@ -1515,22 +1635,24 @@ export default function ClientPortalPage() {
                 <table className="min-w-full text-sm">
                   <thead>
                     <tr className="border-b border-white/10 text-left text-white/45">
-                      <th className="pb-3 pr-4">Sel</th>
+                      <th className="pb-3 pr-4">Sel.</th>
                       <th className="pb-3 pr-4">Fecha</th>
                       <th className="pb-3 pr-4">Nombre</th>
                       <th className="pb-3 pr-4">Teléfono</th>
-                      <th className="pb-3 pr-4">Owner</th>
-                      <th className="pb-3 pr-4">Score</th>
+                      <th className="pb-3 pr-4">Responsable</th>
+                      <th className="pb-3 pr-4">Puntuación</th>
                       <th className="pb-3 pr-4">Estado</th>
+                      <th className="pb-3 pr-4">Interés</th>
+                      <th className="pb-3 pr-4">Valor €</th>
                       <th className="pb-3 pr-4">Predicción</th>
-                      <th className="pb-3 pr-4">Flags</th>
+                      <th className="pb-3 pr-4">Indicadores</th>
                       <th className="pb-3 pr-4">Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredLeads.length === 0 ? (
                       <tr>
-                        <td colSpan={10} className="py-6 text-white/40">
+                        <td colSpan={12} className="py-6 text-white/40">
                           No hay leads con esos filtros.
                         </td>
                       </tr>
@@ -1549,10 +1671,16 @@ export default function ClientPortalPage() {
                           <td className="py-4 pr-4 text-white/75">{lead.telefono || "-"}</td>
                           <td className="py-4 pr-4 text-white/65">{lead.owner || "-"}</td>
                           <td className="py-4 pr-4">
-                            <Badge color={getScoreColor(lead.score)}>Score {lead.score || 0}</Badge>
+                            <Badge color={getScoreColor(lead.score)}>Puntuación {lead.score || 0}</Badge>
                           </td>
                           <td className="py-4 pr-4">
-                            <Badge color="blue">{lead.status || "new"}</Badge>
+                            <Badge color="blue">{getStatusLabel(lead.status)}</Badge>
+                          </td>
+                          <td className="py-4 pr-4">
+                            <Badge color={getInterestColor(lead.interes)}>{lead.interes || "-"}</Badge>
+                          </td>
+                          <td className="py-4 pr-4 text-white/75">
+                            {Number(lead.valor_estimado || settings.default_deal_value || 0)}€
                           </td>
                           <td className="py-4 pr-4">
                             <Badge color="green">{lead.predicted_close_probability || 0}%</Badge>
@@ -1560,7 +1688,11 @@ export default function ClientPortalPage() {
                           <td className="py-4 pr-4">
                             <div className="flex flex-wrap gap-2">
                               {lead.followup_sms_sent ? <Badge color="yellow">SMS</Badge> : null}
-                              {lead.owner ? <Badge color="default">Owner</Badge> : <Badge color="red">Sin owner</Badge>}
+                              {lead.owner ? (
+                                <Badge color="default">Con responsable</Badge>
+                              ) : (
+                                <Badge color="red">Sin responsable</Badge>
+                              )}
                             </div>
                           </td>
                           <td className="py-4 pr-4">
@@ -1635,7 +1767,7 @@ export default function ClientPortalPage() {
                       <th className="pb-3 pr-4">Estado</th>
                       <th className="pb-3 pr-4">Lead</th>
                       <th className="pb-3 pr-4">Duración</th>
-                      <th className="pb-3 pr-4">Intent</th>
+                      <th className="pb-3 pr-4">Intento detectado</th>
                       <th className="pb-3 pr-4">Resumen</th>
                     </tr>
                   </thead>
@@ -1671,7 +1803,7 @@ export default function ClientPortalPage() {
           </div>
 
           <div className="space-y-6">
-            <PanelCard title="Actividad en tiempo real" right={<Badge color="green">Auto refresh</Badge>}>
+            <PanelCard title="Actividad en tiempo real" right={<Badge color="green">Actualización automática</Badge>}>
               <div className="space-y-3 text-sm text-white/70">
                 <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                   El portal se actualiza automáticamente cada {data.settings?.realtime_refresh_seconds || 15} segundos.
@@ -1743,7 +1875,7 @@ export default function ClientPortalPage() {
               ) : null}
             </PanelCard>
 
-            <PanelCard title="Dashboard comercial" right={<Badge color="green">Equipo</Badge>}>
+            <PanelCard title="Panel comercial" right={<Badge color="green">Equipo</Badge>}>
               <div className="space-y-3">
                 {leadsByOwner.length === 0 ? (
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-white/45">
@@ -1762,15 +1894,15 @@ export default function ClientPortalPage() {
 
                       <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
                         <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                          <div className="text-white/45">Qualified</div>
+                          <div className="text-white/45">Cualificados</div>
                           <div className="mt-1 font-semibold text-white">{row.qualified}</div>
                         </div>
                         <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                          <div className="text-white/45">Won</div>
+                          <div className="text-white/45">Ganados</div>
                           <div className="mt-1 font-semibold text-white">{row.won}</div>
                         </div>
                         <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                          <div className="text-white/45">Revenue</div>
+                          <div className="text-white/45">Ingresos</div>
                           <div className="mt-1 font-semibold text-white">{row.revenue.toFixed(0)}€</div>
                         </div>
                       </div>
@@ -1825,7 +1957,7 @@ export default function ClientPortalPage() {
               </div>
             </PanelCard>
 
-            <PanelCard title="Insights IA" right={<Badge color="purple">{insights.length}</Badge>}>
+            <PanelCard title="Insights con IA" right={<Badge color="purple">{insights.length}</Badge>}>
               <div className="space-y-3">
                 {insights.length === 0 ? (
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-white/45">
@@ -1848,14 +1980,14 @@ export default function ClientPortalPage() {
                   disabled={!canAdmin}
                   value={brandingForm?.brand_name || ""}
                   onChange={(e) => setBrandingForm((f) => ({ ...f, brand_name: e.target.value }))}
-                  placeholder="Brand name"
+                  placeholder="Nombre de marca"
                   className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white disabled:opacity-50"
                 />
                 <input
                   disabled={!canAdmin}
                   value={brandingForm?.brand_logo_url || ""}
                   onChange={(e) => setBrandingForm((f) => ({ ...f, brand_logo_url: e.target.value }))}
-                  placeholder="Logo URL"
+                  placeholder="URL del logo"
                   className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white disabled:opacity-50"
                 />
                 <div className="grid grid-cols-2 gap-3">
@@ -1863,14 +1995,14 @@ export default function ClientPortalPage() {
                     disabled={!canAdmin}
                     value={brandingForm?.primary_color || ""}
                     onChange={(e) => setBrandingForm((f) => ({ ...f, primary_color: e.target.value }))}
-                    placeholder="Primary color"
+                    placeholder="Color principal"
                     className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white disabled:opacity-50"
                   />
                   <input
                     disabled={!canAdmin}
                     value={brandingForm?.secondary_color || ""}
                     onChange={(e) => setBrandingForm((f) => ({ ...f, secondary_color: e.target.value }))}
-                    placeholder="Secondary color"
+                    placeholder="Color secundario"
                     className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white disabled:opacity-50"
                   />
                 </div>
@@ -1878,7 +2010,7 @@ export default function ClientPortalPage() {
                   disabled={!canAdmin}
                   value={brandingForm?.owner_email || ""}
                   onChange={(e) => setBrandingForm((f) => ({ ...f, owner_email: e.target.value }))}
-                  placeholder="Owner email"
+                  placeholder="Email del responsable"
                   className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white disabled:opacity-50"
                 />
                 <input
@@ -1928,7 +2060,7 @@ export default function ClientPortalPage() {
               </div>
             </PanelCard>
 
-            <PanelCard title="Audit log" right={<Badge color="blue">{auditLogs.length}</Badge>}>
+            <PanelCard title="Registro de actividad" right={<Badge color="blue">{auditLogs.length}</Badge>}>
               <div className="space-y-3">
                 {auditLogs.length === 0 ? (
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-white/45">

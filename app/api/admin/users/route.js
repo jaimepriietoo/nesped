@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { getAdminContext, hashPassword } from "@/lib/server/auth";
 
 function getSupabase() {
   return createClient(
@@ -9,6 +10,18 @@ function getSupabase() {
 
 export async function GET() {
   try {
+    const admin = await getAdminContext();
+    if (!admin.ok) {
+      return Response.json(
+        {
+          success: false,
+          message: admin.message,
+          data: [],
+        },
+        { status: admin.status || 401 }
+      );
+    }
+
     const supabase = getSupabase();
 
     const { data, error } = await supabase
@@ -47,10 +60,21 @@ export async function GET() {
 
 export async function POST(req) {
   try {
+    const admin = await getAdminContext();
+    if (!admin.ok) {
+      return Response.json(
+        {
+          success: false,
+          message: admin.message,
+        },
+        { status: admin.status || 401 }
+      );
+    }
+
     const supabase = getSupabase();
     const body = await req.json();
 
-    const email = body.email?.trim();
+    const email = body.email?.trim()?.toLowerCase();
     const password = body.password?.trim();
     const role = body.role?.trim() || "client";
     const clientId = body.clientId?.trim();
@@ -102,7 +126,7 @@ export async function POST(req) {
       .insert([
         {
           email,
-          password,
+          password: hashPassword(password),
           role,
           client_id: clientId,
           created_at: new Date().toISOString(),

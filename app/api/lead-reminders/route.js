@@ -1,108 +1,38 @@
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
-
+import { getPortalContext } from "@/lib/portal-auth";
+ 
 export async function GET(req) {
   try {
-    const ctx = await getPortalContext();
-    if (!ctx.ok) {
-      return Response.json(
-        { success: false, message: ctx.message, data: [] },
-        { status: 401 }
-      );
-    }
-
     const { searchParams } = new URL(req.url);
     const leadId = searchParams.get("lead_id");
-
-    if (!leadId) {
-      return Response.json(
-        { success: false, message: "Falta lead_id", data: [] },
-        { status: 400 }
-      );
-    }
-
+    const ctx = await getPortalContext();
+    if (!ctx.ok) return Response.json({ success: false, message: ctx.message }, { status: 401 });
+ 
     const { data, error } = await ctx.supabase
       .from("lead_reminders")
       .select("*")
       .eq("lead_id", leadId)
-      .eq("client_id", ctx.clientId)
       .order("remind_at", { ascending: true });
-
-    if (error) {
-      return Response.json(
-        { success: false, message: error.message, data: [] },
-        { status: 500 }
-      );
-    }
-
+ 
+    if (error) throw new Error(error.message);
     return Response.json({ success: true, data: data || [] });
-  } catch (error) {
-    return Response.json(
-      { success: false, message: error.message || "Error cargando recordatorios", data: [] },
-      { status: 500 }
-    );
+  } catch (err) {
+    return Response.json({ success: false, message: err.message }, { status: 500 });
   }
 }
-
+ 
 export async function POST(req) {
   try {
     const ctx = await getPortalContext();
-    if (!ctx.ok) {
-      return Response.json(
-        { success: false, message: ctx.message },
-        { status: 401 }
-      );
-    }
-
-    if (!hasRole(ctx.role, ["owner", "admin", "manager", "agent"])) {
-      return Response.json(
-        { success: false, message: "Sin permisos para crear recordatorios" },
-        { status: 403 }
-      );
-    }
-
-    const body = await req.json();
-    const { lead_id, title, remind_at, assigned_to = "" } = body;
-
-    if (!lead_id || !title || !remind_at) {
-      return Response.json(
-        { success: false, message: "Faltan datos obligatorios" },
-        { status: 400 }
-      );
-    }
-
-    const { data, error } = await ctx.supabase
-      .from("lead_reminders")
-      .insert({
-        lead_id,
-        client_id: ctx.clientId,
-        assigned_to,
-        title,
-        remind_at,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      return Response.json(
-        { success: false, message: error.message },
-        { status: 500 }
-      );
-    }
-
-    await ctx.supabase.from("lead_events").insert({
-      lead_id,
-      client_id: ctx.clientId,
-      type: "reminder_created",
-      title: "Recordatorio creado",
-      description: `${title} · ${new Date(remind_at).toLocaleString()}`,
-      meta: { assigned_to },
-    });
-
+    if (!ctx.ok) return Response.json({ success: false, message: ctx.message }, { status: 401 });
+ 
+    const { lead_id, title, remind_at, assigned_to } = await req.json();
+    const { data, error } = await ctx.supabase.from("lead_reminders").insert({
+      lead_id, title, remind_at, assigned_to, client_id: ctx.clientId,
+    }).select().single();
+ 
+    if (error) throw new Error(error.message);
     return Response.json({ success: true, data });
-  } catch (error) {
-    return Response.json(
-      { success: false, message: error.message || "Error creando recordatorio" },
-      { status: 500 }
-    );
+  } catch (err) {
+    return Response.json({ success: false, message: err.message }, { status: 500 });
   }
 }

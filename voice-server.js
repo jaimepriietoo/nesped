@@ -116,7 +116,52 @@ Después de eso:
 - no hagas más preguntas
 - no alargues la conversación
 - no sigas hablando
+
+DESPEDIDAS:
+- si la persona se despide o deja claro que se tiene que ir, respóndele con una despedida breve, cálida y natural
+- ejemplos: "adios", "hasta luego", "hablamos", "chao", "me tengo que ir", "nos vemos", "un saludo", "gracias, adios", "vale, hablamos luego"
+- cuando detectes una despedida, no reabras la conversación, no hagas preguntas y termina por completo
 `.trim();
+}
+
+function normalizeTranscriptText(value = "") {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function detectFarewellIntent(value = "") {
+  const text = normalizeTranscriptText(value);
+  if (!text) return false;
+
+  const phrases = [
+    "adios",
+    "hasta luego",
+    "hasta pronto",
+    "hablamos",
+    "vale hablamos luego",
+    "perfecto hasta luego",
+    "gracias adios",
+    "chao",
+    "ciao",
+    "nos vemos",
+    "un saludo",
+    "me tengo que ir",
+    "me voy",
+    "te dejo",
+    "te tengo que dejar",
+    "luego hablamos",
+    "hablamos luego",
+    "hasta otra",
+    "hasta mas tarde",
+    "gracias hasta luego",
+  ];
+
+  return phrases.some((phrase) => text.includes(phrase));
 }
 
 async function getClientConfig(clientId) {
@@ -440,8 +485,26 @@ wss.on("connection", async (twilioWs, req) => {
           resumen,
           notes: preferencia || null,
         })
+        
         .select()
         .single();
+
+        await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/ai/next-best-action/save`, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "x-nesped-internal-token":
+      process.env.INTERNAL_API_TOKEN ||
+      process.env.CRON_SECRET ||
+      process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      "",
+  },
+  body: JSON.stringify({
+    leadId: insertedLead.id,
+    clientId: insertedLead.client_id,
+    brandName: "Nesped",
+  }),
+});
 
       if (error) {
         console.error("❌ Error guardando lead en Supabase:", error.message);
@@ -496,8 +559,23 @@ wss.on("connection", async (twilioWs, req) => {
     );
   }
 
+  async function hangupCall() {
+    if (!callSid) return;
+
+    try {
+      await client.calls(callSid).update({
+        status: "completed",
+      });
+      console.log("📴 Twilio call completada:", callSid);
+    } catch (err) {
+      console.error("❌ Error completando llamada en Twilio:", err.message);
+    }
+  }
+
   function endCallSoon() {
     console.log("📴 Cerrando llamada...");
+
+    hangupCall();
 
     try {
       if (twilioWs.readyState === WebSocket.OPEN) {
@@ -717,7 +795,7 @@ wss.on("connection", async (twilioWs, req) => {
         if (closingRequested) {
           pendingHangup = setTimeout(() => {
             endCallSoon();
-          }, 1200);
+          }, 1400);
         }
       }
 
@@ -738,6 +816,22 @@ wss.on("connection", async (twilioWs, req) => {
         event.transcript
       ) {
         addTranscriptLine(`[USER] ${event.transcript}`);
+
+        if (detectFarewellIntent(event.transcript) && !closingRequested) {
+          callSummary = "La persona se despidio y la llamada se cerro de forma natural.";
+
+          if (openaiWs.readyState === WebSocket.OPEN) {
+            openaiWs.send(
+              JSON.stringify({
+                type: "response.cancel",
+              })
+            );
+          }
+
+          requestClosingResponse(
+            "El usuario se esta despidiendo. Responde con una sola frase breve, humana y calida para despedirte en espanol, sin hacer preguntas ni retomar la conversacion. Despues termina completamente la llamada."
+          );
+        }
       }
 
       if (

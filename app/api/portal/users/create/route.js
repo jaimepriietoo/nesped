@@ -1,65 +1,38 @@
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
-
+import { hashPassword } from "@/lib/server/auth";
+ 
 export async function POST(req) {
   try {
     const ctx = await getPortalContext();
-    if (!ctx.ok) {
-      return Response.json(
-        { success: false, message: ctx.message },
-        { status: 401 }
-      );
-    }
-
-    if (!hasRole(ctx.role, ["owner", "admin"])) {
-      return Response.json(
-        { success: false, message: "Sin permisos para crear usuarios" },
-        { status: 403 }
-      );
-    }
-
-    const body = await req.json();
-    const { full_name, email, role = "agent", phone = "" } = body;
-
-    if (!full_name || !email) {
-      return Response.json(
-        { success: false, message: "Faltan datos obligatorios" },
-        { status: 400 }
-      );
-    }
-
-    const { data, error } = await ctx.supabase
-      .from("portal_users")
-      .insert({
-        client_id: ctx.clientId,
-        full_name,
-        email,
-        role,
-        phone,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      return Response.json(
-        { success: false, message: error.message },
-        { status: 500 }
-      );
-    }
-
-    await ctx.supabase.from("audit_logs").insert({
+    if (!ctx.ok) return Response.json({ success: false, message: ctx.message }, { status: 401 });
+    if (!hasRole(ctx.role, ["owner","admin"])) return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
+ 
+    const { full_name, email, role, phone, password } = await req.json();
+    if (!full_name || !email) return Response.json({ success: false, message: "Faltan datos obligatorios" }, { status: 400 });
+ 
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+    const hashedPassword = password ? hashPassword(password) : null;
+ 
+    const { data: user, error } = await ctx.supabase.from("portal_users").insert({
       client_id: ctx.clientId,
-      entity_type: "user",
-      entity_id: data.id,
-      action: "created",
-      actor: ctx.currentUser?.full_name || ctx.userEmail || "portal_user",
-      changes: { full_name, email, role, phone },
-    });
-
-    return Response.json({ success: true, data });
-  } catch (error) {
-    return Response.json(
-      { success: false, message: error.message || "Error creando usuario" },
-      { status: 500 }
-    );
+      full_name,
+      email: normalizedEmail,
+      role: role || "agent",
+      phone: phone || "",
+    }).select().single();
+ 
+    if (error) throw new Error(error.message);
+ 
+    // Also create in users table
+    await ctx.supabase.from("users").upsert({
+      email: normalizedEmail,
+      role: role || "agent",
+      client_id: ctx.clientId,
+      ...(hashedPassword ? { password: hashedPassword } : {}),
+    }, { onConflict: "email" });
+ 
+    return Response.json({ success: true, data: user });
+  } catch (err) {
+    return Response.json({ success: false, message: err.message }, { status: 500 });
   }
 }

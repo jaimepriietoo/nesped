@@ -1,31 +1,7 @@
-import { cookies } from "next/headers";
+import { clearAuthCookies } from "@/lib/server/auth";
 
 export async function POST() {
-  const cookieStore = await cookies();
-
-  cookieStore.set("nesped_auth", "", {
-    httpOnly: true,
-    secure: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 0,
-  });
-
-  cookieStore.set("nesped_client_id", "", {
-    httpOnly: true,
-    secure: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 0,
-  });
-
-  cookieStore.set("nesped_client_name", "", {
-    httpOnly: true,
-    secure: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 0,
-  });
+  await clearAuthCookies();
 
   return Response.json({ success: true });
 }

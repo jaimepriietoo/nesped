@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { getAdminContext } from "@/lib/server/auth";
 
 function getSupabase() {
   return createClient(
@@ -9,6 +10,14 @@ function getSupabase() {
 
 export async function PATCH(req) {
   try {
+    const admin = await getAdminContext();
+    if (!admin.ok) {
+      return Response.json(
+        { success: false, message: admin.message },
+        { status: admin.status || 401 }
+      );
+    }
+
     const supabase = getSupabase();
     const body = await req.json();
 

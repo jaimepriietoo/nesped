@@ -1,24 +1,19 @@
-import { cookies } from "next/headers";
-import { getSupabase } from "@/lib/supabase";
+import { getPortalContext } from "@/lib/portal-auth";
 
 export async function GET() {
   try {
-    const supabase = getSupabase();
-    const cookieStore = await cookies();
-    const auth = cookieStore.get("nesped_auth")?.value;
-    const clientId = cookieStore.get("nesped_client_id")?.value;
-
-    if (auth !== "ok") {
+    const ctx = await getPortalContext();
+    if (!ctx.ok) {
       return Response.json(
         { success: false, message: "No autorizado", data: [] },
         { status: 401 }
       );
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await ctx.supabase
       .from("calls")
       .select("*")
-      .eq("client_id", clientId)
+      .eq("client_id", ctx.clientId)
       .order("created_at", { ascending: false })
       .limit(50);
 

@@ -1,85 +1,25 @@
 import { headers } from "next/headers";
-import { createClient } from "@supabase/supabase-js";
-import { getStripe } from "@/lib/stripe";
-
-const stripe = getStripe();
-
-function getSupabase() {
-  return createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
-}
-
+import { stripe } from "@/lib/server/stripe-utils";
+import { processStripeWebhookEvent } from "@/lib/server/stripe-webhook";
+ 
 export async function POST(req) {
   const body = await req.text();
-  const headersList = await headers();
-  const signature = headersList.get("stripe-signature");
-
+  const sig = (await headers()).get("stripe-signature") || "";
+ 
   let event;
-
   try {
-    event = stripe.webhooks.constructEvent(
-      body,
-      signature,
-      process.env.STRIPE_WEBHOOK_SECRET
-    );
+    event = stripe.webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET);
   } catch (err) {
-    return new Response(`Webhook Error: ${err.message}`, { status: 400 });
+    return Response.json({ error: `Webhook error: ${err.message}` }, { status: 400 });
   }
-
-  const supabase = getSupabase();
-
+ 
   try {
-    if (event.type === "checkout.session.completed") {
-      const session = event.data.object;
-
-      const clientId =
-        session.client_reference_id || session.metadata?.clientId || null;
-      const plan = session.metadata?.plan || null;
-
-      if (clientId) {
-        await supabase
-          .from("clients")
-          .update({
-            stripe_customer_id: session.customer || null,
-            stripe_subscription_id: session.subscription || null,
-            stripe_price_id: plan,
-            plan: plan || "pro",
-            billing_status: "active",
-          })
-          .eq("id", clientId);
-      }
-    }
-
-    if (event.type === "customer.subscription.deleted") {
-      const subscription = event.data.object;
-
-      await supabase
-        .from("clients")
-        .update({
-          billing_status: "canceled",
-        })
-        .eq("stripe_subscription_id", subscription.id);
-    }
-
-    if (event.type === "customer.subscription.updated") {
-      const subscription = event.data.object;
-
-      await supabase
-        .from("clients")
-        .update({
-          billing_status: subscription.status || "active",
-        })
-        .eq("stripe_subscription_id", subscription.id);
-    }
-
+    await processStripeWebhookEvent(event);
     return Response.json({ received: true });
-  } catch (error) {
-    console.error("Stripe webhook handler error:", error);
-    return Response.json(
-      { success: false, message: "Webhook processing error" },
-      { status: 500 }
-    );
+  } catch (err) {
+    console.error("Webhook processing error:", err);
+    return Response.json({ error: err.message }, { status: 500 });
   }
 }
+ 
+export const config = { api: { bodyParser: false } };

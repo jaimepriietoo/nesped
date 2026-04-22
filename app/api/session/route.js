@@ -1,5 +1,5 @@
-import { cookies } from "next/headers";
 import { getSupabase } from "@/lib/supabase";
+import { getAuthenticatedUserContext } from "@/lib/server/auth";
 
 const supabase = getSupabase();
 
@@ -21,17 +21,15 @@ function mapClient(row) {
 }
 
 export async function GET() {
-  const cookieStore = await cookies();
-
-  const auth = cookieStore.get("nesped_auth")?.value;
-  const clientId = cookieStore.get("nesped_client_id")?.value || "demo";
-
-  if (auth !== "ok") {
+  const auth = await getAuthenticatedUserContext();
+  if (!auth.ok) {
     return Response.json({
       success: false,
       authenticated: false,
     });
   }
+
+  const clientId = auth.user.client_id;
 
   const { data, error } = await supabase
     .from("clients")

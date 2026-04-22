@@ -1,124 +1,70 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import {
+  ActionLink,
+  AppBackdrop,
+  FeatureCard,
+  GlassPanel,
+  MetricCard,
+  PlanCard,
+  SectionHeading,
+  SiteHeader,
+  SurfaceCard,
+} from "@/components/site-chrome";
 
-function StatCard({ label, value, glow = "from-blue-500/20 to-white/5" }) {
-  return (
-    <div className={`rounded-3xl border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-black/30 backdrop-blur-xl`}>
-      <div className="text-xs uppercase tracking-[0.18em] text-white/45">
-        {label}
-      </div>
-      <div className="mt-3 text-3xl font-semibold tracking-tight text-white">
-        {value}
-      </div>
-      <div className={`mt-4 h-1 rounded-full bg-gradient-to-r ${glow}`} />
-    </div>
-  );
-}
-
-function FeatureCard({ title, text }) {
-  return (
-    <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6 shadow-xl shadow-black/30 backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:border-white/20 hover:bg-white/[0.06]">
-      <div className="text-xl font-semibold text-white">{title}</div>
-      <p className="mt-3 text-sm leading-7 text-white/60">{text}</p>
-    </div>
-  );
-}
-
-function PricingCard({
-  title,
-  price,
-  subtitle,
-  features,
-  cta,
-  href,
-  highlighted = false,
-}) {
-  return (
-    <div
-      className={`rounded-[30px] border p-7 shadow-2xl backdrop-blur-xl transition duration-300 hover:-translate-y-1 ${
-        highlighted
-          ? "border-white/25 bg-white/[0.08] shadow-white/10"
-          : "border-white/10 bg-white/[0.04] shadow-black/30"
-      }`}
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="text-xl font-semibold text-white">{title}</div>
-          <div className="mt-2 text-sm text-white/55">{subtitle}</div>
-        </div>
-        {highlighted ? (
-          <div className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-black">
-            Recomendado
-          </div>
-        ) : null}
-      </div>
-
-      <div className="mt-6 flex items-end gap-2">
-        <div className="text-5xl font-semibold tracking-tight text-white">
-          {price}
-        </div>
-        <div className="pb-2 text-sm text-white/45">/ mes</div>
-      </div>
-
-      <div className="mt-6 space-y-3">
-        {features.map((item) => (
-          <div key={item} className="flex items-start gap-3 text-sm text-white/70">
-            <span className="mt-1 h-2 w-2 rounded-full bg-emerald-400" />
-            <span>{item}</span>
-          </div>
-        ))}
-      </div>
-
-      <Link
-        href={href}
-        className={`mt-8 inline-flex w-full items-center justify-center rounded-2xl px-5 py-3 text-sm font-semibold transition ${
-          highlighted
-            ? "bg-white text-black hover:bg-white/90"
-            : "border border-white/15 text-white hover:bg-white/5"
-        }`}
-      >
-        {cta}
-      </Link>
-    </div>
-  );
+function formatCount(value) {
+  return new Intl.NumberFormat("es-ES").format(Number(value || 0));
 }
 
 export default function NespedLanding() {
   const [clients, setClients] = useState([]);
   const [leads, setLeads] = useState([]);
   const [telefonoDemo, setTelefonoDemo] = useState("");
-  const [selectedClientId, setSelectedClientId] = useState("demo");
+  const [selectedClientId, setSelectedClientId] = useState("");
   const [loadingCall, setLoadingCall] = useState(false);
   const [callStatus, setCallStatus] = useState("");
 
-  async function loadClients() {
-    try {
-      const res = await fetch("/api/clients", { cache: "no-store" });
-      const json = await res.json();
-      const data = Array.isArray(json.data) ? json.data : [];
-      setClients(data);
+  useEffect(() => {
+    let cancelled = false;
 
-      if (data.length > 0 && !selectedClientId) {
-        setSelectedClientId(data[0].id);
+    async function loadSnapshot() {
+      try {
+        const [clientsRes, leadsRes] = await Promise.all([
+          fetch("/api/clients", { cache: "no-store" }),
+          fetch("/api/leads", { cache: "no-store" }),
+        ]);
+
+        const [clientsJson, leadsJson] = await Promise.all([
+          clientsRes.json().catch(() => ({})),
+          leadsRes.json().catch(() => ({})),
+        ]);
+
+        if (cancelled) return;
+
+        const clientRows = Array.isArray(clientsJson?.data) ? clientsJson.data : [];
+        const leadRows = Array.isArray(leadsJson?.data) ? leadsJson.data : [];
+
+        setClients(clientRows);
+        setLeads(leadRows);
+
+        if (!selectedClientId && clientRows[0]?.id) {
+          setSelectedClientId(clientRows[0].id);
+        }
+      } catch (error) {
+        console.error(error);
+        if (!cancelled) {
+          setClients([]);
+          setLeads([]);
+        }
       }
-    } catch (err) {
-      console.error(err);
-      setClients([]);
     }
-  }
 
-  async function loadLeads() {
-    try {
-      const res = await fetch("/api/leads", { cache: "no-store" });
-      const json = await res.json();
-      setLeads(Array.isArray(json.data) ? json.data : []);
-    } catch (err) {
-      console.error(err);
-      setLeads([]);
-    }
-  }
+    loadSnapshot();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedClientId]);
 
   async function hacerLlamada() {
     try {
@@ -132,546 +78,389 @@ export default function NespedLanding() {
         },
         body: JSON.stringify({
           telefono: telefonoDemo,
-          client_id: selectedClientId,
+          client_id: selectedClientId || clients[0]?.id || "demo",
         }),
       });
 
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
 
       if (!res.ok || !json.success) {
-        setCallStatus(json.message || "No se pudo lanzar la llamada.");
+        setCallStatus(json.message || "No se pudo lanzar la llamada de prueba.");
         return;
       }
 
-      setCallStatus("Llamada lanzada correctamente. Revisa tu móvil.");
-    } catch (err) {
-      console.error(err);
-      setCallStatus("Error técnico al lanzar la llamada.");
+      setCallStatus("Llamada lanzada. Revisa tu movil para probar la experiencia real.");
+    } catch (error) {
+      console.error(error);
+      setCallStatus("Error tecnico al lanzar la llamada.");
     } finally {
       setLoadingCall(false);
     }
   }
 
-  useEffect(() => {
-    loadClients();
-    loadLeads();
-  }, []);
-
   const stats = useMemo(() => {
-    const totalClients = clients.length;
-    const totalLeads = leads.length;
     const activeCities = new Set(
       leads.map((lead) => lead.ciudad || lead.city).filter(Boolean)
     ).size;
 
     return [
-      { label: "Clientes activos", value: totalClients || "0" },
-      { label: "Leads capturados", value: totalLeads || "0" },
-      { label: "Ciudades activas", value: activeCities || "0" },
-      { label: "Disponibilidad", value: "24/7" },
+      {
+        label: "Clientes activos",
+        value: formatCount(clients.length),
+        detail: "Instancias operando con configuracion propia",
+      },
+      {
+        label: "Leads capturados",
+        value: formatCount(leads.length),
+        detail: "Pipeline comercial vivo y visible",
+      },
+      {
+        label: "Ciudades activas",
+        value: formatCount(activeCities),
+        detail: "Cobertura comercial distribuida",
+      },
+      {
+        label: "Disponibilidad",
+        value: "24/7",
+        detail: "Atencion y captacion siempre encendidas",
+      },
     ];
   }, [clients, leads]);
 
   const selectedClient =
-    clients.find((client) => client.id === selectedClientId) || clients[0];
+    clients.find((client) => client.id === selectedClientId) || clients[0] || null;
+
+  const qualifiedLeads = leads.filter((lead) =>
+    ["qualified", "won"].includes(String(lead.status || "").toLowerCase())
+  ).length;
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-[#030303] text-white">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.22),transparent_28%),radial-gradient(circle_at_top_right,rgba(16,185,129,0.14),transparent_24%),radial-gradient(circle_at_bottom,rgba(255,255,255,0.05),transparent_35%)]" />
-      <div className="pointer-events-none fixed inset-0 opacity-30 [background-image:linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] [background-size:36px_36px]" />
+    <div className="app-shell">
+      <AppBackdrop />
+      <div className="page-shell">
+        <SiteHeader
+          links={[
+            { href: "#producto", label: "Producto" },
+            { href: "#senal", label: "Senal" },
+            { href: "#planes", label: "Planes" },
+            { href: "#demo", label: "Demo" },
+          ]}
+          secondaryCta={{ href: "/pricing", label: "Pricing" }}
+          primaryCta={{ href: "/portal", label: "Portal clientes" }}
+        />
 
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-black/45 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-lg font-bold text-black shadow-2xl">
-              N
-            </div>
-            <div>
-              <div className="text-lg font-semibold tracking-tight">NESPED</div>
-              <div className="text-xs text-white/45">
-                Enterprise Voice AI Platform
-              </div>
-            </div>
-          </div>
-
-          <nav className="hidden gap-8 text-sm text-white/65 md:flex">
-            <a href="#producto" className="transition hover:text-white">
-              Producto
-            </a>
-            <a href="#metricas" className="transition hover:text-white">
-              Métricas
-            </a>
-            <a href="#planes" className="transition hover:text-white">
-              Planes
-            </a>
-            <a href="#demo" className="transition hover:text-white">
-              Demo
-            </a>
-            <a href="#faq" className="transition hover:text-white">
-              FAQ
-            </a>
-          </nav>
-
-          <div className="flex items-center gap-3">
-            <Link
-              href="/pricing"
-              className="hidden rounded-2xl border border-white/15 px-4 py-2 text-sm font-medium transition hover:bg-white/5 md:inline-flex"
-            >
-              Pricing
-            </Link>
-            <Link
-              href="/portal"
-              className="rounded-2xl bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-white/90"
-            >
-              Portal clientes
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      <main className="relative">
-        <section className="mx-auto max-w-7xl px-6 pb-20 pt-20 md:pb-28 md:pt-28">
-          <div className="grid items-center gap-14 md:grid-cols-[1.08fr_0.92fr]">
-            <div>
-              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.22em] text-white/60">
-                <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                Automatización de llamadas con IA
+        <main className="content-frame">
+          <section className="hero-block hero-grid">
+            <div className="stack-24 hero-spotlight">
+              <div className="eyebrow">
+                <span className="eyebrow-dot" />
+                Revenue OS para voz con IA
               </div>
 
-              <h1 className="max-w-4xl text-5xl font-semibold tracking-tight md:text-7xl">
-                La capa de voz con IA que convierte llamadas en clientes.
-              </h1>
-
-              <p className="mt-6 max-w-2xl text-lg leading-8 text-white/65 md:text-xl">
-                NESPED automatiza llamadas, atiende en tiempo real, capta leads,
-                los organiza por cliente y da una visibilidad brutal con portales,
-                métricas y control comercial centralizado.
-              </p>
-
-              <div className="mt-8 flex flex-wrap gap-4">
-                <a
-                  href="#demo"
-                  className="rounded-2xl bg-white px-6 py-3 text-sm font-semibold text-black shadow-2xl shadow-white/10 transition hover:bg-white/90"
-                >
-                  Probar llamada en vivo
-                </a>
-
-                <Link
-                  href="/portal"
-                  className="rounded-2xl border border-white/15 px-6 py-3 text-sm font-semibold transition hover:bg-white/5"
-                >
-                  Entrar al portal
-                </Link>
-
-                <Link
-                  href="/pricing"
-                  className="rounded-2xl border border-white/15 px-6 py-3 text-sm font-semibold transition hover:bg-white/5"
-                >
-                  Ver planes
-                </Link>
+              <div className="stack-18">
+                <h1 className="display-title">
+                  Una capa de voz que suena <span className="serif">humana</span>
+                  <span className="accent">y convierte mejor que un simple bot.</span>
+                </h1>
+                <p className="lede">
+                  Nesped une llamada, captacion, seguimiento, cobro y visibilidad
+                  operativa en una experiencia premium que tus clientes sienten como
+                  producto serio desde el primer segundo.
+                </p>
               </div>
 
-              <div className="mt-10 grid max-w-2xl grid-cols-2 gap-4 md:grid-cols-4">
-                {stats.map((item, index) => (
-                  <StatCard
+              <div className="flex flex-wrap gap-3">
+                <ActionLink href="#demo" variant="primary">
+                  Probar llamada real
+                </ActionLink>
+                <ActionLink href="/pricing" variant="secondary">
+                  Ver planes y checkout
+                </ActionLink>
+              </div>
+
+              <div className="section-grid md:grid-cols-2">
+                {stats.map((item) => (
+                  <MetricCard
                     key={item.label}
                     label={item.label}
                     value={item.value}
-                    glow={
-                      index % 2 === 0
-                        ? "from-blue-500/30 to-white/5"
-                        : "from-emerald-500/30 to-white/5"
-                    }
+                    detail={item.detail}
                   />
                 ))}
               </div>
             </div>
 
-            <div className="relative">
-              <div className="absolute -inset-6 rounded-[36px] bg-gradient-to-br from-blue-500/20 to-emerald-500/10 blur-3xl" />
-              <div className="relative rounded-[32px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-black/50 backdrop-blur-2xl">
-                <div className="rounded-[28px] border border-white/10 bg-black/50 p-6">
-                  <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                    <div>
-                      <div className="text-sm text-white/45">Vista ejecutiva</div>
-                      <div className="mt-1 text-2xl font-semibold">
-                        NESPED Control Layer
-                      </div>
-                    </div>
-                    <div className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs text-emerald-300">
-                      Online
-                    </div>
-                  </div>
-
-                  <div className="mt-5 space-y-4">
-                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                      <div className="text-sm text-white/45">Flujo</div>
-                      <div className="mt-2 text-sm leading-7 text-white/70">
-                        Llamada → IA en tiempo real → lead capturado → CRM →
-                        dashboard privado → seguimiento comercial.
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                      <div className="text-sm text-white/45">Multi-cliente</div>
-                      <div className="mt-2 text-sm leading-7 text-white/70">
-                        Cada empresa tiene su propio prompt, webhook, branding,
-                        usuarios, métricas y portal privado.
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                      <div className="text-sm text-white/45">Casos ideales</div>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {[
-                          "Clínicas",
-                          "Inmobiliarias",
-                          "Seguros",
-                          "Energía",
-                          "B2B",
-                          "Atención al cliente",
-                        ].map((tag) => (
-                          <span
-                            key={tag}
-                            className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/70"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                      <div className="text-sm text-white/45">Stack</div>
-                      <div className="mt-2 text-sm leading-7 text-white/70">
-                        OpenAI Realtime · Twilio · Supabase · Vercel · Railway ·
-                        Stripe · HubSpot · n8n
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl border border-white/10 bg-gradient-to-r from-blue-500/10 to-emerald-500/10 p-4">
-                      <div className="text-sm text-white/45">Lo que consigue</div>
-                      <div className="mt-2 text-sm leading-7 text-white/80">
-                        Menos llamadas perdidas, más leads cualificados y una
-                        experiencia premium para tus clientes.
-                      </div>
-                    </div>
-                  </div>
+            <GlassPanel className="stack-24">
+              <div className="stack-12">
+                <div className="subtle-label">Vista ejecutiva</div>
+                <div className="section-title" style={{ fontSize: "2.3rem" }}>
+                  Control premium para cada cliente.
                 </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section id="producto" className="mx-auto max-w-7xl px-6 py-8 md:py-14">
-          <div className="mb-8">
-            <div className="text-sm uppercase tracking-[0.2em] text-blue-300">
-              Producto
-            </div>
-            <h2 className="mt-2 text-3xl font-semibold tracking-tight md:text-5xl">
-              Una plataforma de llamadas con IA pensada para impresionar
-            </h2>
-          </div>
-
-          <div className="grid gap-5 md:grid-cols-3">
-            <FeatureCard
-              title="Recepcionista IA 24/7"
-              text="Atiende llamadas en tiempo real con voz natural y evita perder oportunidades por no responder."
-            />
-            <FeatureCard
-              title="Captura y calificación"
-              text="Recoge nombre, teléfono, necesidad y contexto comercial para que ventas actúe mucho más rápido."
-            />
-            <FeatureCard
-              title="Infraestructura multi-cliente"
-              text="Cada empresa opera con su propia configuración, identidad, usuarios, panel y flujo comercial."
-            />
-          </div>
-        </section>
-
-        <section id="metricas" className="mx-auto max-w-7xl px-6 py-10 md:py-16">
-          <div className="rounded-[34px] border border-white/10 bg-white/[0.03] p-8 shadow-2xl shadow-black/40">
-            <div className="mb-8">
-              <div className="text-sm uppercase tracking-[0.2em] text-emerald-300">
-                Visibilidad
-              </div>
-              <h2 className="mt-2 text-3xl font-semibold tracking-tight md:text-5xl">
-                Tu cliente ve una plataforma que lo dice absolutamente todo
-              </h2>
-            </div>
-
-            <div className="grid gap-5 md:grid-cols-4">
-              <StatCard label="Llamadas" value="Tiempo real" />
-              <StatCard label="Leads" value="Cualificados" />
-              <StatCard label="Conversión" value="Por cliente" />
-              <StatCard label="Actividad" value="24/7" />
-            </div>
-
-            <div className="mt-8 grid gap-5 md:grid-cols-3">
-              <FeatureCard
-                title="Resumen por llamada"
-                text="Cada llamada puede mostrar estado, duración, lead capturado, transcripción y resumen comercial."
-              />
-              <FeatureCard
-                title="Métricas por cliente"
-                text="Conversión, llamadas totales, duración media, actividad y visión completa del rendimiento."
-              />
-              <FeatureCard
-                title="Portal premium"
-                text="Una interfaz limpia, potente y visual para que cada cliente diga: esto es serio."
-              />
-            </div>
-          </div>
-        </section>
-
-        <section id="casos" className="mx-auto max-w-7xl px-6 py-10 md:py-16">
-          <div className="rounded-[34px] border border-white/10 bg-white/[0.03] p-8 shadow-2xl shadow-black/40">
-            <div className="mb-8">
-              <div className="text-sm uppercase tracking-[0.2em] text-blue-300">
-                Casos de uso
-              </div>
-              <h2 className="mt-2 text-3xl font-semibold tracking-tight md:text-5xl">
-                Diseñado para negocios con volumen de llamadas
-              </h2>
-            </div>
-
-            <div className="grid gap-5 md:grid-cols-3">
-              <FeatureCard
-                title="Clínicas"
-                text="Recepción de pacientes, captura de datos y gestión de solicitudes de cita o tratamiento."
-              />
-              <FeatureCard
-                title="Inmobiliarias"
-                text="Filtrado de compradores, propietarios e interesados para priorizar oportunidades reales."
-              />
-              <FeatureCard
-                title="Empresas de servicios"
-                text="Atención de incidencias, nuevos leads y pre-cualificación antes de pasar a comercial."
-              />
-            </div>
-          </div>
-        </section>
-
-        <section id="planes" className="mx-auto max-w-7xl px-6 py-10 md:py-16">
-          <div className="mb-8">
-            <div className="text-sm uppercase tracking-[0.2em] text-emerald-300">
-              Facturación
-            </div>
-            <h2 className="mt-2 text-3xl font-semibold tracking-tight md:text-5xl">
-              Planes para contratar y escalar
-            </h2>
-          </div>
-
-          <div className="grid gap-5 lg:grid-cols-3">
-            <PricingCard
-              title="Starter"
-              price="97€"
-              subtitle="Para validar el sistema"
-              features={[
-                "Recepción IA básica",
-                "Captura de leads",
-                "Dashboard inicial",
-                "Soporte estándar",
-              ]}
-              cta="Empezar"
-              href="/pricing"
-            />
-            <PricingCard
-              title="Pro"
-              price="197€"
-              subtitle="La opción más sólida para vender"
-              highlighted
-              features={[
-                "IA más avanzada",
-                "Portal de cliente",
-                "Métricas y resúmenes",
-                "Integraciones y soporte prioritario",
-              ]}
-              cta="Contratar Pro"
-              href="/pricing"
-            />
-            <PricingCard
-              title="Enterprise"
-              price="Custom"
-              subtitle="Para despliegues potentes"
-              features={[
-                "Multi-cliente avanzado",
-                "Personalización por empresa",
-                "Automatizaciones premium",
-                "Onboarding dedicado",
-              ]}
-              cta="Hablar con ventas"
-              href="/pricing"
-            />
-          </div>
-        </section>
-
-        <section id="demo" className="mx-auto max-w-7xl px-6 py-10 md:py-16">
-          <div className="rounded-[34px] border border-white/10 bg-gradient-to-br from-white/[0.05] to-white/[0.02] p-8 shadow-2xl shadow-black/40 backdrop-blur-xl">
-            <div className="grid gap-8 md:grid-cols-[1.15fr_0.85fr] md:items-center">
-              <div>
-                <div className="text-sm uppercase tracking-[0.2em] text-emerald-300">
-                  Demo interactiva
-                </div>
-                <h2 className="mt-3 text-3xl font-semibold tracking-tight md:text-5xl">
-                  Recibe una llamada en directo.
-                </h2>
-                <p className="mt-4 max-w-2xl text-lg text-white/65">
-                  Elige una configuración de cliente, introduce tu número y deja
-                  que NESPED te muestre cómo suena una IA preparada para captar
-                  oportunidades comerciales.
+                <p className="support-copy">
+                  Branding propio, llamadas en tiempo real, seguimiento por lead,
+                  automatizaciones y cobro en una sola experiencia.
                 </p>
-
-                <div className="mt-6 rounded-[24px] border border-white/10 bg-black/20 p-5">
-                  <div className="text-sm text-white/45">Cliente seleccionado</div>
-                  <div className="mt-2 text-2xl font-semibold">
-                    {selectedClient?.name || "Cargando..."}
-                  </div>
-                  <div className="mt-2 text-sm text-white/60">
-                    {selectedClient?.tagline || "Sin descripción"}
-                  </div>
-                </div>
               </div>
 
-              <div className="rounded-[28px] border border-white/10 bg-black/40 p-6">
-                <label className="mb-3 block text-sm text-white/60">Cliente</label>
-                <select
-                  value={selectedClientId}
-                  onChange={(e) => setSelectedClientId(e.target.value)}
-                  className="mb-4 w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
-                >
-                  {clients.map((client) => (
-                    <option key={client.id} value={client.id}>
-                      {client.name} ({client.id})
-                    </option>
-                  ))}
-                </select>
+              <div className="section-grid">
+                <SurfaceCard className="stack-12">
+                  <div className="subtle-label">Flujo</div>
+                  <div className="text-2xl font-semibold tracking-tight text-white">
+                    Llamada → IA → lead → CRM → cobro → portal
+                  </div>
+                  <p className="support-copy">
+                    Cada etapa queda conectada con memoria comercial, acciones
+                    recomendadas y visibilidad real para tu cliente final.
+                  </p>
+                </SurfaceCard>
 
-                <label className="mb-3 block text-sm text-white/60">
-                  Teléfono para demo
-                </label>
+                <SurfaceCard className="stack-12">
+                  <div className="subtle-label">Senal comercial</div>
+                  <div className="flex flex-wrap gap-3">
+                    <span className="data-chip">Leads cualificados: {formatCount(qualifiedLeads)}</span>
+                    <span className="data-chip">Portal privado por cliente</span>
+                    <span className="data-chip">Cobro y seguimiento integrados</span>
+                  </div>
+                </SurfaceCard>
 
-                <div className="flex flex-col gap-3">
-                  <input
-                    type="text"
-                    placeholder="+346XXXXXXXX"
-                    value={telefonoDemo}
-                    onChange={(e) => setTelefonoDemo(e.target.value)}
-                    className="rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none placeholder:text-white/25"
-                  />
+                <SurfaceCard className="stack-12">
+                  <div className="subtle-label">Casos ideales</div>
+                  <div className="flex flex-wrap gap-3">
+                    {[
+                      "Clinicas",
+                      "Inmobiliarias",
+                      "Seguros",
+                      "Servicios",
+                      "Despachos",
+                      "Ventas consultivas",
+                    ].map((item) => (
+                      <span key={item} className="data-chip">
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                </SurfaceCard>
+              </div>
+            </GlassPanel>
+          </section>
+
+          <section id="producto" className="section-block stack-24">
+            <SectionHeading
+              eyebrow="Producto"
+              title="Una experiencia que vende mejor porque parece producto de verdad."
+              description="No es una demo bonita encima de automatizaciones sueltas. Es una capa coherente de voz, CRM, seguimiento y revenue pensada para que el cliente note orden, control y calidad."
+            />
+
+            <div className="feature-grid">
+              <FeatureCard
+                meta="Conversacion"
+                title="Voz natural con memoria comercial"
+                text="La llamada no se queda en un audio sin contexto. Se convierte en lead util, resumen accionable y siguiente paso recomendado."
+              />
+              <FeatureCard
+                meta="Visibilidad"
+                title="Portal premium por cliente"
+                text="Metricas, pipeline, historial, automations y facturacion presentados con el nivel visual que esperas de un SaaS serio."
+              />
+              <FeatureCard
+                meta="Operacion"
+                title="Una sola capa para captacion y cierre"
+                text="WhatsApp, seguimiento, scoring, next-best-action y cobro viven dentro del mismo sistema, no repartidos en parches."
+              />
+            </div>
+          </section>
+
+          <section id="senal" className="section-block stack-24">
+            <SectionHeading
+              eyebrow="Senal"
+              title="Indicadores que un cliente entiende al instante."
+              description="El producto transmite control porque cada numero tiene contexto, cada lead tiene estado y cada accion deja una huella visible."
+            />
+
+            <div className="feature-grid">
+              <SurfaceCard className="stack-12">
+                <div className="subtle-label">Captacion</div>
+                <div className="text-3xl font-semibold tracking-tight text-white">
+                  {formatCount(leads.length)} leads visibles
+                </div>
+                <p className="support-copy">
+                  Pipeline vivo con estado, responsable, valor estimado y memoria IA.
+                </p>
+              </SurfaceCard>
+              <SurfaceCard className="stack-12">
+                <div className="subtle-label">Orquestacion</div>
+                <div className="text-3xl font-semibold tracking-tight text-white">
+                  Seguimiento multicanal
+                </div>
+                <p className="support-copy">
+                  SMS, WhatsApp, llamadas y recomendaciones de siguiente accion dentro del mismo panel.
+                </p>
+              </SurfaceCard>
+              <SurfaceCard className="stack-12">
+                <div className="subtle-label">Revenue</div>
+                <div className="text-3xl font-semibold tracking-tight text-white">
+                  Checkout y portal de billing
+                </div>
+                <p className="support-copy">
+                  Cobro directo, plan activo y configuracion del acceso del cliente tras el pago.
+                </p>
+              </SurfaceCard>
+            </div>
+          </section>
+
+          <section id="planes" className="section-block stack-24">
+            <SectionHeading
+              eyebrow="Planes"
+              title="Planes listos para vender, cobrar y escalar."
+              description="Pensados para que puedas activar desde la web publica o desde el portal sin romper el flujo comercial."
+            />
+
+            <div className="feature-grid">
+              <PlanCard
+                name="Starter"
+                price="97 EUR"
+                billing="mensual"
+                subtitle="Entrada rapida para validar experiencia y captacion."
+                features={[
+                  "Recepcion IA basica",
+                  "Captura de leads",
+                  "Resumen por llamada",
+                  "Panel inicial",
+                ]}
+                href="/api/stripe/public-checkout?plan=starter"
+                cta="Empezar con Starter"
+              />
+              <PlanCard
+                name="Pro"
+                price="197 EUR"
+                billing="mensual"
+                subtitle="La version mas seria para mostrar valor y cerrar clientes."
+                highlighted
+                features={[
+                  "Voz mas natural",
+                  "Portal premium",
+                  "Metricas y resúmenes",
+                  "Soporte prioritario",
+                ]}
+                href="/api/stripe/public-checkout?plan=pro"
+                cta="Contratar Pro"
+              />
+              <PlanCard
+                name="Enterprise"
+                price="Custom"
+                billing="arquitectura a medida"
+                subtitle="Despliegues multi-cliente, integraciones y rollouts premium."
+                features={[
+                  "Branding avanzado",
+                  "Automatizaciones custom",
+                  "Mayor control operativo",
+                  "Onboarding dedicado",
+                ]}
+                href="mailto:ventas@nesped.com?subject=Plan%20Enterprise%20Nesped"
+                cta="Hablar con ventas"
+              />
+            </div>
+          </section>
+
+          <section id="demo" className="section-block">
+            <GlassPanel className="stack-24">
+              <SectionHeading
+                eyebrow="Demo real"
+                title="Lanza una llamada y escucha la experiencia completa."
+                description="Selecciona un cliente, introduce tu telefono y prueba la voz, el tono y el flujo de captura de lead tal y como los percibira un usuario real."
+              />
+
+              <div className="hero-grid">
+                <SurfaceCard className="stack-18">
+                  <div className="subtle-label">Cliente activo</div>
+                  <div className="text-3xl font-semibold tracking-tight text-white">
+                    {selectedClient?.name || "Cargando cliente"}
+                  </div>
+                  <p className="support-copy">
+                    {selectedClient?.tagline ||
+                      "Usa esta demo para escuchar una conversacion de voz con tono comercial y memoria de lead."}
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    <span className="data-chip">Instancia: {selectedClient?.id || "demo"}</span>
+                    <span className="data-chip">Twilio listo</span>
+                    <span className="data-chip">Realtime IA</span>
+                  </div>
+                </SurfaceCard>
+
+                <SurfaceCard className="stack-18">
+                  <div className="stack-12">
+                    <label className="subtle-label">Cliente</label>
+                    <select
+                      value={selectedClientId}
+                      onChange={(e) => setSelectedClientId(e.target.value)}
+                      className="premium-select"
+                    >
+                      {clients.length === 0 ? (
+                        <option value="demo">demo</option>
+                      ) : (
+                        clients.map((client) => (
+                          <option key={client.id} value={client.id}>
+                            {client.name} ({client.id})
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+
+                  <div className="stack-12">
+                    <label className="subtle-label">Telefono para demo</label>
+                    <input
+                      type="text"
+                      placeholder="+346XXXXXXXX"
+                      value={telefonoDemo}
+                      onChange={(e) => setTelefonoDemo(e.target.value)}
+                      className="premium-input"
+                    />
+                  </div>
 
                   <button
                     onClick={hacerLlamada}
                     disabled={loadingCall}
-                    className="rounded-2xl bg-white px-5 py-4 text-sm font-semibold text-black transition hover:bg-white/90 disabled:opacity-60"
+                    className="button-primary"
+                    type="button"
                   >
-                    {loadingCall ? "Lanzando..." : "Probar llamada en vivo"}
+                    {loadingCall ? "Lanzando llamada..." : "Probar llamada en vivo"}
                   </button>
 
-                  {callStatus && (
-                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/70">
+                  {callStatus ? (
+                    <div className="status-pill info" style={{ borderRadius: "20px", padding: "0.95rem 1rem" }}>
                       {callStatus}
                     </div>
+                  ) : (
+                    <div className="support-copy">
+                      La demo reproduce una llamada real con voz, deteccion de necesidad y captura del lead.
+                    </div>
                   )}
-                </div>
+                </SurfaceCard>
+              </div>
+            </GlassPanel>
+          </section>
 
-                <div className="mt-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-200">
-                  Demo orientada a mostrar la experiencia real del sistema con
-                  captura de lead, voz natural y flujo comercial.
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+          <section className="section-block">
+            <GlassPanel className="stack-24">
+              <SectionHeading
+                eyebrow="Siguiente paso"
+                title="Si quieres venderlo como producto serio, ensenalo como producto serio."
+                description="El mejor argumento comercial no es explicarlo. Es abrir la plataforma, cobrar un plan y dejar al cliente viendo una experiencia impecable de punta a punta."
+              />
 
-        <section className="mx-auto max-w-7xl px-6 py-10 md:py-16">
-          <div className="grid gap-5 md:grid-cols-2">
-            <div className="rounded-[28px] border border-white/10 bg-white/[0.03] p-8">
-              <div className="text-sm uppercase tracking-[0.2em] text-white/45">
-                Qué ve tu cliente
+              <div className="flex flex-wrap gap-3">
+                <ActionLink href="/pricing" variant="primary">
+                  Ir a pricing
+                </ActionLink>
+                <ActionLink href="/portal" variant="secondary">
+                  Entrar al portal
+                </ActionLink>
               </div>
-              <h3 className="mt-3 text-3xl font-semibold">
-                Portal privado con datos reales
-              </h3>
-              <p className="mt-4 text-sm leading-7 text-white/60">
-                Cada cliente dispone de su propio portal con branding, métricas,
-                historial de llamadas, leads, actividad y facturación.
-              </p>
-              <div className="mt-6">
-                <Link
-                  href="/portal"
-                  className="inline-flex rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black hover:bg-white/90"
-                >
-                  Ver portal del cliente
-                </Link>
-              </div>
-            </div>
-
-            <div className="rounded-[28px] border border-white/10 bg-white/[0.03] p-8">
-              <div className="text-sm uppercase tracking-[0.2em] text-white/45">
-                Qué controlas tú
-              </div>
-              <h3 className="mt-3 text-3xl font-semibold">
-                Admin centralizado de toda la plataforma
-              </h3>
-              <p className="mt-4 text-sm leading-7 text-white/60">
-                Gestiona clientes, usuarios, prompts, webhooks, llamadas,
-                facturación y configuración desde un único panel interno.
-              </p>
-              <div className="mt-6">
-                <Link
-                  href="/admin/overview"
-                  className="inline-flex rounded-2xl border border-white/15 px-5 py-3 text-sm font-semibold hover:bg-white/5"
-                >
-                  Ir al panel admin
-                </Link>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section id="faq" className="mx-auto max-w-7xl px-6 pb-20 pt-8 md:pb-28">
-          <div className="rounded-[34px] border border-white/10 bg-white/[0.03] p-8 shadow-2xl shadow-black/40">
-            <div className="mb-8">
-              <div className="text-sm uppercase tracking-[0.2em] text-blue-300">
-                FAQ
-              </div>
-              <h2 className="mt-2 text-3xl font-semibold tracking-tight md:text-5xl">
-                Preguntas frecuentes
-              </h2>
-            </div>
-
-            <div className="grid gap-4">
-              {[
-                {
-                  q: "¿La IA habla en tiempo real?",
-                  a: "Sí. La llamada se atiende en tiempo real con voz natural y flujo conversacional orientado a captación.",
-                },
-                {
-                  q: "¿Cada empresa puede tener su propio prompt?",
-                  a: "Sí. Cada cliente puede tener su propio tono, prompt, webhook, número y branding.",
-                },
-                {
-                  q: "¿Se integra con CRM?",
-                  a: "Sí. Puede enviar leads a HubSpot y a cualquier automatización compatible vía webhook.",
-                },
-                {
-                  q: "¿Es multi-cliente?",
-                  a: "Sí. La plataforma está preparada para gestionar varios clientes con panel y configuración independiente.",
-                },
-              ].map((item) => (
-                <div
-                  key={item.q}
-                  className="rounded-[24px] border border-white/10 bg-black/20 p-6"
-                >
-                  <div className="text-lg font-semibold">{item.q}</div>
-                  <p className="mt-3 text-sm leading-7 text-white/60">{item.a}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-      </main>
+            </GlassPanel>
+          </section>
+        </main>
+      </div>
     </div>
   );
 }

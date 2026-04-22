@@ -1,9 +1,18 @@
 import { getSupabase } from "@/lib/supabase";
+import { getAdminContext } from "@/lib/server/auth";
 
 const supabase = getSupabase();
 
 export async function GET() {
   try {
+    const admin = await getAdminContext();
+    if (!admin.ok) {
+      return Response.json(
+        { success: false, message: admin.message, data: [] },
+        { status: admin.status || 401 }
+      );
+    }
+
     const { data, error } = await supabase
       .from("calls")
       .select("*")

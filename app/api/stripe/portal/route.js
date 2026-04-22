@@ -1,61 +1,54 @@
-import { createClient } from "@supabase/supabase-js";
-import { getStripe } from "@/lib/stripe";
+import { NextResponse } from "next/server";
+import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { BASE_URL, stripe } from "@/lib/server/stripe-utils";
 
-function getSupabase() {
-  return createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
-}
-
-export async function POST(req) {
+export async function POST() {
   try {
-    const stripe = getStripe();
-    const body = await req.json();
-    const { clientId } = body;
+    const ctx = await getPortalContext();
 
-    if (!clientId) {
-      return Response.json(
-        { success: false, message: "Falta clientId" },
-        { status: 400 }
+    if (!ctx.ok) {
+      return NextResponse.json(
+        { success: false, message: ctx.message },
+        { status: 401 }
       );
     }
 
-    const supabase = getSupabase();
+    if (!hasRole(ctx.role, ["owner", "admin", "manager"])) {
+      return NextResponse.json(
+        { success: false, message: "Sin permisos para abrir billing" },
+        { status: 403 }
+      );
+    }
 
-    const { data: clientRow, error } = await supabase
+    const { data: client, error } = await ctx.supabase
       .from("clients")
       .select("stripe_customer_id")
-      .eq("id", clientId)
+      .eq("id", ctx.clientId)
       .single();
 
-    if (error || !clientRow?.stripe_customer_id) {
-      return Response.json(
+    if (error || !client?.stripe_customer_id) {
+      return NextResponse.json(
         {
           success: false,
-          message: "Cliente sin stripe_customer_id en Supabase",
+          message: error?.message || "Cliente sin stripe_customer_id",
         },
         { status: 400 }
       );
     }
 
     const session = await stripe.billingPortal.sessions.create({
-      customer: clientRow.stripe_customer_id,
-      return_url: `${process.env.NEXT_PUBLIC_APP_URL}/portal`,
+      customer: client.stripe_customer_id,
+      return_url: `${BASE_URL}/portal`,
     });
 
-    return Response.json({
+    return NextResponse.json({
       success: true,
       url: session.url,
     });
   } catch (error) {
-    console.error("Stripe portal error:", error);
-
-    return Response.json(
-      {
-        success: false,
-        message: error.message || "Error creando portal de facturación",
-      },
+    console.error("POST /api/stripe/portal error:", error);
+    return NextResponse.json(
+      { success: false, message: "No se pudo abrir el portal de facturacion" },
       { status: 500 }
     );
   }

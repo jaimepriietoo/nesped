@@ -1,0 +1,191 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+ 
+datasource db {
+  provider = "sqlite"
+}
+ 
+model LeadEvent {
+  id         String   @id @default(cuid())
+  lead_id    String?
+  phone      String?
+  type       String
+  message    String
+  created_at DateTime @default(now())
+ 
+  @@index([lead_id])
+  @@index([phone])
+  @@index([type])
+}
+ 
+model Payment {
+  id         String   @id @default(cuid())
+  amount     Float
+  status     String
+  lead_id    String?
+  client_id  String?
+  created_at DateTime @default(now())
+ 
+  @@index([lead_id])
+}
+ 
+model LeadReactivation {
+  id       String   @id @default(cuid())
+  lead_id  String?
+  phone    String?
+  stage    String
+  sent_at  DateTime @default(now())
+  message  String
+ 
+  @@index([phone])
+  @@index([lead_id])
+}
+ 
+model VoiceCall {
+  id               String   @id @default(cuid())
+  lead_id          String?
+  phone            String?
+  status           String
+  result           String?
+  summary          String?
+  summary_long     String?
+  transcript       String?
+  recording_url    String?
+  duration_seconds Int?
+  detected_intent  String?
+  created_at       DateTime @default(now())
+ 
+  @@index([lead_id])
+  @@index([phone])
+}
+ 
+model LeadMemory {
+  id                  String   @id @default(cuid())
+  lead_id             String   @unique
+  last_intent         String?
+  last_objection      String?
+  temperature         String?
+  recommended_product String?
+  payment_sent        Boolean  @default(false)
+  booking_sent        Boolean  @default(false)
+  onboarding_started  Boolean  @default(false)
+  reactivated         Boolean  @default(false)
+  last_summary        String?
+  updated_at          DateTime @updatedAt
+}
+ 
+model Product {
+  id              String   @id @default(cuid())
+  name            String
+  tier            String
+  price           Float
+  stripe_price_id String
+  active          Boolean  @default(true)
+  description     String?
+  features        String?
+  created_at      DateTime @default(now())
+}
+ 
+model UpsellEvent {
+  id         String   @id @default(cuid())
+  lead_id    String?
+  phone      String?
+  from_tier  String?
+  to_tier    String?
+  status     String
+  message    String?
+  created_at DateTime @default(now())
+ 
+  @@index([phone])
+  @@index([lead_id])
+}
+ 
+model Appointment {
+  id         String    @id @default(cuid())
+  lead_id    String?
+  phone      String?
+  start_at   DateTime
+  end_at     DateTime?
+  status     String
+  source     String?
+  owner      String?
+  notes      String?
+  created_at DateTime  @default(now())
+ 
+  @@index([phone])
+  @@index([status])
+}
+ 
+model MessageVariant {
+  id         String   @id @default(cuid())
+  name       String
+  channel    String
+  stage      String
+  content    String
+  active     Boolean  @default(true)
+  created_at DateTime @default(now())
+}
+ 
+model MessageExperimentResult {
+  id         String   @id @default(cuid())
+  variant_id String
+  lead_id    String?
+  event_type String
+  created_at DateTime @default(now())
+ 
+  @@index([variant_id])
+}
+ 
+model UserPermission {
+  id         String   @id @default(cuid())
+  user_id    String
+  scope      String
+  created_at DateTime @default(now())
+}
+ 
+model Subscription {
+  id                     String    @id @default(cuid())
+  client_id              String?
+  stripe_subscription_id String    @unique
+  status                 String
+  current_period_end     DateTime?
+  created_at             DateTime  @default(now())
+ 
+  @@index([client_id])
+}
+ 
+model Invoice {
+  id                String   @id @default(cuid())
+  client_id         String?
+  stripe_invoice_id String   @unique
+  amount            Float
+  status            String
+  created_at        DateTime @default(now())
+ 
+  @@index([client_id])
+}
+ 
+model IndustryPlaybook {
+  id            String   @id @default(cuid())
+  industry      String   @unique
+  system_prompt String
+  objections    String
+  tone          String?
+  created_at    DateTime @default(now())
+}
+ 
+model AuditLog {
+  id          String   @id @default(cuid())
+  client_id   String?
+  entity_type String
+  entity_id   String?
+  action      String
+  actor       String?
+  changes     String?
+  created_at  DateTime @default(now())
+ 
+  @@index([client_id])
+  @@index([entity_id])
+}

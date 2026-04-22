@@ -2,17 +2,17 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { AppBackdrop, SiteHeader } from "@/components/site-chrome";
 
 export default function LoginPage() {
   const router = useRouter();
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  async function handleLogin(e) {
-    e.preventDefault();
+  async function handleLogin(event) {
+    event.preventDefault();
 
     try {
       setLoading(true);
@@ -26,7 +26,7 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
 
       if (!res.ok || !json.success) {
         setError(json.message || "Login incorrecto");
@@ -37,62 +37,105 @@ export default function LoginPage() {
       router.refresh();
     } catch (err) {
       console.error(err);
-      setError("Error iniciando sesión");
+      setError("Error iniciando sesion");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center px-6">
-      <div className="w-full max-w-md rounded-[32px] border border-white/10 bg-white/[0.04] p-8 shadow-2xl shadow-black/50 backdrop-blur-2xl">
-        <div className="mb-6 text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-black text-xl font-bold">
-            N
+    <div className="app-shell">
+      <AppBackdrop />
+      <div className="page-shell">
+        <SiteHeader
+          secondaryCta={{ href: "/", label: "Volver a inicio" }}
+          primaryCta={{ href: "/pricing", label: "Ver planes" }}
+        />
+
+        <main className="content-frame" style={{ paddingTop: "4.5rem", paddingBottom: "4rem" }}>
+          <div className="hero-grid" style={{ gridTemplateColumns: "minmax(0,1fr) minmax(380px,0.9fr)" }}>
+            <section className="stack-24">
+              <div className="eyebrow">
+                <span className="eyebrow-dot" />
+                Acceso premium
+              </div>
+
+              <div className="stack-18">
+                <h1 className="display-title" style={{ fontSize: "clamp(2.8rem,6vw,5.3rem)" }}>
+                  Entra al portal con una experiencia limpia,
+                  <span className="accent">rapida y seria.</span>
+                </h1>
+                <p className="lede">
+                  Accede a leads, pipeline, metricas, automatizaciones y facturacion
+                  desde una sola capa. El objetivo no es solo entrar, sino sentir que
+                  estas dentro de un producto premium.
+                </p>
+              </div>
+
+              <div className="section-grid md:grid-cols-2">
+                <div className="metric-card">
+                  <div className="metric-label">Visibilidad</div>
+                  <div className="metric-value">CRM + voz</div>
+                  <div className="metric-detail">Todo el flujo comercial conectado.</div>
+                </div>
+                <div className="metric-card">
+                  <div className="metric-label">Operativa</div>
+                  <div className="metric-value">Tiempo real</div>
+                  <div className="metric-detail">Leads, acciones y revenue con contexto.</div>
+                </div>
+              </div>
+            </section>
+
+            <section className="form-shell" style={{ borderRadius: "32px", padding: "1.6rem" }}>
+              <div className="stack-24">
+                <div className="stack-12">
+                  <div className="eyebrow">
+                    <span className="eyebrow-dot" />
+                    Portal de cliente
+                  </div>
+                  <div>
+                    <h2 className="section-title" style={{ fontSize: "2.35rem" }}>
+                      Acceso privado
+                    </h2>
+                    <p className="support-copy">
+                      Usa el email y la contrasena del cliente para entrar a su panel.
+                    </p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleLogin} className="stack-18">
+                  <div className="stack-12">
+                    <label className="subtle-label">Email</label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="premium-input"
+                      placeholder="cliente@empresa.com"
+                    />
+                  </div>
+
+                  <div className="stack-12">
+                    <label className="subtle-label">Contrasena</label>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="premium-input"
+                      placeholder="Tu acceso"
+                    />
+                  </div>
+
+                  {error ? <div className="status-pill error">{error}</div> : null}
+
+                  <button type="submit" disabled={loading} className="button-primary">
+                    {loading ? "Entrando..." : "Entrar al portal"}
+                  </button>
+                </form>
+              </div>
+            </section>
           </div>
-          <h1 className="mt-4 text-3xl font-semibold">Acceso clientes</h1>
-          <p className="mt-2 text-sm text-white/50">
-            Entra al portal privado de NESPED
-          </p>
-        </div>
-
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="mb-2 block text-sm text-white/60">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
-              placeholder="admin@nesped.com"
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm text-white/60">Contraseña</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
-              placeholder="••••••••"
-            />
-          </div>
-
-          {error && (
-            <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-              {error}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-2xl bg-white px-5 py-4 text-sm font-semibold text-black transition hover:bg-white/90 disabled:opacity-60"
-          >
-            {loading ? "Entrando..." : "Entrar al portal"}
-          </button>
-        </form>
+        </main>
       </div>
     </div>
   );

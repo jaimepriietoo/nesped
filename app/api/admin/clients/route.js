@@ -1,4 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
+import crypto from "crypto";
+import { getAdminContext, hashPassword } from "@/lib/server/auth";
 
 function getSupabase() {
   return createClient(
@@ -45,6 +47,18 @@ function mapClient(row) {
 
 export async function GET() {
   try {
+    const admin = await getAdminContext();
+    if (!admin.ok) {
+      return Response.json(
+        {
+          success: false,
+          message: admin.message,
+          data: [],
+        },
+        { status: admin.status || 401 }
+      );
+    }
+
     const supabase = getSupabase();
 
     const { data, error } = await supabase
@@ -83,13 +97,24 @@ export async function GET() {
 
 export async function POST(req) {
   try {
+    const admin = await getAdminContext();
+    if (!admin.ok) {
+      return Response.json(
+        {
+          success: false,
+          message: admin.message,
+        },
+        { status: admin.status || 401 }
+      );
+    }
+
     const supabase = getSupabase();
     const body = await req.json();
 
     const id = body.id?.trim();
     const name = body.name?.trim();
     const prompt = body.prompt || "";
-    const email = body.email?.trim() || body.owner_email?.trim() || "";
+    const email = body.email?.trim()?.toLowerCase() || body.owner_email?.trim()?.toLowerCase() || "";
 
     const type = body.type || "";
     const status = body.status || "Activo";
@@ -190,12 +215,12 @@ export async function POST(req) {
     }
 
     if (email) {
-      const password = Math.random().toString(36).slice(-8);
+      const password = crypto.randomBytes(6).toString("base64url");
 
       const { error: userError } = await supabase.from("users").insert([
         {
           email,
-          password,
+          password: hashPassword(password),
           role: "client",
           client_id: id,
         },
@@ -246,6 +271,17 @@ export async function POST(req) {
 
 export async function PATCH(req) {
   try {
+    const admin = await getAdminContext();
+    if (!admin.ok) {
+      return Response.json(
+        {
+          success: false,
+          message: admin.message,
+        },
+        { status: admin.status || 401 }
+      );
+    }
+
     const supabase = getSupabase();
     const body = await req.json();
 

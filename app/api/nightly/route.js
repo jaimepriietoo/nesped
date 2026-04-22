@@ -1,150 +1,165 @@
-import { createClient } from "@supabase/supabase-js";
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import {
+  getAllLeadsForAutomation,
+  normalizePhone,
+  runFunnelAutomation,
+  runOnboardingAutomation,
+  runVoiceCallsAutomation,
+  sendWhatsAppMessage,
+} from "@/lib/server/automation-service";
 
-function getSupabase() {
-  return createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
+function hoursBetween(dateA, dateB) {
+  const a = new Date(dateA).getTime();
+  const b = new Date(dateB).getTime();
+  return Math.abs(b - a) / 1000 / 60 / 60;
+}
+
+function hasEventType(history, type) {
+  return (history || []).some(
+    (event) => String(event?.type || "").toLowerCase() === String(type).toLowerCase()
   );
 }
 
-function buildInsights(calls, leads) {
-  const items = [];
-  const totalCalls = calls.length;
-  const totalLeads = leads.length;
-  const conversion = totalCalls > 0 ? ((totalLeads / totalCalls) * 100).toFixed(1) : "0.0";
+function selectPaymentLinkFromLead(lead) {
+  const score = Number(lead?.score || 0);
+  const prob = Number(lead?.predicted_close_probability || 0);
 
-  items.push({
-    insight_type: "conversion",
-    title: "Conversión diaria",
-    body: `La conversión actual del periodo es ${conversion}%.`,
-    priority: 10,
-  });
-
-  const hotLeads = leads.filter((l) => Number(l.score || 0) >= 80).length;
-  items.push({
-    insight_type: "quality",
-    title: "Leads calientes",
-    body: `Se han detectado ${hotLeads} leads con score alto.`,
-    priority: 8,
-  });
-
-  const needs = {};
-  leads.forEach((lead) => {
-    const key = lead.necesidad || "sin definir";
-    needs[key] = (needs[key] || 0) + 1;
-  });
-
-  const topNeed = Object.entries(needs).sort((a, b) => b[1] - a[1])[0];
-  if (topNeed) {
-    items.push({
-      insight_type: "need",
-      title: "Necesidad dominante",
-      body: `La necesidad más repetida es "${topNeed[0]}".`,
-      priority: 7,
-    });
+  if (prob > 80 || score > 80) {
+    return process.env.PAYMENT_PREMIUM || "";
   }
 
-  return items;
+  if (prob > 50 || score > 50) {
+    return process.env.PAYMENT_PRO || "";
+  }
+
+  return process.env.PAYMENT_BASIC || "";
 }
 
-function buildAlerts(calls, leads) {
-  const alerts = [];
-  const hotLeads = leads.filter((l) => Number(l.score || 0) >= 80).length;
-  const noLeadCalls = calls.filter((c) => !c.lead_captured).length;
+function buildTimedRecoveryMessage(lead, stage, paymentLink, bookingUrl) {
+  const name = lead?.nombre || "";
 
-  if (hotLeads > 0) {
-    alerts.push({
-      kind: "lead",
-      severity: "high",
-      title: "Lead caliente detectado",
-      message: `Hay ${hotLeads} leads con score alto que conviene atender rápido.`,
-    });
+  if (stage === "30m") {
+    return `Hola ${name}, te dejo por aquí el enlace por si quieres dejarlo resuelto ahora:\n${paymentLink}\n\nSi prefieres verlo antes conmigo, aquí tienes la agenda:\n${bookingUrl}`;
   }
 
-  if (noLeadCalls > 3) {
-    alerts.push({
-      kind: "conversion",
-      severity: "medium",
-      title: "Varias llamadas sin lead",
-      message: `Se han registrado ${noLeadCalls} llamadas sin lead capturado.`,
-    });
+  if (stage === "24h") {
+    return `Hola ${name}, cierro seguimiento por aquí para no molestarte. Si quieres retomarlo, puedes hacerlo directamente aquí:\n${paymentLink}\n\nY si prefieres hablarlo antes, agenda aquí:\n${bookingUrl}`;
   }
 
-  return alerts;
+  return `Hola ${name}, te dejo el enlace directo por si quieres retomarlo:\n${paymentLink}`;
 }
 
 export async function POST() {
   try {
-    const supabase = getSupabase();
-    const { data: clients, error } = await supabase.from("clients").select("*");
+    const bookingUrl = process.env.BOOKING_URL || "";
+    const leads = await getAllLeadsForAutomation();
+    const processed = [];
+    const failed = [];
 
-    if (error) {
-      return Response.json(
-        { success: false, message: error.message },
-        { status: 500 }
-      );
+    const recentPaymentEvents = await prisma.leadEvent.findMany({
+      where: {
+        type: {
+          in: ["ai_reply_with_payment", "ai_payment_push"],
+        },
+      },
+      orderBy: {
+        created_at: "desc",
+      },
+      take: 100,
+    });
+
+    for (const paymentEvent of recentPaymentEvents) {
+      try {
+        const phone = paymentEvent.phone;
+        if (!phone) continue;
+
+        const history = await prisma.leadEvent.findMany({
+          where: { phone },
+          orderBy: { created_at: "desc" },
+          take: 50,
+        });
+
+        const latestPaymentEvent = history.find((e) =>
+          ["ai_reply_with_payment", "ai_payment_push"].includes(String(e.type || ""))
+        );
+
+        if (!latestPaymentEvent) continue;
+
+        const alreadySent30m = hasEventType(history, "payment_followup_30m");
+        const alreadySent24h = hasEventType(history, "payment_followup_24h");
+        const leadBought = hasEventType(history, "payment_completed");
+
+        if (leadBought) continue;
+
+        const lead =
+          leads.find(
+            (l) => normalizePhone(l.telefono || "") === normalizePhone(phone)
+          ) || null;
+
+        if (!lead) continue;
+
+        const paymentLink = selectPaymentLinkFromLead(lead);
+        if (!paymentLink) continue;
+
+        const elapsed = hoursBetween(latestPaymentEvent.created_at, new Date());
+
+        let stage = null;
+        if (elapsed >= 24 && !alreadySent24h) {
+          stage = "24h";
+        } else if (elapsed >= 0.5 && !alreadySent30m) {
+          stage = "30m";
+        }
+
+        if (!stage) continue;
+
+        const message = buildTimedRecoveryMessage(
+          lead,
+          stage,
+          paymentLink,
+          bookingUrl
+        );
+
+        await sendWhatsAppMessage(normalizePhone(phone), message);
+
+        await prisma.leadEvent.create({
+          data: {
+            lead_id: lead.id || null,
+            phone,
+            type: stage === "30m" ? "payment_followup_30m" : "payment_followup_24h",
+            message,
+          },
+        });
+
+        processed.push({ phone, stage });
+      } catch (err) {
+        console.error(err);
+        failed.push({ phone: paymentEvent.phone || null });
+      }
     }
 
-    for (const client of clients || []) {
-      const clientId = client.id;
+    const [funnelResult, onboardingResult, voiceResult] = await Promise.all([
+      runFunnelAutomation(),
+      runOnboardingAutomation(),
+      runVoiceCallsAutomation(),
+    ]);
 
-      const [callsRes, leadsRes] = await Promise.all([
-        supabase.from("calls").select("*").eq("client_id", clientId).order("created_at", { ascending: false }).limit(500),
-        supabase.from("leads").select("*").eq("client_id", clientId).order("created_at", { ascending: false }).limit(500),
-      ]);
-
-      const calls = callsRes.data || [];
-      const leads = leadsRes.data || [];
-
-      const totalCalls = calls.length;
-      const totalLeads = leads.length;
-      const conversionRate =
-        totalCalls > 0 ? Number(((totalLeads / totalCalls) * 100).toFixed(1)) : 0;
-
-      const avgDuration =
-        totalCalls > 0
-          ? Math.round(
-              calls.reduce((acc, c) => acc + Number(c.duration_seconds || 0), 0) / totalCalls
-            )
-          : 0;
-
-      const callsWithLead = calls.filter((c) => c.lead_captured).length;
-      const callsWithoutLead = totalCalls - callsWithLead;
-
-      await supabase.from("performance_snapshots").insert({
-        client_id: clientId,
-        period_type: "day",
-        period_label: new Date().toISOString().slice(0, 10),
-        total_calls: totalCalls,
-        total_leads: totalLeads,
-        conversion_rate: conversionRate,
-        avg_duration_seconds: avgDuration,
-        calls_with_lead: callsWithLead,
-        calls_without_lead: callsWithoutLead,
-      });
-
-      const insights = buildInsights(calls, leads);
-      for (const insight of insights) {
-        await supabase.from("ai_insights").insert({
-          client_id: clientId,
-          ...insight,
-        });
-      }
-
-      const alerts = buildAlerts(calls, leads);
-      for (const alert of alerts) {
-        await supabase.from("alerts").insert({
-          client_id: clientId,
-          ...alert,
-        });
-      }
-    }
-
-    return Response.json({ success: true });
-  } catch (error) {
-    return Response.json(
-      { success: false, message: error.message || "Error en nightly job" },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      success: true,
+      processed: processed.length,
+      failed: failed.length,
+      data: processed,
+      automation: {
+        funnel: funnelResult,
+        onboarding: onboardingResult,
+        voice: voiceResult,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    return NextResponse.json({
+      success: false,
+      message: "Error ejecutando follow-up automático",
+    });
   }
 }

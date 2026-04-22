@@ -220,9 +220,21 @@ export async function GET() {
         .limit(30),
     ]);
 
-    if (clientRes.error) {
+    const errors = [
+      clientRes.error,
+      settingsRes.error,
+      usersRes.error,
+      leadsRes.error,
+      callsRes.error,
+      alertsRes.error,
+      insightsRes.error,
+      benchmarkRes.error,
+      auditRes.error,
+    ].filter(Boolean);
+
+    if (errors.length > 0) {
       return Response.json(
-        { success: false, message: clientRes.error.message },
+        { success: false, message: errors[0].message || "Error cargando overview" },
         { status: 500 }
       );
     }

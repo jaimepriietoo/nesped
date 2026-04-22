@@ -1,9 +1,20 @@
-import { cookies } from "next/headers";
+import { getPortalContext } from "@/lib/portal-auth";
 
 export async function GET() {
   try {
-    const cookieStore = await cookies();
-    const clientId = cookieStore.get("nesped_client_id")?.value || "demo";
+    const ctx = await getPortalContext();
+    if (!ctx.ok) {
+      return Response.json(
+        {
+          success: false,
+          message: "No autorizado",
+          data: [],
+        },
+        { status: 401 }
+      );
+    }
+
+    const clientId = ctx.clientId;
 
     const res = await fetch("https://api.hubapi.com/crm/v3/objects/contacts/search", {
       method: "POST",

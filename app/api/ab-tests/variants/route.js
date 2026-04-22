@@ -1,0 +1,50 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+
+export async function GET() {
+  try {
+    const rows = await prisma.messageVariant.findMany({
+      orderBy: {
+        created_at: "desc",
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: rows,
+    });
+  } catch (err) {
+    console.error(err);
+    return NextResponse.json({
+      success: false,
+      message: "Error obteniendo variantes",
+    });
+  }
+}
+
+export async function POST(req) {
+  try {
+    const body = await req.json();
+
+    const row = await prisma.messageVariant.create({
+      data: {
+        name: body.name || "",
+        channel: body.channel || "whatsapp",
+        stage: body.stage || "qualified",
+        content: body.content || "",
+        active: body.active !== false,
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: row,
+    });
+  } catch (err) {
+    console.error(err);
+    return NextResponse.json({
+      success: false,
+      message: "Error creando variante",
+    });
+  }
+}

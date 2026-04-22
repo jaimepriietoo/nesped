@@ -1,60 +1,23 @@
 import { getPortalContext } from "@/lib/portal-auth";
-
-function escapeCsv(value) {
-  const str = String(value ?? "");
-  if (str.includes(",") || str.includes('"') || str.includes("\n")) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
-}
-
+ 
 export async function GET() {
   try {
     const ctx = await getPortalContext();
-    if (!ctx.ok) {
-      return new Response("No autorizado", { status: 401 });
-    }
-
-    const { data: leads, error } = await ctx.supabase
-      .from("leads")
-      .select("*")
-      .eq("client_id", ctx.clientId)
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      return new Response(error.message, { status: 500 });
-    }
-
-    const headers = [
-      "id",
-      "created_at",
-      "nombre",
-      "telefono",
-      "ciudad",
-      "necesidad",
-      "score",
-      "status",
-      "owner",
-      "interes",
-      "valor_estimado",
-      "resumen",
-    ];
-
-    const rows = [
-      headers.join(","),
-      ...(leads || []).map((lead) =>
-        headers.map((h) => escapeCsv(lead[h])).join(",")
-      ),
-    ];
-
-    return new Response(rows.join("\n"), {
-      status: 200,
+    if (!ctx.ok) return Response.json({ success: false, message: ctx.message }, { status: 401 });
+ 
+    const { data: leads } = await ctx.supabase.from("leads").select("*").eq("client_id", ctx.clientId).order("created_at", { ascending: false });
+ 
+    const cols = ["id","nombre","email","telefono","ciudad","necesidad","fuente","status","score","predicted_close_probability","interes","valor_estimado","next_action","next_action_priority","next_action_reason","owner","followup_sms_sent","created_at","updated_at"];
+    const escape = v => `"${String(v || "").replace(/"/g, '""')}"`;
+    const rows = [cols.join(","), ...(leads || []).map(l => cols.map(c => escape(l[c])).join(","))].join("\n");
+ 
+    return new Response(rows, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="leads-${ctx.clientId}.csv"`,
+        "Content-Disposition": `attachment; filename="leads-${new Date().toISOString().split("T")[0]}.csv"`,
       },
     });
-  } catch (error) {
-    return new Response(error.message || "Error exportando CSV", { status: 500 });
+  } catch (err) {
+    return Response.json({ success: false, message: err.message }, { status: 500 });
   }
 }

@@ -2,13 +2,13 @@ import { getSupabase } from "@/lib/supabase";
 import { setAuthCookies, verifyPassword } from "@/lib/server/auth";
 import { findUser } from "@/lib/auth";
 
-const supabase = getSupabase();
-
 export async function POST(req) {
   try {
+    const supabase = getSupabase();
     const body = await req.json();
     const email = String(body?.email || "").trim().toLowerCase();
     const password = String(body?.password || "");
+    const nextPath = String(body?.next || "").trim();
 
     if (!email || !password) {
       return Response.json(
@@ -21,7 +21,8 @@ export async function POST(req) {
       .from("users")
       .select("email,password,password_hash,role,client_id")
       .eq("email", email)
-      .single();
+      .limit(1)
+      .maybeSingle();
 
     let authenticatedUser = null;
 
@@ -70,6 +71,10 @@ export async function POST(req) {
       clientId: authenticatedUser.client_id,
       clientName: client?.name || authenticatedUser.client_id,
       role: authenticatedUser.role || "client",
+      redirectTo:
+        nextPath && nextPath.startsWith("/") && !nextPath.startsWith("//")
+          ? nextPath
+          : "/portal",
     });
   } catch (error) {
     console.error(error);

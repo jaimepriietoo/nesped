@@ -1561,6 +1561,10 @@ export default function ClientPortalPage() {
   async function loadOverview() {
     try {
       const res = await fetch("/api/portal/overview", { cache: "no-store" });
+      if (res.status === 401) {
+        window.location.replace("/login?next=/portal");
+        return;
+      }
       const json = await res.json();
       if (json?.success) {
         setData(json);

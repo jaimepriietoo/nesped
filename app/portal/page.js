@@ -1752,11 +1752,11 @@ export default function ClientPortalPage() {
   }
 
   async function openBillingPortal() {
-    try { setBillingLoading(true); const res = await fetch("/api/stripe/portal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clientId: data?.client?.id || "demo" }) }); const json = await readJsonResponse(res); if (json?.url) { window.location.href = json.url; return; } alert("Portal no disponible."); } catch (e) { alert(e?.message || "Error."); } finally { setBillingLoading(false); }
+    try { setBillingLoading(true); const res = await fetch("/api/stripe/portal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) }); const json = await readJsonResponse(res); if (json?.url) { window.location.href = json.url; return; } alert(json?.message || "Portal no disponible."); } catch (e) { alert(e?.message || "Error."); } finally { setBillingLoading(false); }
   }
 
   async function openCheckout(plan = "pro") {
-    try { setBillingLoading(true); const res = await fetch("/api/stripe/checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clientId: data?.client?.id || "demo", plan }) }); const json = await readJsonResponse(res); if (json?.url) { window.location.href = json.url; return; } alert("Checkout no disponible."); } catch (e) { alert(e?.message || "Error."); } finally { setBillingLoading(false); }
+    try { setBillingLoading(true); const res = await fetch("/api/stripe/checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ plan }) }); const json = await readJsonResponse(res); if (json?.url) { window.location.href = json.url; return; } alert(json?.message || "Checkout no disponible."); } catch (e) { alert(e?.message || "Error."); } finally { setBillingLoading(false); }
   }
 
   function exportCsv() { window.location.href = "/api/leads/export"; }

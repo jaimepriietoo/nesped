@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
-import { BASE_URL, stripe } from "@/lib/server/stripe-utils";
+import {
+  BASE_URL,
+  resolveClientStripeCustomer,
+  stripe,
+} from "@/lib/server/stripe-utils";
 
 export async function POST() {
   try {
@@ -20,24 +24,27 @@ export async function POST() {
       );
     }
 
-    const { data: client, error } = await ctx.supabase
-      .from("clients")
-      .select("stripe_customer_id")
-      .eq("id", ctx.clientId)
-      .single();
+    const { client, customerId } = await resolveClientStripeCustomer({
+      clientId: ctx.clientId,
+      email: ctx.userEmail || "",
+      name: ctx.currentUser?.full_name || "",
+      phone: ctx.currentUser?.phone || "",
+      createIfMissing: false,
+    });
 
-    if (error || !client?.stripe_customer_id) {
+    if (!client || !customerId) {
       return NextResponse.json(
         {
           success: false,
-          message: error?.message || "Cliente sin stripe_customer_id",
+          message:
+            "Este cliente todavia no tiene una cuenta de facturacion activa en Stripe. Activa primero un plan para poder gestionarlo aqui.",
         },
         { status: 400 }
       );
     }
 
     const session = await stripe.billingPortal.sessions.create({
-      customer: client.stripe_customer_id,
+      customer: customerId,
       return_url: `${BASE_URL}/portal`,
     });
 

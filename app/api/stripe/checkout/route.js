@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
 import {
   BASE_URL,
+  getClientBillingState,
   normalizePhone,
+  resolveClientStripeCustomer,
   resolveCheckoutConfig,
   stripe,
 } from "@/lib/server/stripe-utils";
@@ -46,6 +48,8 @@ export async function POST(req) {
       );
     }
 
+    const isClientPlanCheckout = !leadId;
+
     const metadata = {
       client_id: ctx.clientId,
       lead_id: leadId || "",
@@ -54,7 +58,54 @@ export async function POST(req) {
       product_name: config.productName || "",
       lead_name: name || "",
       created_by: ctx.currentUser?.full_name || ctx.userEmail || "portal_user",
+      client_plan_checkout: isClientPlanCheckout ? "true" : "false",
     };
+
+    let customerId = "";
+
+    if (isClientPlanCheckout) {
+      const { hasManagedSubscription } = await getClientBillingState(ctx.clientId);
+
+      if (hasManagedSubscription) {
+        const existingCustomer = await resolveClientStripeCustomer({
+          clientId: ctx.clientId,
+          email: email || ctx.userEmail || "",
+          name: name || ctx.currentUser?.full_name || "",
+          phone: phone || ctx.currentUser?.phone || "",
+          createIfMissing: false,
+        });
+
+        if (existingCustomer.customerId) {
+          const billingSession = await stripe.billingPortal.sessions.create({
+            customer: existingCustomer.customerId,
+            return_url: `${BASE_URL}/portal`,
+          });
+
+          return NextResponse.json({
+            success: true,
+            url: billingSession.url,
+            destination: "billing_portal",
+            message:
+              "Este cliente ya tiene un plan activo. Te llevamos a facturacion para gestionarlo o ampliarlo sin duplicar suscripciones.",
+          });
+        }
+      }
+
+      const customer = await resolveClientStripeCustomer({
+        clientId: ctx.clientId,
+        email: email || ctx.userEmail || "",
+        name:
+          name ||
+          ctx.currentUser?.full_name ||
+          ctx.currentUser?.email ||
+          ctx.userEmail ||
+          "",
+        phone: phone || ctx.currentUser?.phone || "",
+        createIfMissing: true,
+      });
+
+      customerId = customer.customerId || "";
+    }
 
     const sessionConfig = {
       mode: config.mode,
@@ -67,15 +118,22 @@ export async function POST(req) {
       success_url: successUrl || `${BASE_URL}/portal?checkout=success`,
       cancel_url: cancelUrl || `${BASE_URL}/portal?checkout=cancelled`,
       client_reference_id: leadId || null,
-      customer_email: email || undefined,
       phone_number_collection: {
         enabled: true,
       },
       metadata,
     };
 
+    if (customerId) {
+      sessionConfig.customer = customerId;
+    } else if (email) {
+      sessionConfig.customer_email = email;
+    }
+
     if (config.mode === "payment") {
-      sessionConfig.customer_creation = "always";
+      if (!customerId) {
+        sessionConfig.customer_creation = "always";
+      }
     } else {
       sessionConfig.subscription_data = {
         metadata,

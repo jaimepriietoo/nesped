@@ -4,7 +4,10 @@ import {
   getSessionSecurityProfile,
   getTwoFactorSecurityProfile,
 } from "@/lib/server/auth";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import {
+  getObservabilityStatus,
+  observeRoute,
+} from "@/lib/server/observability.mjs";
 import { requirePortalRoleOrInternal } from "@/lib/server/security";
 
 async function handleGet(req) {
@@ -22,6 +25,7 @@ async function handleGet(req) {
       env: envReport,
       session: getSessionSecurityProfile(),
       twoFactor: getTwoFactorSecurityProfile(),
+      observability: getObservabilityStatus(),
       voiceCompliance: getVoiceCompliancePolicy(),
       runtime: {
         nodeVersion: process.version,

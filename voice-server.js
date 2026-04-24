@@ -5,7 +5,186 @@ const http = require("http");
 const WebSocket = require("ws");
 const twilio = require("twilio");
 const crypto = require("crypto");
+const Sentry = require("@sentry/node");
 const { createClient } = require("@supabase/supabase-js");
+
+const SECRET_FIELD_PATTERN =
+  /authorization|cookie|set-cookie|token|secret|password|api[_-]?key|dsn|x-nesped-internal-token/i;
+
+function numberEnv(name, fallback) {
+  const parsed = Number(process.env[name]);
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+  return parsed;
+}
+
+function getVoiceSentryDsn() {
+  return (
+    String(process.env.SENTRY_DSN || "").trim() ||
+    String(process.env.NEXT_PUBLIC_SENTRY_DSN || "").trim()
+  );
+}
+
+function isVoiceSentryEnabled() {
+  return Boolean(getVoiceSentryDsn());
+}
+
+function getSentryEnvironment() {
+  return (
+    String(process.env.SENTRY_ENVIRONMENT || "").trim() ||
+    String(process.env.RAILWAY_ENVIRONMENT || "").trim() ||
+    process.env.NODE_ENV ||
+    "development"
+  );
+}
+
+function getSentryRelease() {
+  return (
+    String(process.env.SENTRY_RELEASE || "").trim() ||
+    String(process.env.RAILWAY_GIT_COMMIT_SHA || "").trim() ||
+    String(process.env.GIT_COMMIT_SHA || "").trim()
+  );
+}
+
+function sanitizeObject(value, depth = 0) {
+  if (depth > 4 || value == null) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.slice(0, 20).map((item) => sanitizeObject(item, depth + 1));
+  }
+
+  if (typeof value !== "object") {
+    return value;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, nested]) => [
+      key,
+      SECRET_FIELD_PATTERN.test(key)
+        ? "[redacted]"
+        : sanitizeObject(nested, depth + 1),
+    ])
+  );
+}
+
+function sanitizeError(error) {
+  if (!error) return null;
+
+  return {
+    name: error.name || "Error",
+    message: error.message || String(error),
+    stack:
+      typeof error.stack === "string"
+        ? error.stack.split("\n").slice(0, 6).join("\n")
+        : "",
+  };
+}
+
+function initVoiceSentry() {
+  if (!isVoiceSentryEnabled()) {
+    return false;
+  }
+
+  Sentry.init({
+    dsn: getVoiceSentryDsn(),
+    enabled: true,
+    environment: getSentryEnvironment(),
+    release: getSentryRelease() || undefined,
+    sendDefaultPii: false,
+    attachStacktrace: true,
+    sampleRate: numberEnv("SENTRY_ERROR_SAMPLE_RATE", 1),
+    tracesSampleRate: numberEnv(
+      "SENTRY_TRACES_SAMPLE_RATE",
+      process.env.NODE_ENV === "production" ? 0.15 : 1
+    ),
+    profilesSampleRate: numberEnv("SENTRY_PROFILES_SAMPLE_RATE", 0),
+    beforeSend(event) {
+      const nextEvent = { ...event };
+
+      if (nextEvent.request?.headers) {
+        nextEvent.request = {
+          ...nextEvent.request,
+          headers: sanitizeObject(nextEvent.request.headers),
+        };
+      }
+
+      if (nextEvent.extra) {
+        nextEvent.extra = sanitizeObject(nextEvent.extra);
+      }
+
+      if (nextEvent.contexts) {
+        nextEvent.contexts = sanitizeObject(nextEvent.contexts);
+      }
+
+      if (nextEvent.user) {
+        nextEvent.user = sanitizeObject(nextEvent.user);
+        delete nextEvent.user.ip_address;
+      }
+
+      return nextEvent;
+    },
+    initialScope: {
+      tags: {
+        service: "voice-server",
+      },
+    },
+  });
+
+  return true;
+}
+
+function captureVoiceException(error, event, extra = {}, level = "error") {
+  if (!isVoiceSentryEnabled()) {
+    return null;
+  }
+
+  return Sentry.withScope((scope) => {
+    scope.setTag("service", "voice-server");
+    if (event) {
+      scope.setTag("event", event);
+    }
+    scope.setLevel(level);
+    Object.entries(extra || {}).forEach(([key, value]) => {
+      if (value !== undefined) {
+        scope.setExtra(key, sanitizeObject(value));
+      }
+    });
+    return Sentry.captureException(
+      error instanceof Error ? error : new Error(String(error))
+    );
+  });
+}
+
+function captureVoiceMessage(message, event, extra = {}, level = "error") {
+  if (!isVoiceSentryEnabled()) {
+    return null;
+  }
+
+  return Sentry.withScope((scope) => {
+    scope.setTag("service", "voice-server");
+    if (event) {
+      scope.setTag("event", event);
+    }
+    scope.setLevel(level);
+    Object.entries(extra || {}).forEach(([key, value]) => {
+      if (value !== undefined) {
+        scope.setExtra(key, sanitizeObject(value));
+      }
+    });
+    return Sentry.captureMessage(String(message || event || "voice.message"));
+  });
+}
+
+function reportVoiceError(error, event, extra = {}, level = "error") {
+  captureVoiceException(error, event, extra, level);
+  logEvent("error", event, {
+    ...extra,
+    error: sanitizeError(error),
+  });
+}
+
+initVoiceSentry();
 
 function logEvent(level, event, data = {}) {
   const payload = {
@@ -85,15 +264,14 @@ if (!client) {
 }
 
 process.on("unhandledRejection", (reason) => {
-  logEvent("error", "process.unhandled_rejection", {
-    error: reason instanceof Error ? reason.message : String(reason),
-  });
+  reportVoiceError(
+    reason instanceof Error ? reason : new Error(String(reason)),
+    "process.unhandled_rejection"
+  );
 });
 
 process.on("uncaughtException", (error) => {
-  logEvent("error", "process.uncaught_exception", {
-    error: error?.message || String(error),
-  });
+  reportVoiceError(error, "process.uncaught_exception", {}, "fatal");
 });
 
 app.get("/", (req, res) => {
@@ -108,6 +286,7 @@ app.get("/healthz", (req, res) => {
       hasOpenAI: Boolean(process.env.OPENAI_API_KEY),
       hasSupabase,
       hasTwilioClient: Boolean(client),
+      hasSentryDsn: isVoiceSentryEnabled(),
       hasBaseUrl: Boolean(process.env.BASE_URL),
       hasTwilioNumber: Boolean(fallbackTwilioNumber),
       recordingRetentionDays: RECORDING_RETENTION_DAYS,
@@ -309,7 +488,7 @@ function getVoicePolicyUrl() {
 function buildVoiceLegalNotice() {
   const baseNotice =
     process.env.VOICE_LEGAL_NOTICE ||
-    "Aviso. Esta llamada puede ser grabada y transcrita con fines de calidad, seguridad, seguimiento comercial y mejora del servicio.";
+    "Aviso. Esta llamada puede ser atendida por un asistente de voz con IA y puede ser grabada y transcrita para calidad, seguridad, seguimiento comercial y mejora del servicio. Si prefieres no continuar en estas condiciones, indicalo y te ofreceremos una alternativa de contacto.";
   const policyUrl = getVoicePolicyUrl();
   return policyUrl ? `${baseNotice} Más información en ${policyUrl}.` : baseNotice;
 }
@@ -373,9 +552,10 @@ async function getClientConfig(clientId) {
       .single();
 
     if (error || !data) {
-      console.error(
-        "❌ Error cargando client config:",
-        error?.message || "sin data"
+      reportVoiceError(
+        new Error(error?.message || "sin data"),
+        "voice.client_config.load_failed",
+        { clientId }
       );
 
       return {
@@ -395,7 +575,7 @@ async function getClientConfig(clientId) {
       twilioNumber: data.twilio_number || fallbackTwilioNumber,
     };
   } catch (err) {
-    console.error("❌ Excepción cargando client config:", err.message);
+    reportVoiceError(err, "voice.client_config.exception", { clientId });
 
     return {
       id: clientId || "demo",
@@ -439,7 +619,9 @@ app.get("/call", async (req, res) => {
     console.log("📞 Llamada iniciada:", call.sid, "cliente:", clientId);
     res.send("Llamada iniciada: " + call.sid);
   } catch (error) {
-    console.error("❌ ERROR /call:", error.message);
+    reportVoiceError(error, "voice.call.start_failed", {
+      clientId: req.query.client_id || "demo",
+    });
     res.status(500).send("Error: " + error.message);
   }
 });
@@ -483,7 +665,10 @@ app.post("/recording-status", async (req, res) => {
         .select("call_sid");
 
       if (error) {
-        console.error("❌ Error guardando recording_url:", error.message);
+        reportVoiceError(error, "voice.recording_status.persist_failed", {
+          callSid,
+          clientId,
+        });
       } else if (Array.isArray(data) && data.length > 0) {
         console.log("✅ recording_url guardada en calls");
         pendingRecordings.delete(callSid);
@@ -492,7 +677,10 @@ app.post("/recording-status", async (req, res) => {
 
     res.status(200).send("ok");
   } catch (error) {
-    console.error("❌ recording-status error:", error.message);
+    reportVoiceError(error, "voice.recording_status.failed", {
+      callSid: req.body?.CallSid || "",
+      clientId: req.query.client_id || "demo",
+    });
     res.status(500).send("error");
   }
 });
@@ -571,7 +759,12 @@ wss.on("connection", async (twilioWs, req) => {
   const config = await getClientConfig(clientId);
 
   if (!config) {
-    console.error("❌ No hay config, cerrando conexión:", clientId);
+    reportVoiceError(
+      new Error("No hay configuración para el cliente"),
+      "voice.websocket.missing_client_config",
+      { clientId },
+      "warning"
+    );
     twilioWs.close();
     return;
   }
@@ -661,7 +854,11 @@ wss.on("connection", async (twilioWs, req) => {
 
       console.log("📞 Llamada guardada en Supabase");
     } catch (err) {
-      console.error("❌ Error guardando llamada:", err.message);
+      reportVoiceError(err, "voice.call.persist_failed", {
+        callSid,
+        clientId,
+        status,
+      });
     }
   }
 
@@ -695,7 +892,7 @@ wss.on("connection", async (twilioWs, req) => {
           score = scoreValue;
         }
       } catch (err) {
-        console.error("❌ Error calculando score:", err.message);
+        reportVoiceError(err, "voice.lead.score_failed", { clientId }, "warning");
       }
 
       const interes =
@@ -758,7 +955,10 @@ wss.on("connection", async (twilioWs, req) => {
 });
 
       if (error) {
-        console.error("❌ Error guardando lead en Supabase:", error.message);
+        reportVoiceError(error, "voice.lead.persist_failed", {
+          clientId,
+          telefono,
+        });
         return null;
       }
 
@@ -780,17 +980,23 @@ wss.on("connection", async (twilioWs, req) => {
         });
 
         if (eventError) {
-          console.error("❌ Error guardando evento de lead:", eventError.message);
+          reportVoiceError(eventError, "voice.lead_event.persist_failed", {
+            clientId,
+            leadId: insertedLead.id,
+          });
         } else {
           console.log("✅ Evento de lead guardado");
         }
       } catch (err) {
-        console.error("❌ Excepción guardando evento de lead:", err.message);
+        reportVoiceError(err, "voice.lead_event.exception", {
+          clientId,
+          leadId: insertedLead.id,
+        });
       }
 
       return insertedLead;
     } catch (err) {
-      console.error("❌ Excepción guardando lead:", err.message);
+      reportVoiceError(err, "voice.lead.exception", { clientId });
       return null;
     }
   }
@@ -819,7 +1025,7 @@ wss.on("connection", async (twilioWs, req) => {
       });
       console.log("📴 Twilio call completada:", callSid);
     } catch (err) {
-      console.error("❌ Error completando llamada en Twilio:", err.message);
+      reportVoiceError(err, "voice.call.hangup_failed", { callSid }, "warning");
     }
   }
 
@@ -833,7 +1039,7 @@ wss.on("connection", async (twilioWs, req) => {
         twilioWs.close();
       }
     } catch (err) {
-      console.error("❌ Error cerrando Twilio WS:", err.message);
+      reportVoiceError(err, "voice.twilio_ws.close_failed", { callSid }, "warning");
     }
 
     try {
@@ -841,7 +1047,7 @@ wss.on("connection", async (twilioWs, req) => {
         openaiWs.close();
       }
     } catch (err) {
-        console.error("❌ Error cerrando OpenAI WS:", err.message);
+      reportVoiceError(err, "voice.openai_ws.close_failed", { callSid }, "warning");
     }
   }
 
@@ -938,7 +1144,10 @@ wss.on("connection", async (twilioWs, req) => {
         }
       }
     } catch (err) {
-      console.error("❌ Error procesando mensaje de Twilio:", err.message);
+      reportVoiceError(err, "voice.twilio_message.failed", {
+        callSid,
+        streamSid,
+      });
     }
   });
 
@@ -948,6 +1157,11 @@ wss.on("connection", async (twilioWs, req) => {
       console.log("OpenAI event:", event.type);
 
       if (event.type === "error") {
+        captureVoiceMessage(
+          "OpenAI websocket error event",
+          "voice.openai_event.error",
+          { event }
+        );
         console.error("❌ OPENAI ERROR COMPLETO:", JSON.stringify(event, null, 2));
         return;
       }
@@ -1162,7 +1376,10 @@ wss.on("connection", async (twilioWs, req) => {
             "Confirma de forma muy natural, breve y humana que ya está registrado y que el equipo contactará pronto. Después termina completamente la conversación."
           );
         } catch (err) {
-          console.error("❌ Error enviando lead al webhook:", err.message);
+          reportVoiceError(err, "voice.webhook.delivery_failed", {
+            clientId,
+            webhook: config.webhook,
+          });
 
           openaiWs.send(
             JSON.stringify({
@@ -1181,7 +1398,10 @@ wss.on("connection", async (twilioWs, req) => {
         }
       }
     } catch (err) {
-      console.error("❌ Error procesando mensaje de OpenAI:", err.message);
+      reportVoiceError(err, "voice.openai_message.failed", {
+        callSid,
+        streamSid,
+      });
     }
   });
 
@@ -1195,7 +1415,7 @@ wss.on("connection", async (twilioWs, req) => {
   });
 
   twilioWs.on("error", async (err) => {
-    console.error("❌ Error WS Twilio:", err.message);
+    reportVoiceError(err, "voice.twilio_ws.error", { callSid, streamSid });
     await saveCall("failed");
   });
 
@@ -1206,16 +1426,8 @@ wss.on("connection", async (twilioWs, req) => {
   });
 
   openaiWs.on("error", (err) => {
-    console.error("❌ Error WS OpenAI:", err.message);
+    reportVoiceError(err, "voice.openai_ws.error", { callSid, streamSid });
   });
-});
-
-process.on("uncaughtException", (err) => {
-  console.error("❌ uncaughtException:", err);
-});
-
-process.on("unhandledRejection", (reason) => {
-  console.error("❌ unhandledRejection:", reason);
 });
 
 const PORT = process.env.PORT || 3001;

@@ -13,6 +13,7 @@ This checks:
 - Next production build
 - route and portal integration safety at compile time
 - 2FA and voice compliance prerequisites
+- observability and incident-response prerequisites
 
 ## 2. Rotate secrets first
 
@@ -27,6 +28,9 @@ If any token has ever been pasted in chat, screen-shared, committed, or exposed 
 - `OPENAI_API_KEY`
 - `VERCEL_TOKEN`
 - `RESEND_API_KEY`
+- `SENTRY_DSN`
+- `NEXT_PUBLIC_SENTRY_DSN`
+- `SENTRY_AUTH_TOKEN`
 
 ## 3. Environment parity
 
@@ -35,6 +39,19 @@ Make sure the same critical variables exist in:
 - local `.env.local`
 - Vercel production environment
 - Railway voice server environment
+
+Recommended observability variables:
+
+- `OPS_ALERT_WEBHOOK_URL`
+- `SENTRY_DSN`
+- `NEXT_PUBLIC_SENTRY_DSN`
+- `SENTRY_AUTH_TOKEN`
+- `SENTRY_ORG`
+- `SENTRY_PROJECT`
+- `PRIVACY_CONTACT_EMAIL`
+- `VOICE_PRIVACY_URL`
+- `RECORDING_RETENTION_DAYS`
+- `TRANSCRIPT_RETENTION_DAYS`
 
 Use:
 
@@ -83,6 +100,7 @@ npm run smoke -- https://tu-dominio.com
 ## 7. Operational endpoints
 
 - App readiness: `/api/ops/readiness`
+- Incident test: `POST /api/ops/incident-test`
 - Portal health: `/api/portal/health`
 - Voice server liveness: `/healthz`
 - Voice compliance page: `/legal/voice-compliance`
@@ -93,8 +111,14 @@ npm run smoke -- https://tu-dominio.com
 - Si escalas la capa pública, configura:
   - `UPSTASH_REDIS_REST_URL`
   - `UPSTASH_REDIS_REST_TOKEN`
-- Si quieres alertas operativas sin Sentry, configura:
+- Si quieres alertas operativas por webhook, configura:
   - `OPS_ALERT_WEBHOOK_URL`
+- Si quieres observabilidad seria de errores y traces, configura:
+  - `SENTRY_DSN`
+  - `NEXT_PUBLIC_SENTRY_DSN`
+  - `SENTRY_AUTH_TOKEN`
+  - `SENTRY_ORG`
+  - `SENTRY_PROJECT`
 
 ## 9. Incident checklist
 
@@ -106,3 +130,4 @@ If production breaks:
 4. Confirm env variables still exist after redeploy
 5. Confirm Twilio and Stripe signatures are still valid
 6. Run smoke test again against production
+7. Trigger `POST /api/ops/incident-test` from an owner/admin session to verify webhook + Sentry delivery

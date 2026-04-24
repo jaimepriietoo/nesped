@@ -5,6 +5,8 @@ import {
   buildDerivedNotifications,
   buildLeadTimeline,
   buildOnboardingChecklist,
+  buildOnboardingWorkspace,
+  buildRoiSnapshot,
   computeUsagePressure,
 } from "@/lib/portal-product";
 
@@ -65,6 +67,30 @@ function getNextActionLabel(action) {
 
 function getNextActionColor(action) {
   return { call: "green", whatsapp: "blue", sms: "amber", wait: "default" }[action] || "default";
+}
+
+function getChannelLabel(channel) {
+  return {
+    whatsapp: "WhatsApp",
+    voice: "Voz",
+    billing: "Pago",
+    system: "Sistema",
+  }[String(channel || "").toLowerCase()] || "Actividad";
+}
+
+function getChannelColor(channel) {
+  return {
+    whatsapp: "green",
+    voice: "purple",
+    billing: "amber",
+    system: "blue",
+  }[String(channel || "").toLowerCase()] || "default";
+}
+
+function truncateText(value, max = 140) {
+  const text = String(value || "").trim();
+  if (text.length <= max) return text;
+  return `${text.slice(0, max).trim()}…`;
 }
 
 function getPriorityColor(p) {
@@ -1463,6 +1489,296 @@ function NotificationsView({ notifications, data, onNavigate }) {
   );
 }
 
+function OnboardingView({ workspace, onNavigate }) {
+  const checklist = workspace?.checklist || { items: [], completed: 0, total: 0, progress: 0 };
+  const integrations = workspace?.integrations || [];
+  const nextActions = workspace?.nextActions || [];
+
+  return (
+    <div className="fade-up">
+      <div className="stat-grid mb-4">
+        <StatCard title="Readiness" value={`${workspace?.readinessScore || 0}%`} sub="Estado general de activación" accent="var(--c-blue)" />
+        <StatCard title="Checklist" value={`${checklist.completed || 0}/${checklist.total || 0}`} sub="Pasos completados" accent="var(--c-green)" />
+        <StatCard title="Integraciones OK" value={integrations.filter(item => item.ready).length} sub="Servicios listos" accent="var(--c-purple)" />
+        <StatCard title="Siguiente foco" value={nextActions[0]?.title || "Cuenta lista"} sub="Próxima acción recomendada" accent="var(--c-amber)" />
+      </div>
+
+      <div className="grid-2 mb-4">
+        <div className="card">
+          <div className="card-title">Estado de onboarding</div>
+          <div className="card-sm mb-3">
+            <div className="text-sm font-semibold mb-1">{workspace?.summary || "Sin resumen disponible"}</div>
+            <div className="progress-bar mt-3"><div className="progress-fill" style={{ width: `${checklist.progress || 0}%`, background: "var(--c-blue)" }} /></div>
+          </div>
+          {checklist.items.map(item => (
+            <div key={item.id} className="pipeline-row">
+              <div className="flex-1">
+                <div className="text-sm font-semibold">{item.title}</div>
+                <div className="text-xs text-dim">{item.detail}</div>
+              </div>
+              <div className="flex gap-2">
+                <Badge color={item.done ? "green" : "amber"}>{item.done ? "Hecho" : "Pendiente"}</Badge>
+                {!item.done && <button onClick={() => onNavigate(item.view || "settings")} className="btn btn-ghost btn-sm">Abrir</button>}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="card">
+          <div className="card-title">Integraciones y activos</div>
+          {integrations.map(item => (
+            <div key={item.id} className="card-sm mb-2">
+              <div className="flex justify-between mb-1">
+                <div className="text-sm font-semibold">{item.name}</div>
+                <Badge color={item.ready ? "green" : "amber"}>{item.ready ? "Listo" : "Falta"}</Badge>
+              </div>
+              <div className="text-xs text-dim mb-2">{item.detail}</div>
+              {!item.ready && <button onClick={() => onNavigate(item.view || "settings")} className="btn btn-ghost btn-sm">Completar</button>}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-title">Siguientes acciones</div>
+        {nextActions.length === 0 ? <div className="empty">La cuenta ya tiene la base bastante cerrada.</div> : nextActions.map(action => (
+          <div key={action.id} className="pipeline-row">
+            <div className="flex-1">
+              <div className="text-sm font-semibold">{action.title}</div>
+              <div className="text-xs text-dim">{action.detail}</div>
+            </div>
+            <button onClick={() => onNavigate(action.view || "settings")} className="btn btn-primary btn-sm">Ir</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function InboxView({ inboxData, leads, onOpenLead }) {
+  const threads = inboxData?.threads || [];
+  const leadMap = new Map((leads || []).map(lead => [lead.id, lead]));
+
+  return (
+    <div className="fade-up">
+      <div className="stat-grid mb-4">
+        <StatCard title="Hilos" value={inboxData?.summary?.totalThreads || 0} sub="Conversaciones activas" accent="var(--c-blue)" />
+        <StatCard title="Atención" value={inboxData?.summary?.requiresAttention || 0} sub="Hilos con prioridad" accent="var(--c-red)" />
+        <StatCard title="Sin respuesta" value={inboxData?.summary?.waitingForReply || 0} sub="Pendientes de salida" accent="var(--c-amber)" />
+        <StatCard title="Con llamadas" value={inboxData?.summary?.withCalls || 0} sub="Hilos con voz" accent="var(--c-purple)" />
+      </div>
+
+      <div className="card">
+        <div className="card-title">Inbox multicanal</div>
+        {threads.length === 0 ? <div className="empty">Todavía no hay conversaciones trazadas para este cliente.</div> : threads.map(thread => (
+          <div key={thread.id} className="card-sm mb-2">
+            <div className="flex justify-between mb-2" style={{ gap: 12 }}>
+              <div style={{ flex: 1 }}>
+                <div className="flex items-center gap-2 mb-1" style={{ flexWrap: "wrap" }}>
+                  <div className="text-sm font-semibold">{thread.leadName}</div>
+                  <Badge color={getEstadoColor(thread.status)}>{getEstadoLabel(thread.status)}</Badge>
+                  <Badge color={getChannelColor(thread.lastChannel)}>{getChannelLabel(thread.lastChannel)}</Badge>
+                  {thread.hasRecording && <Badge color="purple">Grabación</Badge>}
+                  {thread.hasPayment && <Badge color="green">Pago</Badge>}
+                  {thread.waitingForReply && <Badge color="amber">Esperando salida</Badge>}
+                </div>
+                <div className="text-xs text-dim mb-2">{thread.phone || "Sin teléfono"} · {thread.owner || "Sin owner"} · {formatDate(thread.lastActivityAt)}</div>
+                <div className="text-sm text-dim">{truncateText(thread.lastPreview, 180)}</div>
+              </div>
+              <div className="flex flex-col items-end gap-2">
+                <Badge color={getPriorityColor(thread.next_action_priority)}>{thread.next_action_priority || "media"}</Badge>
+                <div className="text-mono text-xs text-muted">Score {thread.score || 0}</div>
+                <button onClick={() => { const lead = leadMap.get(thread.leadId); if (lead) onOpenLead(lead); }} className="btn btn-primary btn-sm">Abrir lead</button>
+              </div>
+            </div>
+            <div className="grid-3 mb-2">
+              <div className="card-sm"><div className="text-xs text-muted mb-1">Mensajes</div><div className="text-sm font-semibold">{thread.messageCount || 0}</div></div>
+              <div className="card-sm"><div className="text-xs text-muted mb-1">Llamadas</div><div className="text-sm font-semibold">{thread.callCount || 0}</div></div>
+              <div className="card-sm"><div className="text-xs text-muted mb-1">Valor</div><div className="text-sm font-semibold">{fmtEur(thread.valor_estimado || 0)}</div></div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {thread.items.slice(0, 3).map(item => (
+                <Badge key={item.id} color={getChannelColor(item.channel)}>
+                  {getChannelLabel(item.channel)} · {truncateText(item.preview, 42)}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function VoiceCenterView({ voiceCenterData, leads, onOpenLead }) {
+  const calls = voiceCenterData?.calls || [];
+  const leadMap = new Map((leads || []).map(lead => [lead.id, lead]));
+
+  return (
+    <div className="fade-up">
+      <div className="stat-grid mb-4">
+        <StatCard title="Llamadas" value={voiceCenterData?.summary?.total || 0} sub="Total analizadas" accent="var(--c-blue)" />
+        <StatCard title="Grabadas" value={voiceCenterData?.summary?.withRecording || 0} sub="Con audio disponible" accent="var(--c-purple)" />
+        <StatCard title="Score medio" value={voiceCenterData?.summary?.avgScore || 0} sub="QA agregada" accent="var(--c-green)" />
+        <StatCard title="Duración media" value={formatSeconds(voiceCenterData?.summary?.avgDuration || 0)} sub="Media por llamada" accent="var(--c-amber)" />
+      </div>
+
+      <div className="grid-2 mb-4">
+        <div className="card">
+          <div className="card-title">Problemas más repetidos</div>
+          {(voiceCenterData?.commonIssues || []).length === 0 ? <div className="empty">Todavía no hay suficientes llamadas para detectar patrones.</div> : voiceCenterData.commonIssues.map(issue => (
+            <div key={issue.label} className="pipeline-row">
+              <div className="flex-1">
+                <div className="text-sm font-semibold">{issue.label}</div>
+                <div className="text-xs text-dim">Aparece en varias llamadas recientes.</div>
+              </div>
+              <Badge color="red">{issue.count}</Badge>
+            </div>
+          ))}
+        </div>
+
+        <div className="card">
+          <div className="card-title">Resumen del centro de voz</div>
+          {[
+            ["Leads capturados", voiceCenterData?.summary?.capturedLeads || 0],
+            ["Con grabación", voiceCenterData?.summary?.withRecording || 0],
+            ["Top performers", calls.filter(item => (item.qa?.overall || 0) >= 75).length],
+            ["A revisar", calls.filter(item => (item.qa?.overall || 0) < 55).length],
+          ].map(([label, value]) => (
+            <div key={label} className="pipeline-row">
+              <span className="text-sm text-dim flex-1">{label}</span>
+              <Badge color="blue">{value}</Badge>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-title">Grabaciones y QA</div>
+        {calls.length === 0 ? <div className="empty">Aún no hay llamadas en el centro de voz.</div> : calls.map(call => (
+          <div key={call.id} className="card-sm mb-3">
+            <div className="flex justify-between mb-2" style={{ gap: 12 }}>
+              <div style={{ flex: 1 }}>
+                <div className="flex items-center gap-2 mb-1" style={{ flexWrap: "wrap" }}>
+                  <div className="text-sm font-semibold">{call.leadName}</div>
+                  <Badge color={call.qa?.overall >= 75 ? "green" : call.qa?.overall >= 55 ? "amber" : "red"}>{call.qa?.overall || 0}/100</Badge>
+                  <Badge color="blue">{call.status || "unknown"}</Badge>
+                </div>
+                <div className="text-xs text-dim">{call.phone || "Sin teléfono"} · {formatDate(call.created_at)} · {formatSeconds(call.duration_seconds)}</div>
+              </div>
+              <div className="flex flex-col items-end gap-2">
+                <div className="flex gap-2">
+                  <Badge color="blue">Calidad {call.qa?.quality || 0}</Badge>
+                  <Badge color="purple">Empatía {call.qa?.empathy || 0}</Badge>
+                  <Badge color="green">Cierre {call.qa?.closing || 0}</Badge>
+                </div>
+                {call.leadId && leadMap.get(call.leadId) && <button onClick={() => onOpenLead(leadMap.get(call.leadId))} className="btn btn-ghost btn-sm">Abrir lead</button>}
+              </div>
+            </div>
+            <div className="text-sm text-dim mb-2">{call.summary || "Sin resumen."}</div>
+            {call.recording_url ? (
+              <div className="card-sm mb-2">
+                <div className="text-xs text-muted mb-2">Grabación</div>
+                <audio controls style={{ width: "100%" }}>
+                  <source src={call.recording_url} />
+                </audio>
+              </div>
+            ) : (
+              <div className="text-xs text-dim mb-2">Sin grabación disponible para esta llamada.</div>
+            )}
+            {call.transcript && (
+              <div className="card-sm mb-2">
+                <div className="text-xs text-muted mb-2">Transcripción</div>
+                <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 12, color: "var(--text-2)", lineHeight: 1.6, maxHeight: 180, overflow: "auto" }}>{truncateText(call.transcript, 1200)}</pre>
+              </div>
+            )}
+            <div className="text-xs text-dim">Mejora sugerida: {call.qa?.recommendation || "Mantener la línea actual."}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RoiView({ roiSnapshot, leadRevenue, ownerRevenue, openCheckout, openBillingPortal, billingLoading }) {
+  const summary = roiSnapshot?.summary || {};
+  const topLeads = leadRevenue?.topLeads || [];
+  const ownerRanking = ownerRevenue?.ranking || [];
+
+  return (
+    <div className="fade-up">
+      <div className="flex flex-wrap gap-2 mb-4">
+        <button onClick={() => openCheckout("pro")} disabled={billingLoading} className="btn btn-primary">{billingLoading ? "Abriendo..." : "Optimizar plan"}</button>
+        <button onClick={openBillingPortal} disabled={billingLoading} className="btn btn-ghost">💳 Ver billing</button>
+      </div>
+
+      <div className="stat-grid mb-4">
+        <StatCard title="Ingresos" value={fmtEur(summary.totalRevenue || 0)} sub="Valor ya capturado" accent="var(--c-green)" />
+        <StatCard title="Pipeline" value={fmtEur(summary.pipelineValue || 0)} sub="Valor potencial activo" accent="var(--c-blue)" />
+        <StatCard title="ROI estimado" value={summary.roiMultiple ? `x${summary.roiMultiple}` : "—"} sub="Frente a la última inversión trazada" accent="var(--c-purple)" />
+        <StatCard title="Win rate" value={`${summary.winRate || 0}%`} sub="Ganados sobre leads" accent="var(--c-amber)" />
+        <StatCard title="Ingreso/lead" value={fmtEur(summary.revenuePerLead || 0)} sub="Eficiencia por oportunidad" accent="var(--c-cyan)" />
+        <StatCard title="Meta mensual" value={fmtEur(summary.targetRevenue || 0)} sub="Objetivo configurado" accent="var(--c-blue)" />
+      </div>
+
+      <div className="grid-2 mb-4">
+        <div className="card">
+          <div className="card-title">Historia de valor</div>
+          {(roiSnapshot?.story || []).map(item => (
+            <div key={item.id} className="card-sm mb-2">
+              <div className="flex justify-between mb-1">
+                <div className="text-sm font-semibold">{item.title}</div>
+                <Badge color="green">{fmtEur(item.value || 0)}</Badge>
+              </div>
+              <div className="text-xs text-dim">{item.detail}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="card">
+          <div className="card-title">Lectura ejecutiva</div>
+          {(roiSnapshot?.focusAreas || []).map(item => (
+            <div key={item.id} className="pipeline-row">
+              <div className="flex-1">
+                <div className="text-sm font-semibold">{item.title}</div>
+                <div className="text-xs text-dim">{item.body}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid-2">
+        <div className="card">
+          <div className="card-title">Leads con más ingreso</div>
+          {topLeads.length === 0 ? <div className="empty">Sin ingresos trazados todavía.</div> : topLeads.slice(0, 8).map((row, index) => (
+            <div key={`${row.phone}:${index}`} className="pipeline-row">
+              <div className="flex-1">
+                <div className="text-sm font-semibold">{row.customer_name || "Lead"}</div>
+                <div className="text-xs text-dim">{row.customer_email || row.phone || "Sin contacto"}</div>
+              </div>
+              <Badge color="green">{fmtEur(row.total_revenue || 0)}</Badge>
+            </div>
+          ))}
+        </div>
+
+        <div className="card">
+          <div className="card-title">Ranking del equipo</div>
+          {ownerRanking.length === 0 ? <div className="empty">Todavía no hay ranking por responsables.</div> : ownerRanking.slice(0, 8).map((row, index) => (
+            <div key={`${row.owner}:${index}`} className="pipeline-row">
+              <div className="flex-1">
+                <div className="text-sm font-semibold">{row.owner || "Equipo"}</div>
+                <div className="text-xs text-dim">{row.paid_leads || 0} leads pagados · ticket medio {fmtEur(row.avg_ticket || 0)}</div>
+              </div>
+              <Badge color={index === 0 ? "green" : "blue"}>{fmtEur(row.revenue || 0)}</Badge>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BillingView({ data, billingData, revenue, usagePressure, openCheckout, openBillingPortal, billingLoading }) {
   const client = data?.client || {};
   const activeSubscription = billingData?.activeSubscription || null;
@@ -1920,6 +2236,8 @@ export default function ClientPortalPage() {
   const [playbookForm, setPlaybookForm] = useState(null);
   const [playbookSaving, setPlaybookSaving] = useState(false);
   const [voiceQaData, setVoiceQaData] = useState(null);
+  const [voiceCenterData, setVoiceCenterData] = useState(null);
+  const [inboxData, setInboxData] = useState(null);
   const [portalSettingsForm, setPortalSettingsForm] = useState(null);
   const [portalSettingsSaving, setPortalSettingsSaving] = useState(false);
   const [selectedLeadMemory, setSelectedLeadMemory] = useState(null);
@@ -1983,6 +2301,8 @@ export default function ClientPortalPage() {
     loadHealthData();
     loadPlaybooks();
     loadVoiceQa();
+    loadVoiceCenterData();
+    loadInboxData();
     loadReactivationStats();
     loadVoiceStats();
     loadPriorityStats();
@@ -2013,6 +2333,8 @@ export default function ClientPortalPage() {
   async function loadHealthData() { try { const r = await fetch("/api/portal/health", { cache: "no-store" }); const j = await r.json(); if (j.success) setHealthData(j.data); } catch {} }
   async function loadPlaybooks() { try { const r = await fetch("/api/playbooks", { cache: "no-store" }); const j = await r.json(); if (j.success) { setPlaybookData(j.data); setPlaybookForm(j.data.workspace || null); } } catch {} }
   async function loadVoiceQa() { try { const r = await fetch("/api/portal/voice-qa", { cache: "no-store" }); const j = await r.json(); if (j.success) setVoiceQaData(j.data); } catch {} }
+  async function loadVoiceCenterData() { try { const r = await fetch("/api/portal/voice-center", { cache: "no-store" }); const j = await r.json(); if (j.success) setVoiceCenterData(j.data); } catch {} }
+  async function loadInboxData() { try { const r = await fetch("/api/portal/inbox", { cache: "no-store" }); const j = await r.json(); if (j.success) setInboxData(j.data); } catch {} }
   async function loadReactivationStats() { try { const r = await fetch("/api/analytics/reactivation-stats", { cache: "no-store" }); const j = await r.json(); if (j.success) setReactivationStats(j.data); } catch {} }
   async function loadVoiceStats() { try { const r = await fetch("/api/analytics/voice-stats", { cache: "no-store" }); const j = await r.json(); if (j.success) setVoiceStats(j.data); } catch {} }
   async function loadPriorityStats() { try { const r = await fetch("/api/analytics/priority-stats", { cache: "no-store" }); const j = await r.json(); if (j.success) setPriorityStats(j.data); } catch {} }
@@ -2025,7 +2347,7 @@ export default function ClientPortalPage() {
     setSelectedLeadMemory(null);
     await loadLeadMemory(lead.id);
     const [eventsRes, notesRes, commentsRes, remindersRes] = await Promise.all([
-      fetch(`/api/lead-events?lead_id=${lead.id}`, { cache: "no-store" }).then(r => r.json()),
+      fetch(`/api/lead-events?lead_id=${lead.id}&phone=${encodeURIComponent(lead.telefono || "")}`, { cache: "no-store" }).then(r => r.json()),
       fetch(`/api/lead-notes?lead_id=${lead.id}`, { cache: "no-store" }).then(r => r.json()),
       fetch(`/api/lead-comments?lead_id=${lead.id}`, { cache: "no-store" }).then(r => r.json()),
       fetch(`/api/lead-reminders?lead_id=${lead.id}`, { cache: "no-store" }).then(r => r.json()),
@@ -2048,6 +2370,7 @@ export default function ClientPortalPage() {
     const res = await fetch("/api/leads/update", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ leadId, ...changes }) });
     const json = await readJsonResponse(res);
     await loadOverview();
+    await loadInboxData();
     if (selectedLead?.id === leadId) { setSelectedLead(json.data); await openLead(json.data); }
   }
 
@@ -2230,7 +2553,7 @@ export default function ClientPortalPage() {
   function exportCsv() { window.location.href = "/api/leads/export"; }
   async function sendDailyReport() { const r = await fetch("/api/daily-report/send", { method: "POST" }); const j = await r.json(); alert(j.success ? "Informe diario enviado." : j.message || "Error."); }
   async function sendWeeklyReport() { const r = await fetch("/api/weekly-report/send", { method: "POST" }); const j = await r.json(); alert(j.success ? "Informe semanal enviado." : j.message || "Error."); }
-  async function runNightly() { const r = await fetch("/api/nightly", { method: "POST" }); const j = await r.json(); alert(j.success ? "Proceso nocturno ejecutado." : j.message || "Error."); await loadOverview(); await loadHealthData(); }
+  async function runNightly() { const r = await fetch("/api/nightly", { method: "POST" }); const j = await r.json(); alert(j.success ? "Proceso nocturno ejecutado." : j.message || "Error."); await loadOverview(); await loadHealthData(); await loadInboxData(); await loadVoiceCenterData(); }
 
   async function recalculateAllNextActions() {
     const res = await fetch("/api/automation/recalculate-next-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clientId: data?.client?.id }) });
@@ -2239,11 +2562,11 @@ export default function ClientPortalPage() {
     await loadOverview(); alert(`Acciones recalculadas. Procesados: ${j.processed}. Fallidos: ${j.failed}.`);
   }
 
-  async function runAutomaticFunnel() { const r = await fetch("/api/automation/run-funnel", { method: "POST" }); const j = await r.json(); if (!j.success) { alert(j.message || "Error."); return; } await loadOverview(); alert(`Funnel ejecutado. ${j.processed} procesados.`); }
+  async function runAutomaticFunnel() { const r = await fetch("/api/automation/run-funnel", { method: "POST" }); const j = await r.json(); if (!j.success) { alert(j.message || "Error."); return; } await loadOverview(); await loadInboxData(); alert(`Funnel ejecutado. ${j.processed} procesados.`); }
   async function recalculateDynamicScoring() { const r = await fetch("/api/automation/recalculate-dynamic-score", { method: "POST" }); const j = await r.json(); if (!j.success) { alert(j.message || "Error."); return; } await loadOverview(); alert(`Scoring recalculado. ${j.processed} procesados.`); }
-  async function runColdLeadReactivation() { const r = await fetch("/api/automation/reactivate-cold-leads", { method: "POST" }); const j = await r.json(); if (!j.success) { alert(j.message || "Error."); return; } await loadOverview(); alert(`Reactivación completada. ${j.processed} procesados.`); }
-  async function runAutomaticOnboarding() { const r = await fetch("/api/automation/run-onboarding", { method: "POST" }); const j = await r.json(); if (!j.success) { alert(j.message || "Error."); return; } await loadOverview(); alert(`Onboarding ejecutado. ${j.processed} procesados.`); }
-  async function runVoiceCalls() { const r = await fetch("/api/automation/run-voice-calls", { method: "POST" }); const j = await r.json(); if (!j.success) { alert(j.message || "Error."); return; } await loadOverview(); await loadVoiceStats(); await loadVoiceQa(); alert(`Llamadas IA ejecutadas. ${j.processed} procesados.`); }
+  async function runColdLeadReactivation() { const r = await fetch("/api/automation/reactivate-cold-leads", { method: "POST" }); const j = await r.json(); if (!j.success) { alert(j.message || "Error."); return; } await loadOverview(); await loadInboxData(); alert(`Reactivación completada. ${j.processed} procesados.`); }
+  async function runAutomaticOnboarding() { const r = await fetch("/api/automation/run-onboarding", { method: "POST" }); const j = await r.json(); if (!j.success) { alert(j.message || "Error."); return; } await loadOverview(); await loadInboxData(); alert(`Onboarding ejecutado. ${j.processed} procesados.`); }
+  async function runVoiceCalls() { const r = await fetch("/api/automation/run-voice-calls", { method: "POST" }); const j = await r.json(); if (!j.success) { alert(j.message || "Error."); return; } await loadOverview(); await loadVoiceStats(); await loadVoiceQa(); await loadVoiceCenterData(); await loadInboxData(); alert(`Llamadas IA ejecutadas. ${j.processed} procesados.`); }
   async function recalculatePriority() { const r = await fetch("/api/automation/recalculate-priority", { method: "POST" }); const j = await r.json(); if (!j.success) { alert(j.message || "Error."); return; } await loadOverview(); await loadPriorityStats(); alert(`Prioridad recalculada. ${j.processed} procesados.`); }
   async function runUpsells() { const r = await fetch("/api/automation/run-upsells", { method: "POST" }); const j = await r.json(); if (!j.success) { alert(j.message || "Error."); return; } await loadUpsellStats(); alert(`Upsells ejecutados. ${j.processed} procesados.`); }
   async function runAppointments() { const r = await fetch("/api/automation/run-appointment-reminders", { method: "POST" }); const j = await r.json(); if (!j.success) { alert(j.message || "Error."); return; } await loadAppointmentStats(); alert(`Recordatorios enviados. ${j.processed} procesados.`); }
@@ -2300,7 +2623,9 @@ export default function ClientPortalPage() {
 
   const usagePressure = useMemo(() => computeUsagePressure({ data, billingData }), [data, billingData]);
   const onboarding = useMemo(() => buildOnboardingChecklist({ data, billingData, healthData }), [data, billingData, healthData]);
+  const onboardingWorkspace = useMemo(() => buildOnboardingWorkspace({ data, billingData, healthData, playbookData }), [data, billingData, healthData, playbookData]);
   const notifications = useMemo(() => buildDerivedNotifications({ data, billingData, healthData, voiceQaData }), [data, billingData, healthData, voiceQaData]);
+  const roiSnapshot = useMemo(() => buildRoiSnapshot({ data, revenue, billingData, leadRevenue, ownerRevenue }), [data, revenue, billingData, leadRevenue, ownerRevenue]);
 
   if (!data) {
     return (
@@ -2320,10 +2645,14 @@ export default function ClientPortalPage() {
 
   const navItems = [
     { id: "dashboard", icon: "⬡", label: "Dashboard" },
+    { id: "onboarding", icon: "🚀", label: "Onboarding" },
+    { id: "inbox", icon: "💬", label: "Inbox" },
     { id: "notifications", icon: "🔔", label: "Alertas" },
     { id: "pipeline", icon: "◈", label: "Pipeline" },
     { id: "leads", icon: "◉", label: "Leads" },
+    { id: "voice", icon: "🎙", label: "Voice" },
     { id: "analytics", icon: "📊", label: "Analytics" },
+    { id: "roi", icon: "💸", label: "ROI" },
     { id: "billing", icon: "💳", label: "Billing" },
     { id: "playbooks", icon: "🧠", label: "Playbooks" },
     { id: "automations", icon: "⚡", label: "Automatiz." },
@@ -2342,9 +2671,15 @@ export default function ClientPortalPage() {
 
   const selectedCall = selectedLead
     ? (calls || []).find(call => {
+        const leadPhone = normalizePhoneForWhatsApp(selectedLead.telefono);
+        const callPhones = [
+          normalizePhoneForWhatsApp(call.from_number),
+          normalizePhoneForWhatsApp(call.to_number),
+        ].filter(Boolean);
+        const samePhone = leadPhone && callPhones.includes(leadPhone);
         const sameDate = selectedLead.created_at && call.created_at && new Date(selectedLead.created_at).toDateString() === new Date(call.created_at).toDateString();
         const sameName = selectedLead.nombre && call.summary && call.summary.toLowerCase().includes(String(selectedLead.nombre).toLowerCase());
-        return sameDate || sameName;
+        return samePhone || sameDate || sameName;
       }) || null
     : null;
 
@@ -2434,6 +2769,19 @@ export default function ClientPortalPage() {
                 recalculateDynamicScoring={recalculateDynamicScoring} runColdLeadReactivation={runColdLeadReactivation}
               />
             )}
+            {view === "onboarding" && (
+              <OnboardingView
+                workspace={onboardingWorkspace}
+                onNavigate={setView}
+              />
+            )}
+            {view === "inbox" && (
+              <InboxView
+                inboxData={inboxData}
+                leads={data?.leads || []}
+                onOpenLead={openLead}
+              />
+            )}
             {view === "notifications" && (
               <NotificationsView
                 notifications={notifications}
@@ -2459,12 +2807,29 @@ export default function ClientPortalPage() {
                 filters={filters} setFilters={setFilters} users={users} availableCities={availableCities}
               />
             )}
+            {view === "voice" && (
+              <VoiceCenterView
+                voiceCenterData={voiceCenterData}
+                leads={data?.leads || []}
+                onOpenLead={openLead}
+              />
+            )}
             {view === "analytics" && (
               <AnalyticsView
                 data={data} revenue={revenue} leadRevenue={leadRevenue} ownerRevenue={ownerRevenue}
                 voiceStats={voiceStats} priorityStats={priorityStats} reactivationStats={reactivationStats}
                 upsellStats={upsellStats} appointmentStats={appointmentStats} messageExperiments={messageExperiments}
                 filteredLeads={filteredLeads} settings={settings}
+              />
+            )}
+            {view === "roi" && (
+              <RoiView
+                roiSnapshot={roiSnapshot}
+                leadRevenue={leadRevenue}
+                ownerRevenue={ownerRevenue}
+                openCheckout={openCheckout}
+                openBillingPortal={openBillingPortal}
+                billingLoading={billingLoading}
               />
             )}
             {view === "billing" && (

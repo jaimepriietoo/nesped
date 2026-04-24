@@ -1,5 +1,10 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { prisma } from "@/lib/prisma";
+import {
+  buildEnvReadinessReport,
+  getFeatureReport,
+} from "@/lib/server/env.mjs";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function getFreshnessLevel(dateValue, maxAgeHours) {
   if (!dateValue) {
@@ -20,7 +25,7 @@ function getFreshnessLevel(dateValue, maxAgeHours) {
   return { ready: false, level: "critical", ageHours };
 }
 
-export async function GET() {
+async function handleGet() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -84,6 +89,10 @@ export async function GET() {
     const latestLead = leadRes.data || null;
     const latestCall = callRes.data || null;
     const alerts = alertsRes.data || [];
+    const envReport = buildEnvReadinessReport();
+    const aiEnv = getFeatureReport(envReport, "ai");
+    const voiceEnv = getFeatureReport(envReport, "voice");
+    const billingEnv = getFeatureReport(envReport, "billing");
 
     const services = {
       auth: {
@@ -92,21 +101,19 @@ export async function GET() {
         detail: "Sesión y permisos del portal operativos.",
       },
       ai: {
-        ready: Boolean(process.env.OPENAI_API_KEY),
-        level: process.env.OPENAI_API_KEY ? "healthy" : "critical",
+        ready: Boolean(aiEnv?.ready),
+        level: aiEnv?.status || "critical",
         detail: process.env.OPENAI_API_KEY
           ? "OpenAI configurado."
           : "Falta OPENAI_API_KEY.",
       },
       telephony: {
         ready: Boolean(
-          process.env.TWILIO_ACCOUNT_SID &&
-            process.env.TWILIO_AUTH_TOKEN &&
+          voiceEnv?.ready &&
             client?.twilio_number
         ),
         level:
-          process.env.TWILIO_ACCOUNT_SID &&
-          process.env.TWILIO_AUTH_TOKEN &&
+          voiceEnv?.ready &&
           client?.twilio_number
             ? "healthy"
             : "warning",
@@ -118,19 +125,21 @@ export async function GET() {
             : "Falta número Twilio del cliente o credenciales de voz.",
       },
       whatsapp: {
-        ready: Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
-        level:
-          process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
-            ? "healthy"
-            : "warning",
+        ready: Boolean(voiceEnv?.ready),
+        level: voiceEnv?.ready ? "healthy" : "warning",
         detail:
-          process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
+          voiceEnv?.ready
             ? "Canal WhatsApp listo a nivel de credenciales."
             : "Faltan credenciales base para WhatsApp/Twilio.",
       },
       billing: {
         ready: Boolean(client?.stripe_customer_id || billingRes),
-        level: client?.stripe_customer_id || billingRes ? "healthy" : "warning",
+        level:
+          client?.stripe_customer_id || billingRes
+            ? "healthy"
+            : billingEnv?.status === "critical"
+              ? "critical"
+              : "warning",
         detail:
           client?.stripe_customer_id || billingRes
             ? "Billing conectado a Stripe."
@@ -188,6 +197,16 @@ export async function GET() {
           leads: leadFreshness,
           calls: callFreshness,
         },
+        env: {
+          summary: envReport.summary,
+          features: envReport.features.map((feature) => ({
+            id: feature.id,
+            label: feature.label,
+            status: feature.status,
+            requiredMissing: feature.missingRequired.length,
+            recommendedMissing: feature.missingRecommended.length,
+          })),
+        },
       },
     });
   } catch (error) {
@@ -200,3 +219,5 @@ export async function GET() {
     );
   }
 }
+
+export const GET = observeRoute("api.portal.health.get", handleGet);

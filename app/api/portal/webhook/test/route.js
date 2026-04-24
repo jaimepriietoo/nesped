@@ -1,7 +1,8 @@
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { logEvent, observeRoute } from "@/lib/server/observability.mjs";
 import { requireSameOrigin } from "@/lib/server/security";
 
-export async function POST(req) {
+async function handlePost(req) {
   try {
     const sameOriginError = requireSameOrigin(
       req,
@@ -94,6 +95,13 @@ export async function POST(req) {
       created_at: new Date().toISOString(),
     });
 
+    logEvent("info", "portal.webhook_test_completed", {
+      clientId: ctx.clientId,
+      actor: ctx.userEmail,
+      status: response.status,
+      ok: response.ok,
+    });
+
     return Response.json({
       success: response.ok,
       message: response.ok
@@ -107,6 +115,15 @@ export async function POST(req) {
       },
     });
   } catch (error) {
+    logEvent("error", "portal.webhook_test_failed", {
+      error: {
+        name: error?.name || "Error",
+        message:
+          error?.name === "AbortError"
+            ? "Timeout al probar el webhook"
+            : error?.message || "No se pudo probar el webhook",
+      },
+    });
     return Response.json(
       {
         success: false,
@@ -119,3 +136,8 @@ export async function POST(req) {
     );
   }
 }
+
+export const POST = observeRoute(
+  "api.portal.webhook-test.post",
+  handlePost
+);

@@ -1,9 +1,10 @@
 import { getSupabase } from "@/lib/supabase";
 import { setAuthCookies, verifyPassword } from "@/lib/server/auth";
+import { logEvent, observeRoute } from "@/lib/server/observability.mjs";
 import { requireRateLimit, requireSameOrigin } from "@/lib/server/security";
 import { findUser } from "@/lib/auth";
 
-export async function POST(req) {
+async function handlePost(req) {
   try {
     const sameOriginError = requireSameOrigin(
       req,
@@ -71,6 +72,10 @@ export async function POST(req) {
     }
 
     if (!authenticatedUser) {
+      logEvent("warn", "auth.login_failed", {
+        email,
+        reason: "invalid_credentials",
+      });
       return Response.json(
         { success: false, message: "Credenciales incorrectas" },
         { status: 401 }
@@ -90,6 +95,12 @@ export async function POST(req) {
       clientName: client?.name || authenticatedUser.client_id,
     });
 
+    logEvent("info", "auth.login_succeeded", {
+      email,
+      clientId: authenticatedUser.client_id,
+      role: authenticatedUser.role || "client",
+    });
+
     return Response.json({
       success: true,
       clientId: authenticatedUser.client_id,
@@ -101,7 +112,12 @@ export async function POST(req) {
           : "/portal",
     });
   } catch (error) {
-    console.error(error);
+    logEvent("error", "auth.login_error", {
+      error: {
+        name: error?.name || "Error",
+        message: error?.message || "Error iniciando sesión",
+      },
+    });
 
     return Response.json(
       { success: false, message: "Error iniciando sesión" },
@@ -109,3 +125,5 @@ export async function POST(req) {
     );
   }
 }
+
+export const POST = observeRoute("api.login.post", handlePost);

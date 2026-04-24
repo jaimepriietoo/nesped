@@ -1,5 +1,6 @@
 import twilio from "twilio";
 import { getSupabase } from "@/lib/supabase";
+import { logEvent, observeRoute } from "@/lib/server/observability.mjs";
 import { requireRateLimit, requireSameOrigin } from "@/lib/server/security";
 
 function normalizePhone(value = "") {
@@ -11,7 +12,7 @@ function isValidPhone(value = "") {
   return normalized.length >= 9 && normalized.length <= 16;
 }
 
-export async function POST(req) {
+async function handlePost(req) {
   try {
     const sameOriginError = requireSameOrigin(
       req,
@@ -114,7 +115,12 @@ export async function POST(req) {
       recordingEnabled: true,
     });
   } catch (error) {
-    console.error("Error llamada demo:", error);
+    logEvent("error", "voice.demo_call_failed", {
+      error: {
+        name: error?.name || "Error",
+        message: error?.message || "Error iniciando llamada",
+      },
+    });
 
     return Response.json(
       {
@@ -125,3 +131,16 @@ export async function POST(req) {
     );
   }
 }
+
+export const POST = observeRoute("api.demo-call.post", async (req) => {
+  const response = await handlePost(req);
+
+  if (response?.status === 200) {
+    const payload = await response.clone().json().catch(() => ({}));
+    logEvent("info", "voice.demo_call_started", {
+      callSid: payload?.callSid || "",
+    });
+  }
+
+  return response;
+});

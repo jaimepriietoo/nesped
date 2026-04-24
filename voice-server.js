@@ -7,6 +7,30 @@ const twilio = require("twilio");
 const crypto = require("crypto");
 const { createClient } = require("@supabase/supabase-js");
 
+function logEvent(level, event, data = {}) {
+  const payload = {
+    timestamp: new Date().toISOString(),
+    service: "voice-server",
+    level,
+    event,
+    ...data,
+  };
+
+  const line = JSON.stringify(payload);
+
+  if (level === "error") {
+    console.error(line);
+    return;
+  }
+
+  if (level === "warn") {
+    console.warn(line);
+    return;
+  }
+
+  console.log(line);
+}
+
 console.log("VOICE SERVER ENTERPRISE FINAL - 2026-04-07");
 console.log("OPENAI_API_KEY presente:", !!process.env.OPENAI_API_KEY);
 console.log("BASE_URL:", process.env.BASE_URL);
@@ -25,7 +49,8 @@ const authToken =
 const fallbackTwilioNumber =
   process.env.TWILIO_NUMERO || process.env.TWILIO_PHONE_NUMBER;
 
-const client = twilio(accountSid, authToken);
+const client =
+  accountSid && authToken ? twilio(accountSid, authToken) : null;
 
 const hasSupabase =
   !!process.env.SUPABASE_URL && !!process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -44,8 +69,43 @@ if (!hasSupabase) {
   console.log("⚠️ Supabase desactivado");
 }
 
+if (!client) {
+  logEvent("warn", "voice.twilio_missing_env", {
+    hasAccountSid: Boolean(accountSid),
+    hasAuthToken: Boolean(authToken),
+  });
+}
+
+process.on("unhandledRejection", (reason) => {
+  logEvent("error", "process.unhandled_rejection", {
+    error: reason instanceof Error ? reason.message : String(reason),
+  });
+});
+
+process.on("uncaughtException", (error) => {
+  logEvent("error", "process.uncaught_exception", {
+    error: error?.message || String(error),
+  });
+});
+
 app.get("/", (req, res) => {
   res.send("NESPED Voice Server activo");
+});
+
+app.get("/healthz", (req, res) => {
+  res.json({
+    ok: true,
+    service: "voice-server",
+    env: {
+      hasOpenAI: Boolean(process.env.OPENAI_API_KEY),
+      hasSupabase,
+      hasTwilioClient: Boolean(client),
+      hasBaseUrl: Boolean(process.env.BASE_URL),
+      hasTwilioNumber: Boolean(fallbackTwilioNumber),
+    },
+    pendingRecordings: pendingRecordings.size,
+    now: new Date().toISOString(),
+  });
 });
 
 function safeEqual(left, right) {
@@ -323,6 +383,10 @@ app.get("/call", async (req, res) => {
   }
 
   try {
+    if (!client) {
+      return res.status(500).send("Twilio no configurado");
+    }
+
     const clientId = req.query.client_id || "demo";
     const cleanBaseUrl = (process.env.BASE_URL || "").replace(/\/+$/, "");
 
@@ -710,7 +774,7 @@ wss.on("connection", async (twilioWs, req) => {
   }
 
   async function hangupCall() {
-    if (!callSid) return;
+    if (!callSid || !client) return;
 
     try {
       await client.calls(callSid).update({

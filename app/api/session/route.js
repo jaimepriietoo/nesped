@@ -1,7 +1,6 @@
 import { getSupabase } from "@/lib/supabase";
 import { getAuthenticatedUserContext } from "@/lib/server/auth";
-
-const supabase = getSupabase();
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function mapClient(row) {
   return {
@@ -20,7 +19,7 @@ function mapClient(row) {
   };
 }
 
-export async function GET() {
+async function handleGet() {
   const auth = await getAuthenticatedUserContext();
   if (!auth.ok) {
     return Response.json({
@@ -30,6 +29,7 @@ export async function GET() {
   }
 
   const clientId = auth.user.client_id;
+  const supabase = getSupabase();
 
   const { data, error } = await supabase
     .from("clients")
@@ -57,3 +57,5 @@ export async function GET() {
     client,
   });
 }
+
+export const GET = observeRoute("api.session.get", handleGet);

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useEffectEvent, useMemo, useState, useRef } from "react";
 import {
   buildDerivedNotifications,
@@ -3873,7 +3874,16 @@ export default function ClientPortalPage() {
         <aside className="sidebar">
           <div className="sidebar-logo">
             {client.brand_logo_url
-              ? <img src={client.brand_logo_url} alt="logo" style={{ width: 32, height: 32, borderRadius: 8, objectFit: "cover" }} />
+              ? (
+                <Image
+                  src={client.brand_logo_url}
+                  alt="logo"
+                  width={32}
+                  height={32}
+                  unoptimized
+                  style={{ width: 32, height: 32, borderRadius: 8, objectFit: "cover" }}
+                />
+              )
               : <div className="sidebar-logo-icon">{(client.brand_name || client.name || "N").slice(0, 1)}</div>
             }
             <div>

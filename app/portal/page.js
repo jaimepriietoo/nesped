@@ -1,6 +1,12 @@
 "use client";
 
 import { useEffect, useEffectEvent, useMemo, useState, useRef } from "react";
+import {
+  buildDerivedNotifications,
+  buildLeadTimeline,
+  buildOnboardingChecklist,
+  computeUsagePressure,
+} from "@/lib/portal-product";
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 
@@ -117,6 +123,25 @@ async function readJsonResponse(res) {
   const json = await res.json().catch(() => ({}));
   if (!res.ok || json?.success === false) throw new Error(json?.message || "Error en la solicitud.");
   return json;
+}
+
+function getSeverityColor(severity) {
+  return {
+    high: "red",
+    medium: "amber",
+    low: "blue",
+    healthy: "green",
+    warning: "amber",
+    critical: "red",
+  }[String(severity || "").toLowerCase()] || "default";
+}
+
+function getHealthLabel(level) {
+  return {
+    healthy: "Operativo",
+    warning: "Atención",
+    critical: "Crítico",
+  }[String(level || "").toLowerCase()] || "Info";
 }
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -589,7 +614,14 @@ function LeadDrawer({ lead, events, notes, comments, reminders, call, users, can
   const selectedWhatsappTemplate = (whatsappTemplates || []).find(t => t.id === selectedWhatsappTemplateId) || null;
 
   const tier = getRecommendedProductTier(lead);
-  const tabs = ["datos", "ia", "historial", "mensajes", "llamada"];
+  const timelineItems = buildLeadTimeline({
+    call,
+    events,
+    notes,
+    comments,
+    reminders,
+  });
+  const tabs = ["datos", "ia", "timeline", "historial", "mensajes", "llamada"];
 
   return (
     <>
@@ -769,6 +801,28 @@ function LeadDrawer({ lead, events, notes, comments, reminders, call, users, can
             </>
           )}
 
+          {/* TAB: TIMELINE */}
+          {tab === "timeline" && (
+            <>
+              <div className="card-sm" style={{ borderColor: "rgba(59,130,246,0.22)" }}>
+                <div className="text-xs text-muted mb-2 text-upper">Timeline unificada del lead</div>
+                <div className="text-sm text-dim">Vista única de llamadas, eventos, notas, comentarios y recordatorios ordenados en el tiempo.</div>
+              </div>
+              {timelineItems.length === 0 ? <div className="empty">Sin actividad registrada todavía.</div> : timelineItems.map(item => (
+                <div key={item.id} className="card-sm mb-2" style={{ borderColor: `var(--c-${item.accent || "blue"})` }}>
+                  <div className="flex justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Badge color={item.accent || "blue"}>{item.type}</Badge>
+                      <div className="text-sm font-semibold">{item.title}</div>
+                    </div>
+                    <div className="text-xs text-muted">{formatDate(item.created_at)}</div>
+                  </div>
+                  <div className="text-sm text-dim">{item.body || "—"}</div>
+                </div>
+              ))}
+            </>
+          )}
+
           {/* TAB: HISTORIAL */}
           {tab === "historial" && (
             <>
@@ -902,7 +956,7 @@ function LeadDrawer({ lead, events, notes, comments, reminders, call, users, can
 
 // ─── VIEWS ────────────────────────────────────────────────────────────────────
 
-function DashboardView({ data, filteredLeads, revenue, voiceStats, priorityStats, reactivationStats, leadRevenue, ownerRevenue, upsellStats, appointmentStats, onOpenLead, onOpenCheckout, exportCsv, openCheckout, openBillingPortal, billingLoading, sendDailyReport, sendWeeklyReport, runNightly, recalculateAllNextActions, runAutomaticFunnel, recalculateDynamicScoring, runColdLeadReactivation }) {
+function DashboardView({ data, filteredLeads, revenue, voiceStats, priorityStats, reactivationStats, leadRevenue, ownerRevenue, upsellStats, appointmentStats, billingData, healthData, onboarding, notifications, usagePressure, onOpenLead, onOpenCheckout, exportCsv, openCheckout, openBillingPortal, billingLoading, onNavigate, sendDailyReport, sendWeeklyReport, runNightly, recalculateAllNextActions, runAutomaticFunnel, recalculateDynamicScoring, runColdLeadReactivation }) {
   const { metrics = {}, rankings = { bestDays: [], bestHours: [] }, client = {}, settings = {} } = data;
   const chartCalls = rankings.bestDays.length ? rankings.bestDays.map(d => ({ label: d.label, value: d.calls })) : [{ label: "—", value: 0 }];
   const chartLeads = rankings.bestDays.length ? rankings.bestDays.map(d => ({ label: d.label, value: d.leads })) : [{ label: "—", value: 0 }];
@@ -922,6 +976,43 @@ function DashboardView({ data, filteredLeads, revenue, voiceStats, priorityStats
         <button onClick={runAutomaticFunnel} className="btn btn-ghost">⚡ Funnel auto</button>
         <button onClick={recalculateDynamicScoring} className="btn btn-ghost">🎯 Recalcular scoring</button>
         <button onClick={runColdLeadReactivation} className="btn btn-ghost">🔥 Reactivar fríos</button>
+      </div>
+
+      <div className="grid-2 mb-4">
+        <div className="card">
+          <div className="card-title">🚀 Onboarding guiado <div className="card-title-right"><Badge color={onboarding?.progress >= 100 ? "green" : "blue"}>{onboarding?.progress || 0}%</Badge></div></div>
+          <div className="mb-3">
+            <div className="progress-bar"><div className="progress-fill" style={{ width: `${onboarding?.progress || 0}%`, background: "var(--c-blue)" }} /></div>
+          </div>
+          {onboarding?.items?.slice(0, 5).map(item => (
+            <div key={item.id} className="pipeline-row">
+              <div className="flex-1">
+                <div className="text-sm font-semibold">{item.title}</div>
+                <div className="text-xs text-dim">{item.detail}</div>
+              </div>
+              <Badge color={item.done ? "green" : "amber"}>{item.done ? "Hecho" : "Pendiente"}</Badge>
+            </div>
+          ))}
+          {onboarding?.nextStep && (
+            <button onClick={() => onNavigate(onboarding.nextStep.view || "settings")} className="btn btn-primary btn-sm mt-3">
+              Ir al siguiente paso
+            </button>
+          )}
+        </div>
+
+        <div className="card">
+          <div className="card-title">🔔 Centro de prioridades <div className="card-title-right"><Badge color={notifications?.length ? "red" : "green"}>{notifications?.length || 0}</Badge></div></div>
+          {notifications?.length ? notifications.slice(0, 5).map(item => (
+            <div key={item.id} className="card-sm mb-2">
+              <div className="flex justify-between mb-1">
+                <div className="text-sm font-semibold">{item.title}</div>
+                <Badge color={getSeverityColor(item.severity)}>{item.severity}</Badge>
+              </div>
+              <div className="text-xs text-dim mb-2">{item.body}</div>
+              <button onClick={() => onNavigate(item.view || "notifications")} className="btn btn-ghost btn-sm">Abrir</button>
+            </div>
+          )) : <div className="empty">Todo bastante controlado ahora mismo.</div>}
+        </div>
       </div>
 
       {/* Core metrics */}
@@ -981,6 +1072,24 @@ function DashboardView({ data, filteredLeads, revenue, voiceStats, priorityStats
             </table>
           </div>
         )}
+      </div>
+
+      <div className="grid-3 mb-4">
+        <div className="card-sm">
+          <div className="text-xs text-muted mb-1">Facturación</div>
+          <div className="text-md font-bold text-white">{billingData?.activeSubscription?.status || (client.stripe_customer_id ? "Stripe listo" : "Sin activar")}</div>
+          <div className="text-xs text-dim mt-2">{billingData?.lastInvoice ? `Última factura ${fmtEur(billingData.lastInvoice.amount)}` : "Sin facturas todavía"}</div>
+        </div>
+        <div className="card-sm">
+          <div className="text-xs text-muted mb-1">Salud del sistema</div>
+          <div className="flex items-center gap-2"><Badge color={getSeverityColor(healthData?.summary?.level)}>{getHealthLabel(healthData?.summary?.level)}</Badge></div>
+          <div className="text-xs text-dim mt-2">{healthData?.summary?.message || "Sin diagnóstico cargado"}</div>
+        </div>
+        <div className="card-sm">
+          <div className="text-xs text-muted mb-1">Uso del plan</div>
+          <div className="text-md font-bold text-white">{usagePressure?.callsLimit ? `${usagePressure.usagePercent}%` : "Sin límite"}</div>
+          <div className="text-xs text-dim mt-2">{usagePressure?.recommendation || "Sin recomendación aún"}</div>
+        </div>
       </div>
 
       {/* Voice + Priority + Reactivation */}
@@ -1309,6 +1418,257 @@ function AnalyticsView({ data, revenue, leadRevenue, ownerRevenue, voiceStats, p
   );
 }
 
+function NotificationsView({ notifications, data, onNavigate }) {
+  const alerts = data?.alerts || [];
+
+  return (
+    <div className="fade-up">
+      <div className="section-header mb-4">
+        <div className="section-title">Centro de notificaciones</div>
+        <Badge color={notifications.length ? "red" : "green"}>{notifications.length}</Badge>
+      </div>
+
+      <div className="grid-2 mb-4">
+        <div className="card">
+          <div className="card-title">Prioridades de producto</div>
+          {notifications.length === 0 ? <div className="empty">No hay alertas operativas ahora mismo.</div> : notifications.map(item => (
+            <div key={item.id} className="card-sm mb-2">
+              <div className="flex justify-between mb-1">
+                <div className="text-sm font-semibold">{item.title}</div>
+                <Badge color={getSeverityColor(item.severity)}>{item.severity}</Badge>
+              </div>
+              <div className="text-xs text-dim mb-2">{item.body}</div>
+              <div className="flex gap-2">
+                <Badge color="default">{item.area || "general"}</Badge>
+                <button onClick={() => onNavigate(item.view || "dashboard")} className="btn btn-ghost btn-sm">Abrir módulo</button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="card">
+          <div className="card-title">Alertas del sistema</div>
+          {alerts.length === 0 ? <div className="empty">Sin alertas guardadas.</div> : alerts.map(alert => (
+            <div key={alert.id} className="pipeline-row">
+              <div className="flex-1">
+                <div className="text-sm font-semibold">{alert.title || "Alerta"}</div>
+                <div className="text-xs text-dim">{alert.message || "—"}</div>
+              </div>
+              <Badge color={getSeverityColor(alert.severity)}>{alert.severity || "info"}</Badge>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BillingView({ data, billingData, revenue, usagePressure, openCheckout, openBillingPortal, billingLoading }) {
+  const client = data?.client || {};
+  const activeSubscription = billingData?.activeSubscription || null;
+  const invoices = billingData?.invoices || [];
+
+  return (
+    <div className="fade-up">
+      <div className="flex flex-wrap gap-2 mb-4">
+        <button onClick={() => openCheckout(client.plan || "pro")} disabled={billingLoading} className="btn btn-primary">
+          {billingLoading ? "Abriendo..." : "⬆ Gestionar o ampliar plan"}
+        </button>
+        <button onClick={openBillingPortal} disabled={billingLoading} className="btn btn-ghost">💳 Abrir facturación</button>
+      </div>
+
+      <div className="stat-grid mb-4">
+        <StatCard title="Plan actual" value={client.plan || "pro"} sub="Configurado en cliente" accent="var(--c-blue)" />
+        <StatCard title="Estado suscripción" value={activeSubscription?.status || "sin suscripción"} sub="Stripe / billing" accent="var(--c-green)" />
+        <StatCard title="Ingresos generados" value={fmtEur(revenue?.total || billingData?.totalRevenue || 0)} sub="Valor total trazado" accent="var(--c-purple)" />
+        <StatCard title="Uso de llamadas" value={usagePressure?.callsLimit ? `${usagePressure.usagePercent}%` : usagePressure?.totalCalls || 0} sub={usagePressure?.callsLimit ? `${usagePressure.totalCalls}/${usagePressure.callsLimit}` : "Sin límite definido"} accent="var(--c-amber)" />
+      </div>
+
+      <div className="grid-2 mb-4">
+        <div className="card">
+          <div className="card-title">Estado de facturación</div>
+          <div className="card-sm mb-3">
+            <div className="text-sm font-semibold mb-1">{activeSubscription ? "Suscripción gestionada" : "Cuenta todavía no consolidada"}</div>
+            <div className="text-xs text-dim">{usagePressure?.recommendation || "Sin recomendación disponible"}</div>
+          </div>
+          <div className="mb-3">
+            <div className="progress-bar"><div className="progress-fill" style={{ width: `${Math.min(100, usagePressure?.usagePercent || 0)}%`, background: usagePressure?.level === "critical" ? "var(--c-red)" : usagePressure?.level === "high" ? "var(--c-amber)" : "var(--c-green)" }} /></div>
+          </div>
+          {[["Customer Stripe", client.stripe_customer_id || "No vinculado"], ["Facturas pagadas", billingData?.paidInvoicesCount || 0], ["Facturas pendientes", billingData?.pendingInvoicesCount || 0], ["Leads pagados", billingData?.paidLeads || 0]].map(([k, v]) => (
+            <div key={k} className="pipeline-row"><span className="text-sm text-dim flex-1">{k}</span><span className="text-sm font-semibold">{String(v)}</span></div>
+          ))}
+        </div>
+
+        <div className="card">
+          <div className="card-title">ROI y retorno</div>
+          {[["Ingresos históricos", fmtEur(billingData?.totalRevenue || revenue?.total || 0)], ["Pagos trazados", billingData?.totalPayments || 0], ["Última factura", billingData?.lastInvoice ? fmtEur(billingData.lastInvoice.amount) : "—"], ["Próximo foco", usagePressure?.level === "healthy" ? "Expandir canal" : "Ampliar plan"]].map(([k, v]) => (
+            <div key={k} className="pipeline-row"><span className="text-sm text-dim flex-1">{k}</span><span className="text-sm font-semibold">{String(v)}</span></div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid-2">
+        <div className="card">
+          <div className="card-title">Facturas recientes</div>
+          {invoices.length === 0 ? <div className="empty">Aún no hay facturas sincronizadas.</div> : (
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>Factura</th><th>Estado</th><th>Importe</th><th>Fecha</th></tr></thead>
+                <tbody>
+                  {invoices.slice(0, 10).map(invoice => (
+                    <tr key={invoice.id}>
+                      <td className="bold">{invoice.stripe_invoice_id || invoice.id}</td>
+                      <td><Badge color={invoice.status === "paid" ? "green" : "amber"}>{invoice.status || "unknown"}</Badge></td>
+                      <td>{fmtEur(invoice.amount || 0)}</td>
+                      <td className="text-xs text-muted">{formatDate(invoice.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="card">
+          <div className="card-title">Leads con ingreso</div>
+          {(billingData?.topLeads || []).length === 0 ? <div className="empty">Sin ventas trazadas todavía.</div> : billingData.topLeads.slice(0, 8).map((lead, index) => (
+            <div key={`${lead.phone}:${index}`} className="card-sm mb-2">
+              <div className="flex justify-between mb-1">
+                <div className="text-sm font-semibold">{lead.customer_name || "Cliente"}</div>
+                <Badge color="green">{fmtEur(lead.total_revenue || 0)}</Badge>
+              </div>
+              <div className="text-xs text-dim">{lead.customer_email || lead.phone || "Sin contacto"}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PlaybooksView({ data, playbookData, playbookForm, setPlaybookForm, savePlaybook, playbookSaving, canEdit }) {
+  const client = data?.client || {};
+  const library = playbookData?.library || [];
+
+  return (
+    <div className="fade-up">
+      <div className="grid-2 mb-4">
+        <div className="card">
+          <div className="card-title">Biblioteca de playbooks</div>
+          {library.length === 0 ? <div className="empty">Sin playbooks cargados.</div> : library.map(item => (
+            <div key={item.id} className="card-sm mb-2">
+              <div className="flex justify-between mb-1">
+                <div className="text-sm font-semibold">{item.title}</div>
+                <div className="flex gap-2">
+                  <Badge color="default">{item.channel}</Badge>
+                  <Badge color="blue">{item.stage}</Badge>
+                </div>
+              </div>
+              <div className="text-xs text-dim mb-2">{item.description}</div>
+              <div className="text-sm text-dim">{item.content}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="card">
+          <div className="card-title">Entrenamiento de la IA</div>
+          <div className="grid-2" style={{ gap: 10 }}>
+            {[["Tono", "tone"], ["Apertura", "opening"], ["Cualificación", "qualification"], ["Objeciones", "objections"], ["Cierre", "closing"], ["Follow-up", "followup"], ["Upsell", "upsell"], ["Handoff", "handoff"]].map(([label, key]) => (
+              <div key={key}>
+                <label className="text-xs text-muted mb-1" style={{ display: "block" }}>{label}</label>
+                <textarea disabled={!canEdit} rows={3} className="textarea" value={playbookForm?.[key] || ""} onChange={e => setPlaybookForm(p => ({ ...(p || {}), [key]: e.target.value }))} />
+              </div>
+            ))}
+            <div className="col-span-2">
+              <label className="text-xs text-muted mb-1" style={{ display: "block" }}>Notas extra</label>
+              <textarea disabled={!canEdit} rows={4} className="textarea" value={playbookForm?.notes || ""} onChange={e => setPlaybookForm(p => ({ ...(p || {}), notes: e.target.value }))} />
+            </div>
+          </div>
+          <div className="card-sm mt-3">
+            <div className="text-xs text-muted mb-2">Prompt activo para {client.brand_name || client.name || "la marca"}</div>
+            <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 12, color: "var(--text-2)", lineHeight: 1.6, maxHeight: 240, overflow: "auto" }}>{playbookForm?.compiledPrompt || playbookData?.workspace?.compiledPrompt || "Sin prompt compilado todavía."}</pre>
+          </div>
+          {canEdit && <button onClick={savePlaybook} disabled={playbookSaving} className="btn btn-primary mt-3">{playbookSaving ? "Guardando..." : "Guardar playbook"}</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OperationsView({ data, healthData, voiceQaData, runNightly }) {
+  const auditLogs = data?.auditLogs || [];
+  const services = healthData?.services || {};
+  const voiceCalls = voiceQaData?.calls || [];
+
+  return (
+    <div className="fade-up">
+      <div className="flex flex-wrap gap-2 mb-4">
+        <button onClick={runNightly} className="btn btn-primary">🌙 Ejecutar proceso nocturno</button>
+      </div>
+
+      <div className="grid-2 mb-4">
+        <div className="card">
+          <div className="card-title">Salud del sistema</div>
+          <div className="card-sm mb-3">
+            <div className="flex justify-between mb-1">
+              <div className="text-sm font-semibold">Resumen</div>
+              <Badge color={getSeverityColor(healthData?.summary?.level)}>{getHealthLabel(healthData?.summary?.level)}</Badge>
+            </div>
+            <div className="text-xs text-dim">{healthData?.summary?.message || "Sin diagnóstico."}</div>
+          </div>
+          {Object.entries(services).map(([key, service]) => (
+            <div key={key} className="pipeline-row">
+              <div className="flex-1">
+                <div className="text-sm font-semibold">{key}</div>
+                <div className="text-xs text-dim">{service.detail}</div>
+              </div>
+              <Badge color={getSeverityColor(service.level)}>{getHealthLabel(service.level)}</Badge>
+            </div>
+          ))}
+        </div>
+
+        <div className="card">
+          <div className="card-title">QA de llamadas IA</div>
+          <div className="stat-grid mb-3">
+            <StatCard title="Llamadas revisadas" value={voiceQaData?.summary?.total || 0} accent="var(--c-blue)" />
+            <StatCard title="Score medio" value={voiceQaData?.summary?.avgScore || 0} accent="var(--c-green)" />
+            <StatCard title="Top calls" value={voiceQaData?.summary?.bestCalls || 0} accent="var(--c-purple)" />
+            <StatCard title="A revisar" value={voiceQaData?.summary?.needsAttention || 0} accent="var(--c-red)" />
+          </div>
+          {voiceCalls.length === 0 ? <div className="empty">Todavía no hay llamadas IA evaluables.</div> : voiceCalls.slice(0, 6).map(call => (
+            <div key={call.id} className="card-sm mb-2">
+              <div className="flex justify-between mb-1">
+                <div className="text-sm font-semibold">{call.leadName}</div>
+                <Badge color={call.qa.overall >= 75 ? "green" : call.qa.overall >= 55 ? "amber" : "red"}>{call.qa.overall}/100</Badge>
+              </div>
+              <div className="text-xs text-dim mb-2">{call.summary || "Sin resumen."}</div>
+              <div className="flex flex-wrap gap-2">
+                <Badge color="blue">Calidad {call.qa.quality}</Badge>
+                <Badge color="purple">Empatía {call.qa.empathy}</Badge>
+                <Badge color="green">Cierre {call.qa.closing}</Badge>
+              </div>
+              <div className="text-xs text-dim mt-2">Mejora sugerida: {call.qa.recommendation}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-title">Audit log visible</div>
+        {auditLogs.length === 0 ? <div className="empty">Sin actividad registrada.</div> : auditLogs.slice(0, 20).map(log => (
+          <div key={log.id} className="pipeline-row">
+            <div className="flex-1">
+              <div className="text-sm font-semibold">{log.action}</div>
+              <div className="text-xs text-dim">{log.entity_type} · {log.entity_id || "—"} · {log.actor || "sistema"}</div>
+            </div>
+            <div className="text-xs text-muted">{formatDate(log.created_at)}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function AutomationsView({ leads, runColdLeadReactivation, recalculateDynamicScoring, runAutomaticFunnel, runAutomaticOnboarding, runVoiceCalls, recalculatePriority, runUpsells, runAppointments }) {
   const [results, setResults] = useState({});
   const [running, setRunning] = useState({});
@@ -1388,6 +1748,7 @@ function TeamView({ data, canAdmin, newUser, setNewUser, createUser, leadsByOwne
                   {["owner","admin","manager","agent","viewer"].map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
                 <input value={newUser.phone} onChange={e => setNewUser(u => ({ ...u, phone: e.target.value }))} placeholder="Teléfono" className="input" />
+                <input value={newUser.password || ""} onChange={e => setNewUser(u => ({ ...u, password: e.target.value }))} placeholder="Contraseña temporal (opcional)" className="input" />
                 <button onClick={createUser} className="btn btn-primary btn-sm" style={{ alignSelf: "flex-start" }}>Crear usuario</button>
               </div>
             </div>
@@ -1444,6 +1805,24 @@ function TeamView({ data, canAdmin, newUser, setNewUser, createUser, leadsByOwne
           ))}
         </div>
         <div className="card">
+          <div className="card-title">Permisos disponibles</div>
+          {[
+            ["owner", "Control total del cliente, branding, billing y equipo."],
+            ["admin", "Gestión operativa y acceso amplio al portal."],
+            ["manager", "Coordina pipeline, equipo y automatizaciones."],
+            ["agent", "Trabaja leads, follow-up y acciones comerciales."],
+            ["viewer", "Solo lectura para reporting y seguimiento."],
+          ].map(([role, description]) => (
+            <div key={role} className="pipeline-row">
+              <div className="flex-1">
+                <div className="text-sm font-semibold">{role}</div>
+                <div className="text-xs text-dim">{description}</div>
+              </div>
+              <Badge color="blue">{role}</Badge>
+            </div>
+          ))}
+        </div>
+        <div className="card">
           <div className="card-title">📋 Registro de actividad <div className="card-title-right"><Badge color="blue">{auditLogs.length}</Badge></div></div>
           {auditLogs.length === 0 ? <div className="empty">Sin actividad.</div> : auditLogs.slice(0, 8).map(log => (
             <div key={log.id} className="pipeline-row">
@@ -1457,7 +1836,7 @@ function TeamView({ data, canAdmin, newUser, setNewUser, createUser, leadsByOwne
   );
 }
 
-function SettingsView({ data, canAdmin, brandingForm, setBrandingForm, saveBranding }) {
+function SettingsView({ data, canAdmin, brandingForm, setBrandingForm, saveBranding, portalSettingsForm, setPortalSettingsForm, savePortalSettings, portalSettingsSaving }) {
   const { client = {} } = data;
   return (
     <div className="fade-up">
@@ -1479,6 +1858,33 @@ function SettingsView({ data, canAdmin, brandingForm, setBrandingForm, saveBrand
           {[["Plan", client.plan || "pro"], ["Estado", client.is_active !== false ? "Activo" : "Inactivo"], ["Llamadas límite", client.calls_limit || client.callsLimit || 0], ["Email owner", client.owner_email || "—"], ["Industria", client.industry || "—"]].map(([k, v]) => (
             <div key={k} className="pipeline-row"><span className="text-sm text-dim flex-1">{k}</span><span className="text-sm font-semibold">{String(v)}</span></div>
           ))}
+        </div>
+      </div>
+
+      <div className="grid-2 mt-4">
+        <div className="card">
+          <div className="card-title">🧩 Operativa y reporting</div>
+          <div className="flex-col gap-3" style={{ display: "flex" }}>
+            {[["Email informe diario", "daily_report_email", "email"], ["Email informe semanal", "weekly_report_email", "email"], ["Refresh (seg)", "realtime_refresh_seconds", "number"], ["Valor por operación", "default_deal_value", "number"], ["Meta leads mes", "monthly_target_leads", "number"], ["Meta conversión %", "monthly_target_conversion", "number"]].map(([label, key, type]) => (
+              <div key={key}>
+                <label className="text-xs text-muted mb-1" style={{ display: "block" }}>{label}</label>
+                <input type={type} disabled={!canAdmin} value={portalSettingsForm?.[key] ?? ""} onChange={e => setPortalSettingsForm(f => ({ ...(f || {}), [key]: e.target.value }))} className="input" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-title">🌐 White-label y canales</div>
+          <div className="flex-col gap-3" style={{ display: "flex" }}>
+            {[["Número Twilio", "twilio_number", "text"], ["Webhook", "webhook", "text"], ["Tagline", "tagline", "text"]].map(([label, key, type]) => (
+              <div key={key}>
+                <label className="text-xs text-muted mb-1" style={{ display: "block" }}>{label}</label>
+                <input type={type} disabled={!canAdmin} value={portalSettingsForm?.[key] ?? ""} onChange={e => setPortalSettingsForm(f => ({ ...(f || {}), [key]: e.target.value }))} className="input" />
+              </div>
+            ))}
+            {canAdmin && <button onClick={savePortalSettings} disabled={portalSettingsSaving} className="btn btn-primary" style={{ alignSelf: "flex-start" }}>{portalSettingsSaving ? "Guardando..." : "Guardar ajustes operativos"}</button>}
+          </div>
         </div>
       </div>
     </div>
@@ -1508,8 +1914,16 @@ export default function ClientPortalPage() {
   const [reactivationStats, setReactivationStats] = useState(null);
   const [voiceStats, setVoiceStats] = useState(null);
   const [priorityStats, setPriorityStats] = useState(null);
+  const [billingData, setBillingData] = useState(null);
+  const [healthData, setHealthData] = useState(null);
+  const [playbookData, setPlaybookData] = useState(null);
+  const [playbookForm, setPlaybookForm] = useState(null);
+  const [playbookSaving, setPlaybookSaving] = useState(false);
+  const [voiceQaData, setVoiceQaData] = useState(null);
+  const [portalSettingsForm, setPortalSettingsForm] = useState(null);
+  const [portalSettingsSaving, setPortalSettingsSaving] = useState(false);
   const [selectedLeadMemory, setSelectedLeadMemory] = useState(null);
-  const [newUser, setNewUser] = useState({ full_name: "", email: "", role: "agent", phone: "" });
+  const [newUser, setNewUser] = useState({ full_name: "", email: "", role: "agent", phone: "", password: "" });
   const [showAccountSetup, setShowAccountSetup] = useState(false);
   const [accountSetupForm, setAccountSetupForm] = useState({ email: "", password: "", confirmPassword: "" });
   const [accountSetupLoading, setAccountSetupLoading] = useState(false);
@@ -1545,11 +1959,30 @@ export default function ClientPortalPage() {
     setAccountSetupForm(p => ({ ...p, email: p.email || data?.currentUser?.email || data?.client?.owner_email || "" }));
   }, [data]);
 
+  useEffect(() => {
+    if (!data?.client && !data?.settings) return;
+    setPortalSettingsForm({
+      daily_report_email: data?.settings?.daily_report_email || "",
+      weekly_report_email: data?.settings?.weekly_report_email || "",
+      realtime_refresh_seconds: data?.settings?.realtime_refresh_seconds || 15,
+      default_deal_value: data?.settings?.default_deal_value || 250,
+      monthly_target_leads: data?.settings?.monthly_target_leads || 25,
+      monthly_target_conversion: data?.settings?.monthly_target_conversion || 20,
+      twilio_number: data?.client?.twilio_number || "",
+      webhook: data?.client?.webhook || "",
+      tagline: data?.client?.tagline || "",
+    });
+  }, [data]);
+
   function loadAll() {
     loadOverview();
     loadRevenue();
     loadLeadRevenue();
     loadOwnerRevenue();
+    loadBillingData();
+    loadHealthData();
+    loadPlaybooks();
+    loadVoiceQa();
     loadReactivationStats();
     loadVoiceStats();
     loadPriorityStats();
@@ -1576,6 +2009,10 @@ export default function ClientPortalPage() {
   async function loadRevenue() { try { const r = await fetch("/api/analytics/revenue", { cache: "no-store" }); const j = await r.json(); if (j.success) setRevenue(j.data); } catch {} }
   async function loadLeadRevenue() { try { const r = await fetch("/api/analytics/lead-revenue", { cache: "no-store" }); const j = await r.json(); if (j.success) setLeadRevenue(j.data); } catch {} }
   async function loadOwnerRevenue() { try { const r = await fetch("/api/analytics/owner-revenue", { cache: "no-store" }); const j = await r.json(); if (j.success) setOwnerRevenue(j.data); } catch {} }
+  async function loadBillingData() { try { const r = await fetch("/api/analytics/billing", { cache: "no-store" }); const j = await r.json(); if (j.success) setBillingData(j.data); } catch {} }
+  async function loadHealthData() { try { const r = await fetch("/api/portal/health", { cache: "no-store" }); const j = await r.json(); if (j.success) setHealthData(j.data); } catch {} }
+  async function loadPlaybooks() { try { const r = await fetch("/api/playbooks", { cache: "no-store" }); const j = await r.json(); if (j.success) { setPlaybookData(j.data); setPlaybookForm(j.data.workspace || null); } } catch {} }
+  async function loadVoiceQa() { try { const r = await fetch("/api/portal/voice-qa", { cache: "no-store" }); const j = await r.json(); if (j.success) setVoiceQaData(j.data); } catch {} }
   async function loadReactivationStats() { try { const r = await fetch("/api/analytics/reactivation-stats", { cache: "no-store" }); const j = await r.json(); if (j.success) setReactivationStats(j.data); } catch {} }
   async function loadVoiceStats() { try { const r = await fetch("/api/analytics/voice-stats", { cache: "no-store" }); const j = await r.json(); if (j.success) setVoiceStats(j.data); } catch {} }
   async function loadPriorityStats() { try { const r = await fetch("/api/analytics/priority-stats", { cache: "no-store" }); const j = await r.json(); if (j.success) setPriorityStats(j.data); } catch {} }
@@ -1744,11 +2181,42 @@ export default function ClientPortalPage() {
     await loadOverview(); alert("Branding actualizado.");
   }
 
+  async function savePortalSettings() {
+    try {
+      setPortalSettingsSaving(true);
+      const res = await fetch("/api/portal/settings/update", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(portalSettingsForm || {}) });
+      const json = await readJsonResponse(res);
+      await loadOverview();
+      await loadHealthData();
+      alert(json.message || "Ajustes operativos actualizados.");
+    } catch (e) {
+      alert(e.message || "Error guardando ajustes.");
+    } finally {
+      setPortalSettingsSaving(false);
+    }
+  }
+
+  async function savePlaybook() {
+    try {
+      setPlaybookSaving(true);
+      const res = await fetch("/api/playbooks", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workspace: playbookForm || {} }) });
+      const json = await readJsonResponse(res);
+      setPlaybookData(current => current ? { ...current, workspace: json.data.workspace } : current);
+      setPlaybookForm(json.data.workspace);
+      await loadOverview();
+      alert(json.message || "Playbook actualizado.");
+    } catch (e) {
+      alert(e.message || "Error guardando playbook.");
+    } finally {
+      setPlaybookSaving(false);
+    }
+  }
+
   async function createUser() {
     const res = await fetch("/api/portal/users/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newUser) });
     const json = await res.json();
     if (!json.success) { alert(json.message || "Error creando usuario."); return; }
-    setNewUser({ full_name: "", email: "", role: "agent", phone: "" }); await loadOverview();
+    setNewUser({ full_name: "", email: "", role: "agent", phone: "", password: "" }); await loadOverview();
   }
 
   async function openBillingPortal() {
@@ -1762,7 +2230,7 @@ export default function ClientPortalPage() {
   function exportCsv() { window.location.href = "/api/leads/export"; }
   async function sendDailyReport() { const r = await fetch("/api/daily-report/send", { method: "POST" }); const j = await r.json(); alert(j.success ? "Informe diario enviado." : j.message || "Error."); }
   async function sendWeeklyReport() { const r = await fetch("/api/weekly-report/send", { method: "POST" }); const j = await r.json(); alert(j.success ? "Informe semanal enviado." : j.message || "Error."); }
-  async function runNightly() { const r = await fetch("/api/nightly", { method: "POST" }); const j = await r.json(); alert(j.success ? "Proceso nocturno ejecutado." : j.message || "Error."); await loadOverview(); }
+  async function runNightly() { const r = await fetch("/api/nightly", { method: "POST" }); const j = await r.json(); alert(j.success ? "Proceso nocturno ejecutado." : j.message || "Error."); await loadOverview(); await loadHealthData(); }
 
   async function recalculateAllNextActions() {
     const res = await fetch("/api/automation/recalculate-next-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clientId: data?.client?.id }) });
@@ -1775,7 +2243,7 @@ export default function ClientPortalPage() {
   async function recalculateDynamicScoring() { const r = await fetch("/api/automation/recalculate-dynamic-score", { method: "POST" }); const j = await r.json(); if (!j.success) { alert(j.message || "Error."); return; } await loadOverview(); alert(`Scoring recalculado. ${j.processed} procesados.`); }
   async function runColdLeadReactivation() { const r = await fetch("/api/automation/reactivate-cold-leads", { method: "POST" }); const j = await r.json(); if (!j.success) { alert(j.message || "Error."); return; } await loadOverview(); alert(`Reactivación completada. ${j.processed} procesados.`); }
   async function runAutomaticOnboarding() { const r = await fetch("/api/automation/run-onboarding", { method: "POST" }); const j = await r.json(); if (!j.success) { alert(j.message || "Error."); return; } await loadOverview(); alert(`Onboarding ejecutado. ${j.processed} procesados.`); }
-  async function runVoiceCalls() { const r = await fetch("/api/automation/run-voice-calls", { method: "POST" }); const j = await r.json(); if (!j.success) { alert(j.message || "Error."); return; } await loadOverview(); await loadVoiceStats(); alert(`Llamadas IA ejecutadas. ${j.processed} procesados.`); }
+  async function runVoiceCalls() { const r = await fetch("/api/automation/run-voice-calls", { method: "POST" }); const j = await r.json(); if (!j.success) { alert(j.message || "Error."); return; } await loadOverview(); await loadVoiceStats(); await loadVoiceQa(); alert(`Llamadas IA ejecutadas. ${j.processed} procesados.`); }
   async function recalculatePriority() { const r = await fetch("/api/automation/recalculate-priority", { method: "POST" }); const j = await r.json(); if (!j.success) { alert(j.message || "Error."); return; } await loadOverview(); await loadPriorityStats(); alert(`Prioridad recalculada. ${j.processed} procesados.`); }
   async function runUpsells() { const r = await fetch("/api/automation/run-upsells", { method: "POST" }); const j = await r.json(); if (!j.success) { alert(j.message || "Error."); return; } await loadUpsellStats(); alert(`Upsells ejecutados. ${j.processed} procesados.`); }
   async function runAppointments() { const r = await fetch("/api/automation/run-appointment-reminders", { method: "POST" }); const j = await r.json(); if (!j.success) { alert(j.message || "Error."); return; } await loadAppointmentStats(); alert(`Recordatorios enviados. ${j.processed} procesados.`); }
@@ -1830,6 +2298,10 @@ export default function ClientPortalPage() {
     });
   }, [data]);
 
+  const usagePressure = useMemo(() => computeUsagePressure({ data, billingData }), [data, billingData]);
+  const onboarding = useMemo(() => buildOnboardingChecklist({ data, billingData, healthData }), [data, billingData, healthData]);
+  const notifications = useMemo(() => buildDerivedNotifications({ data, billingData, healthData, voiceQaData }), [data, billingData, healthData, voiceQaData]);
+
   if (!data) {
     return (
       <>
@@ -1848,10 +2320,14 @@ export default function ClientPortalPage() {
 
   const navItems = [
     { id: "dashboard", icon: "⬡", label: "Dashboard" },
+    { id: "notifications", icon: "🔔", label: "Alertas" },
     { id: "pipeline", icon: "◈", label: "Pipeline" },
     { id: "leads", icon: "◉", label: "Leads" },
     { id: "analytics", icon: "📊", label: "Analytics" },
+    { id: "billing", icon: "💳", label: "Billing" },
+    { id: "playbooks", icon: "🧠", label: "Playbooks" },
     { id: "automations", icon: "⚡", label: "Automatiz." },
+    { id: "operations", icon: "🛟", label: "Ops" },
     { id: "team", icon: "👥", label: "Equipo" },
     { id: "settings", icon: "⚙", label: "Ajustes" },
   ];
@@ -1915,6 +2391,9 @@ export default function ClientPortalPage() {
               <input placeholder="Buscar leads..." value={filters.search} onChange={e => setFilters(f => ({ ...f, search: e.target.value }))} />
             </div>
             <div className="topbar-meta">
+              <Badge color={notifications.length > 0 ? "amber" : "green"}>
+                {notifications.length} alertas
+              </Badge>
               <Badge color={filteredLeads.filter(l => l.next_action_priority === "urgente").length > 0 ? "red" : "default"}>
                 {filteredLeads.filter(l => l.next_action_priority === "urgente").length} urgentes
               </Badge>
@@ -1945,11 +2424,21 @@ export default function ClientPortalPage() {
                 data={data} filteredLeads={filteredLeads} revenue={revenue} voiceStats={voiceStats}
                 priorityStats={priorityStats} reactivationStats={reactivationStats} leadRevenue={leadRevenue}
                 ownerRevenue={ownerRevenue} upsellStats={upsellStats} appointmentStats={appointmentStats}
+                billingData={billingData} healthData={healthData} onboarding={onboarding}
+                notifications={notifications} usagePressure={usagePressure}
                 onOpenLead={openLead} onOpenCheckout={openCheckoutForLead} exportCsv={exportCsv}
                 openCheckout={openCheckout} openBillingPortal={openBillingPortal} billingLoading={billingLoading}
+                onNavigate={setView}
                 sendDailyReport={sendDailyReport} sendWeeklyReport={sendWeeklyReport} runNightly={runNightly}
                 recalculateAllNextActions={recalculateAllNextActions} runAutomaticFunnel={runAutomaticFunnel}
                 recalculateDynamicScoring={recalculateDynamicScoring} runColdLeadReactivation={runColdLeadReactivation}
+              />
+            )}
+            {view === "notifications" && (
+              <NotificationsView
+                notifications={notifications}
+                data={data}
+                onNavigate={setView}
               />
             )}
             {view === "pipeline" && (
@@ -1978,6 +2467,28 @@ export default function ClientPortalPage() {
                 filteredLeads={filteredLeads} settings={settings}
               />
             )}
+            {view === "billing" && (
+              <BillingView
+                data={data}
+                billingData={billingData}
+                revenue={revenue}
+                usagePressure={usagePressure}
+                openCheckout={openCheckout}
+                openBillingPortal={openBillingPortal}
+                billingLoading={billingLoading}
+              />
+            )}
+            {view === "playbooks" && (
+              <PlaybooksView
+                data={data}
+                playbookData={playbookData}
+                playbookForm={playbookForm}
+                setPlaybookForm={setPlaybookForm}
+                savePlaybook={savePlaybook}
+                playbookSaving={playbookSaving}
+                canEdit={canEdit}
+              />
+            )}
             {view === "automations" && (
               <AutomationsView
                 leads={data?.leads || []}
@@ -1991,6 +2502,14 @@ export default function ClientPortalPage() {
                 runAppointments={runAppointments}
               />
             )}
+            {view === "operations" && (
+              <OperationsView
+                data={data}
+                healthData={healthData}
+                voiceQaData={voiceQaData}
+                runNightly={runNightly}
+              />
+            )}
             {view === "team" && (
               <TeamView
                 data={data} canAdmin={canAdmin} newUser={newUser}
@@ -2001,6 +2520,8 @@ export default function ClientPortalPage() {
               <SettingsView
                 data={data} canAdmin={canAdmin} brandingForm={brandingForm}
                 setBrandingForm={setBrandingForm} saveBranding={saveBranding}
+                portalSettingsForm={portalSettingsForm} setPortalSettingsForm={setPortalSettingsForm}
+                savePortalSettings={savePortalSettings} portalSettingsSaving={portalSettingsSaving}
               />
             )}
           </div>

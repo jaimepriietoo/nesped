@@ -4,6 +4,7 @@ import { useEffect, useEffectEvent, useMemo, useState, useRef } from "react";
 import {
   buildDerivedNotifications,
   buildBrandLabWorkspace,
+  buildControlTowerSnapshot,
   buildLeadTimeline,
   buildMessageExperimentSummary,
   buildOnboardingChecklist,
@@ -171,6 +172,16 @@ function getHealthLabel(level) {
     warning: "Atención",
     critical: "Crítico",
   }[String(level || "").toLowerCase()] || "Info";
+}
+
+function getRoleColor(role) {
+  return {
+    owner: "purple",
+    admin: "blue",
+    manager: "amber",
+    agent: "green",
+    viewer: "default",
+  }[String(role || "").toLowerCase()] || "default";
 }
 
 const BRAND_THEME_PRESETS = [
@@ -2721,6 +2732,390 @@ function TeamView({ data, canAdmin, newUser, setNewUser, createUser, leadsByOwne
   );
 }
 
+function ControlTowerView({ controlTowerData, onNavigate, runWorkflowAction, runningWorkflowId }) {
+  const summary = controlTowerData?.summary || {};
+  const workflows = controlTowerData?.workflows || [];
+  const watchlist = controlTowerData?.watchlist || [];
+  const feed = controlTowerData?.feed || [];
+
+  return (
+    <div className="fade-up">
+      <div className="section-header mb-4">
+        <div>
+          <div className="section-title">Control Tower</div>
+          <div className="text-sm text-dim">Visibilidad ejecutiva de workflows, riesgo operativo y señal crítica del sistema.</div>
+        </div>
+        <Badge color={summary.readiness >= 80 ? "green" : summary.readiness >= 60 ? "amber" : "red"}>
+          {summary.readiness || 0}% readiness
+        </Badge>
+      </div>
+
+      <div className="stat-grid mb-4">
+        <StatCard title="Workflows en riesgo" value={summary.workflowsAtRisk || 0} sub="Warning o critical" accent="var(--c-amber)" />
+        <StatCard title="Leads estancados" value={summary.stalledLeads || 0} sub="Más de 15 días sin movimiento" accent="var(--c-red)" />
+        <StatCard title="Alertas altas" value={summary.highAlerts || 0} sub="Incidencias de máxima prioridad" accent="var(--c-purple)" />
+        <StatCard title="QA a revisar" value={summary.voiceNeedsAttention || 0} sub="Llamadas que requieren repaso" accent="var(--c-blue)" />
+        <StatCard title="Facturas pendientes" value={summary.pendingInvoices || 0} sub="Fricción directa en expansión" accent="var(--c-green)" />
+        <StatCard title="Leads abiertos" value={summary.openLeads || 0} sub="Pipeline con trabajo vivo" accent="var(--c-cyan)" />
+      </div>
+
+      <div className="grid-2 mb-4">
+        <div className="card">
+          <div className="card-title">Watchlist</div>
+          {watchlist.length === 0 ? (
+            <div className="empty">No hay focos relevantes ahora mismo.</div>
+          ) : (
+            watchlist.map((item) => (
+              <div key={item.id} className="card-sm mb-2">
+                <div className="flex justify-between mb-1">
+                  <div className="text-sm font-semibold">{item.title}</div>
+                  <Badge color={getSeverityColor(item.level)}>{getHealthLabel(item.level)}</Badge>
+                </div>
+                <div className="text-xs text-dim">{item.body}</div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="card">
+          <div className="card-title">Event feed</div>
+          {feed.length === 0 ? (
+            <div className="empty">Sin actividad relevante reciente.</div>
+          ) : (
+            feed.map((item) => (
+              <div key={item.id} className="pipeline-row">
+                <div className="flex-1">
+                  <div className="text-sm font-semibold">{item.title}</div>
+                  <div className="text-xs text-dim">{item.body}</div>
+                </div>
+                <div className="text-right">
+                  <Badge color={getSeverityColor(item.level)}>{item.type}</Badge>
+                  <div className="text-xs text-muted mt-1">{formatDate(item.created_at)}</div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-title">Workflow studio</div>
+        {workflows.length === 0 ? (
+          <div className="empty">Sin workflows calculados.</div>
+        ) : (
+          workflows.map((workflow) => (
+            <div key={workflow.id} className="card-sm mb-2">
+              <div className="flex justify-between mb-2" style={{ gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <div className="flex items-center gap-2 mb-1" style={{ flexWrap: "wrap" }}>
+                    <div className="text-sm font-semibold">{workflow.name}</div>
+                    <Badge color={getSeverityColor(workflow.status)}>{getHealthLabel(workflow.status)}</Badge>
+                    <Badge color="blue">{workflow.eligible || 0} elegibles</Badge>
+                  </div>
+                  <div className="text-xs text-dim">{workflow.detail}</div>
+                </div>
+                <div className="flex gap-2" style={{ flexWrap: "wrap", justifyContent: "flex-end" }}>
+                  {workflow.view && (
+                    <button onClick={() => onNavigate(workflow.view)} className="btn btn-ghost btn-sm">
+                      Abrir módulo
+                    </button>
+                  )}
+                  {workflow.actionId && (
+                    <button
+                      onClick={() => runWorkflowAction(workflow.actionId)}
+                      disabled={runningWorkflowId === workflow.actionId}
+                      className="btn btn-primary btn-sm"
+                    >
+                      {runningWorkflowId === workflow.actionId ? "Ejecutando..." : "Ejecutar"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AccessCenterView({
+  accessCenterData,
+  canAdmin,
+  accessUserDrafts,
+  setAccessUserDrafts,
+  savePortalUserAccess,
+  resetPortalUserPassword,
+  accessSavingUserId,
+  passwordResettingUserId,
+}) {
+  const summary = accessCenterData?.summary || {};
+  const users = accessCenterData?.users || [];
+  const policies = accessCenterData?.policies || {};
+  const roleMatrix = accessCenterData?.roleMatrix || [];
+  const recommendations = accessCenterData?.recommendations || [];
+  const auditLogs = accessCenterData?.auditLogs || [];
+
+  return (
+    <div className="fade-up">
+      <div className="section-header mb-4">
+        <div>
+          <div className="section-title">Access Center</div>
+          <div className="text-sm text-dim">Gobierna usuarios, roles, contraseñas y postura de seguridad del cliente.</div>
+        </div>
+        <Badge color={summary.recommendations > 0 ? "amber" : "green"}>
+          {summary.recommendations || 0} recomendaciones
+        </Badge>
+      </div>
+
+      <div className="stat-grid mb-4">
+        <StatCard title="Usuarios activos" value={summary.activeUsers || 0} sub="Con acceso operativo" accent="var(--c-green)" />
+        <StatCard title="Usuarios inactivos" value={summary.inactiveUsers || 0} sub="Acceso pausado" accent="var(--c-amber)" />
+        <StatCard title="Roles elevados" value={summary.elevatedUsers || 0} sub="Owner, admin o manager" accent="var(--c-purple)" />
+        <StatCard title="Sin password" value={summary.usersWithoutPassword || 0} sub="Requieren cierre de acceso" accent="var(--c-red)" />
+      </div>
+
+      <div className="grid-2 mb-4">
+        <div className="card">
+          <div className="card-title">Postura de seguridad</div>
+          {[
+            ["Sesión firmada", policies.signed ? "Sí" : "No"],
+            ["Cookie segura", policies.secureCookie ? "Sí" : "No"],
+            ["SameSite", policies.sameSite || "lax"],
+            ["Duración sesión", `${policies.maxAgeDays || 0} días`],
+            ["Rate limit", policies.rateLimit ? "Activo" : "No"],
+            ["Same-origin guard", policies.sameOriginGuard ? "Activo" : "No"],
+          ].map(([label, value]) => (
+            <div key={label} className="pipeline-row">
+              <span className="text-sm text-dim flex-1">{label}</span>
+              <Badge color={value === "No" ? "red" : "green"}>{String(value)}</Badge>
+            </div>
+          ))}
+        </div>
+
+        <div className="card">
+          <div className="card-title">Recomendaciones</div>
+          {recommendations.length === 0 ? (
+            <div className="empty">La postura de acceso está bastante saneada.</div>
+          ) : (
+            recommendations.map((item) => (
+              <div key={item.id} className="card-sm mb-2">
+                <div className="text-sm font-semibold mb-1">{item.title}</div>
+                <div className="text-xs text-dim">{item.body}</div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="grid-2 mb-4">
+        <div className="card">
+          <div className="card-title">Matriz de roles</div>
+          {roleMatrix.map((row) => (
+            <div key={row.role} className="card-sm mb-2">
+              <div className="flex justify-between mb-2">
+                <div className="text-sm font-semibold">{row.label}</div>
+                <Badge color={getRoleColor(row.role)}>{row.role}</Badge>
+              </div>
+              <div className="flex gap-2" style={{ flexWrap: "wrap" }}>
+                {(row.capabilities || []).map((item) => (
+                  <Badge key={item} color="default">{item}</Badge>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="card">
+          <div className="card-title">Audit de acceso</div>
+          {auditLogs.length === 0 ? (
+            <div className="empty">Sin eventos recientes.</div>
+          ) : (
+            auditLogs.slice(0, 12).map((item) => (
+              <div key={item.id} className="pipeline-row">
+                <div className="flex-1">
+                  <div className="text-sm font-semibold">{item.action}</div>
+                  <div className="text-xs text-dim">{item.entity_type} · {item.actor || "sistema"}</div>
+                </div>
+                <div className="text-xs text-muted">{formatDate(item.created_at)}</div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-title">Usuarios y permisos</div>
+        {users.length === 0 ? (
+          <div className="empty">Sin usuarios cargados.</div>
+        ) : (
+          users.map((user) => {
+            const draft = accessUserDrafts?.[user.id] || user;
+            return (
+              <div key={user.id} className="card-sm mb-2">
+                <div className="grid-3" style={{ gap: 12, alignItems: "end" }}>
+                  <div>
+                    <label className="text-xs text-muted mb-1" style={{ display: "block" }}>Nombre</label>
+                    <input disabled={!canAdmin} value={draft.full_name || ""} onChange={(e) => setAccessUserDrafts((current) => ({ ...(current || {}), [user.id]: { ...draft, full_name: e.target.value } }))} className="input" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted mb-1" style={{ display: "block" }}>Email</label>
+                    <input disabled={!canAdmin} value={draft.email || ""} onChange={(e) => setAccessUserDrafts((current) => ({ ...(current || {}), [user.id]: { ...draft, email: e.target.value } }))} className="input" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted mb-1" style={{ display: "block" }}>Teléfono</label>
+                    <input disabled={!canAdmin} value={draft.phone || ""} onChange={(e) => setAccessUserDrafts((current) => ({ ...(current || {}), [user.id]: { ...draft, phone: e.target.value } }))} className="input" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted mb-1" style={{ display: "block" }}>Rol</label>
+                    <select disabled={!canAdmin} value={draft.role || "agent"} onChange={(e) => setAccessUserDrafts((current) => ({ ...(current || {}), [user.id]: { ...draft, role: e.target.value } }))} className="select">
+                      {["owner","admin","manager","agent","viewer"].map((role) => <option key={role} value={role}>{role}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted mb-1" style={{ display: "block" }}>Estado</label>
+                    <select disabled={!canAdmin} value={draft.is_active === false ? "inactive" : "active"} onChange={(e) => setAccessUserDrafts((current) => ({ ...(current || {}), [user.id]: { ...draft, is_active: e.target.value !== "inactive" } }))} className="select">
+                      <option value="active">Activo</option>
+                      <option value="inactive">Inactivo</option>
+                    </select>
+                  </div>
+                  <div className="flex gap-2" style={{ flexWrap: "wrap" }}>
+                    <Badge color={getRoleColor(draft.role)}>{draft.role || "viewer"}</Badge>
+                    <Badge color={user.hasPassword ? "green" : "amber"}>
+                      {user.hasPassword ? "password ok" : "sin password"}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="flex justify-between mt-3" style={{ gap: 12, flexWrap: "wrap" }}>
+                  <div className="text-xs text-dim">
+                    Alta auth: {formatDate(user.authCreatedAt || user.created_at)} · acceso {user.is_active === false ? "inactivo" : "activo"}
+                  </div>
+                  {canAdmin && (
+                    <div className="flex gap-2" style={{ flexWrap: "wrap" }}>
+                      <button onClick={() => resetPortalUserPassword(user)} disabled={passwordResettingUserId === user.id} className="btn btn-ghost btn-sm">
+                        {passwordResettingUserId === user.id ? "Reseteando..." : "Reset password"}
+                      </button>
+                      <button onClick={() => savePortalUserAccess(user.id)} disabled={accessSavingUserId === user.id} className="btn btn-primary btn-sm">
+                        {accessSavingUserId === user.id ? "Guardando..." : "Guardar"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ApiHubView({ apiHubData, webhookTesting, webhookTestResult, testClientWebhook, onNavigate }) {
+  const summary = apiHubData?.summary || {};
+  const endpoints = apiHubData?.endpoints || [];
+  const integrations = apiHubData?.integrations || [];
+  const eventCatalog = apiHubData?.eventCatalog || [];
+  const recipes = apiHubData?.recipes || [];
+
+  return (
+    <div className="fade-up">
+      <div className="section-header mb-4">
+        <div>
+          <div className="section-title">API Hub</div>
+          <div className="text-sm text-dim">Capa partner, webhooks, dominio y superficie pública del cliente.</div>
+        </div>
+        <Badge color={summary.readinessScore >= 80 ? "green" : summary.readinessScore >= 60 ? "amber" : "red"}>
+          {summary.readinessScore || 0}% listo
+        </Badge>
+      </div>
+
+      <div className="stat-grid mb-4">
+        <StatCard title="Endpoints" value={summary.endpoints || 0} sub="Superficie pública y operativa" accent="var(--c-blue)" />
+        <StatCard title="Integraciones listas" value={summary.configuredIntegrations || 0} sub="Conexiones configuradas" accent="var(--c-green)" />
+        <StatCard title="Public surface" value={summary.publicSurface || "—"} sub="Cara visible del cliente" accent="var(--c-purple)" />
+      </div>
+
+      <div className="grid-2 mb-4">
+        <div className="card">
+          <div className="card-title">Estado de integraciones</div>
+          {integrations.length === 0 ? (
+            <div className="empty">Sin integraciones disponibles.</div>
+          ) : (
+            integrations.map((item) => (
+              <div key={item.id} className="pipeline-row">
+                <div className="flex-1">
+                  <div className="text-sm font-semibold">{item.name}</div>
+                  <div className="text-xs text-dim">{item.detail}</div>
+                </div>
+                <Badge color={item.ready ? "green" : "amber"}>{item.ready ? "ready" : "pending"}</Badge>
+              </div>
+            ))
+          )}
+          <div className="flex gap-2 mt-3" style={{ flexWrap: "wrap" }}>
+            <button onClick={() => onNavigate("brandlab")} className="btn btn-ghost btn-sm">Ir a Brand Lab</button>
+            <button onClick={testClientWebhook} disabled={webhookTesting} className="btn btn-primary btn-sm">
+              {webhookTesting ? "Probando..." : "Probar webhook"}
+            </button>
+          </div>
+          {webhookTestResult && (
+            <div className={`alert ${webhookTestResult.success ? "alert-success" : "alert-error"} mt-3`}>
+              <div>{webhookTestResult.message}</div>
+              {webhookTestResult.data?.status ? <div className="text-xs mt-1">HTTP {webhookTestResult.data.status}</div> : null}
+            </div>
+          )}
+        </div>
+
+        <div className="card">
+          <div className="card-title">Recetas partner</div>
+          {recipes.map((item) => (
+            <div key={item.id} className="card-sm mb-2">
+              <div className="text-sm font-semibold mb-1">{item.title}</div>
+              <div className="text-xs text-dim">{item.body}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid-2 mb-4">
+        <div className="card">
+          <div className="card-title">Endpoints disponibles</div>
+          {endpoints.map((endpoint) => (
+            <div key={endpoint.id} className="card-sm mb-2">
+              <div className="flex justify-between mb-1" style={{ gap: 12 }}>
+                <div className="text-sm font-semibold">{endpoint.name}</div>
+                <Badge color="blue">{endpoint.method}</Badge>
+              </div>
+              <div className="text-xs text-dim mb-2">{endpoint.description}</div>
+              <div className="text-xs" style={{ fontFamily: "var(--font-mono)", color: "var(--text-2)", wordBreak: "break-all" }}>{endpoint.url}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="card">
+          <div className="card-title">Catálogo de eventos</div>
+          {eventCatalog.map((event) => (
+            <div key={event.id} className="card-sm mb-2">
+              <div className="flex justify-between mb-1">
+                <div className="text-sm font-semibold">{event.title}</div>
+                <Badge color="purple">event</Badge>
+              </div>
+              <div className="text-xs text-dim mb-2">{event.body}</div>
+              <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 12, color: "var(--text-2)", lineHeight: 1.6, maxHeight: 180, overflow: "auto" }}>{JSON.stringify(event.payload, null, 2)}</pre>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {webhookTestResult?.data?.response ? (
+        <div className="card">
+          <div className="card-title">Respuesta del último test</div>
+          <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 12, color: "var(--text-2)", lineHeight: 1.6, maxHeight: 240, overflow: "auto" }}>{webhookTestResult.data.response}</pre>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function SettingsView({ data, canAdmin, brandingForm, setBrandingForm, saveBranding, portalSettingsForm, setPortalSettingsForm, savePortalSettings, portalSettingsSaving }) {
   const { client = {} } = data;
   return (
@@ -2810,9 +3205,17 @@ export default function ClientPortalPage() {
   const [inboxData, setInboxData] = useState(null);
   const [strategyData, setStrategyData] = useState(null);
   const [brandLabData, setBrandLabData] = useState(null);
+  const [accessCenterData, setAccessCenterData] = useState(null);
+  const [apiHubData, setApiHubData] = useState(null);
   const [portalSettingsForm, setPortalSettingsForm] = useState(null);
   const [portalSettingsSaving, setPortalSettingsSaving] = useState(false);
   const [domainLoading, setDomainLoading] = useState(false);
+  const [accessUserDrafts, setAccessUserDrafts] = useState({});
+  const [accessSavingUserId, setAccessSavingUserId] = useState("");
+  const [passwordResettingUserId, setPasswordResettingUserId] = useState("");
+  const [webhookTesting, setWebhookTesting] = useState(false);
+  const [webhookTestResult, setWebhookTestResult] = useState(null);
+  const [runningWorkflowId, setRunningWorkflowId] = useState("");
   const [selectedLeadMemory, setSelectedLeadMemory] = useState(null);
   const [newUser, setNewUser] = useState({ full_name: "", email: "", role: "agent", phone: "", password: "" });
   const [showAccountSetup, setShowAccountSetup] = useState(false);
@@ -2865,6 +3268,15 @@ export default function ClientPortalPage() {
     });
   }, [data]);
 
+  useEffect(() => {
+    const users = accessCenterData?.users || [];
+    if (!users.length) return;
+
+    setAccessUserDrafts(
+      Object.fromEntries(users.map((user) => [user.id, { ...user }]))
+    );
+  }, [accessCenterData]);
+
   function loadAll() {
     loadOverview();
     loadRevenue();
@@ -2884,6 +3296,8 @@ export default function ClientPortalPage() {
     loadMessageExperiments();
     loadStrategyData();
     loadBrandLabData();
+    loadAccessCenterData();
+    loadApiHubData();
   }
 
   async function loadOverview() {
@@ -2927,6 +3341,8 @@ export default function ClientPortalPage() {
   async function loadInboxData() { try { const r = await fetch("/api/portal/inbox", { cache: "no-store" }); const j = await r.json(); if (j.success) setInboxData(j.data); } catch {} }
   async function loadStrategyData() { try { const r = await fetch("/api/portal/strategy", { cache: "no-store" }); const j = await r.json(); if (j.success) setStrategyData(j.data); } catch {} }
   async function loadBrandLabData() { try { const r = await fetch("/api/portal/brand-lab", { cache: "no-store" }); const j = await r.json(); if (j.success) setBrandLabData(j.data); } catch {} }
+  async function loadAccessCenterData() { try { const r = await fetch("/api/portal/access-center", { cache: "no-store" }); const j = await r.json(); if (j.success) setAccessCenterData(j.data); } catch {} }
+  async function loadApiHubData() { try { const r = await fetch("/api/portal/api-hub", { cache: "no-store" }); const j = await r.json(); if (j.success) setApiHubData(j.data); } catch {} }
   async function loadReactivationStats() { try { const r = await fetch("/api/analytics/reactivation-stats", { cache: "no-store" }); const j = await r.json(); if (j.success) setReactivationStats(j.data); } catch {} }
   async function loadVoiceStats() { try { const r = await fetch("/api/analytics/voice-stats", { cache: "no-store" }); const j = await r.json(); if (j.success) setVoiceStats(j.data); } catch {} }
   async function loadPriorityStats() { try { const r = await fetch("/api/analytics/priority-stats", { cache: "no-store" }); const j = await r.json(); if (j.success) setPriorityStats(j.data); } catch {} }
@@ -3107,7 +3523,7 @@ export default function ClientPortalPage() {
     const res = await fetch("/api/portal/branding/update", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(brandingForm) });
     const json = await res.json();
     if (!json.success) { alert(json.message || "Error guardando branding."); return; }
-    await loadOverview(); await loadBrandLabData(); alert("Branding actualizado.");
+    await loadOverview(); await loadBrandLabData(); await loadApiHubData(); alert("Branding actualizado.");
   }
 
   async function savePortalSettings() {
@@ -3119,6 +3535,7 @@ export default function ClientPortalPage() {
       await loadHealthData();
       await loadBrandLabData();
       await loadStrategyData();
+      await loadApiHubData();
       alert(json.message || "Ajustes operativos actualizados.");
     } catch (e) {
       alert(e.message || "Error guardando ajustes.");
@@ -3143,11 +3560,77 @@ export default function ClientPortalPage() {
       const json = await readJsonResponse(res);
       await loadOverview();
       await loadBrandLabData();
+      await loadApiHubData();
       alert(json.message || "Dominio actualizado.");
     } catch (error) {
       alert(error.message || "No se pudo conectar el dominio.");
     } finally {
       setDomainLoading(false);
+    }
+  }
+
+  async function savePortalUserAccess(userId) {
+    const draft = accessUserDrafts?.[userId];
+    if (!draft) return;
+
+    try {
+      setAccessSavingUserId(userId);
+      const res = await fetch("/api/portal/users/update", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(draft),
+      });
+      const json = await readJsonResponse(res);
+      await loadOverview();
+      await loadAccessCenterData();
+      alert(json.message || "Usuario actualizado.");
+    } catch (error) {
+      alert(error.message || "No se pudo actualizar el usuario.");
+    } finally {
+      setAccessSavingUserId("");
+    }
+  }
+
+  async function resetPortalUserPassword(user) {
+    const password = window.prompt(`Nueva contraseña para ${user?.email || "el usuario"}:`, "");
+    if (!password) return;
+
+    try {
+      setPasswordResettingUserId(user.id);
+      const res = await fetch("/api/portal/users/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, password }),
+      });
+      const json = await readJsonResponse(res);
+      await loadAccessCenterData();
+      alert(json.message || "Contraseña actualizada.");
+    } catch (error) {
+      alert(error.message || "No se pudo resetear la contraseña.");
+    } finally {
+      setPasswordResettingUserId("");
+    }
+  }
+
+  async function testClientWebhook() {
+    try {
+      setWebhookTesting(true);
+      setWebhookTestResult(null);
+      const res = await fetch("/api/portal/webhook/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const json = await res.json().catch(() => ({}));
+      setWebhookTestResult(json);
+      await loadApiHubData();
+    } catch (error) {
+      setWebhookTestResult({
+        success: false,
+        message: error.message || "No se pudo probar el webhook",
+      });
+    } finally {
+      setWebhookTesting(false);
     }
   }
 
@@ -3171,7 +3654,7 @@ export default function ClientPortalPage() {
     const res = await fetch("/api/portal/users/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newUser) });
     const json = await res.json();
     if (!json.success) { alert(json.message || "Error creando usuario."); return; }
-    setNewUser({ full_name: "", email: "", role: "agent", phone: "", password: "" }); await loadOverview();
+    setNewUser({ full_name: "", email: "", role: "agent", phone: "", password: "" }); await loadOverview(); await loadAccessCenterData();
   }
 
   async function openBillingPortal() {
@@ -3202,6 +3685,25 @@ export default function ClientPortalPage() {
   async function recalculatePriority() { const r = await fetch("/api/automation/recalculate-priority", { method: "POST" }); const j = await r.json(); if (!j.success) { alert(j.message || "Error."); return; } await loadOverview(); await loadPriorityStats(); alert(`Prioridad recalculada. ${j.processed} procesados.`); }
   async function runUpsells() { const r = await fetch("/api/automation/run-upsells", { method: "POST" }); const j = await r.json(); if (!j.success) { alert(j.message || "Error."); return; } await loadUpsellStats(); alert(`Upsells ejecutados. ${j.processed} procesados.`); }
   async function runAppointments() { const r = await fetch("/api/automation/run-appointment-reminders", { method: "POST" }); const j = await r.json(); if (!j.success) { alert(j.message || "Error."); return; } await loadAppointmentStats(); alert(`Recordatorios enviados. ${j.processed} procesados.`); }
+
+  async function runWorkflowAction(actionId) {
+    const actions = {
+      runAutomaticFunnel,
+      runColdLeadReactivation,
+      runVoiceCalls,
+      recalculateAllNextActions,
+    };
+
+    const action = actions[actionId];
+    if (!action) return;
+
+    try {
+      setRunningWorkflowId(actionId);
+      await action();
+    } finally {
+      setRunningWorkflowId("");
+    }
+  }
 
   async function saveAccountSetup() {
     if (!accountSetupForm.email || !accountSetupForm.password) { setAccountSetupErr("Completa email y contraseña."); return; }
@@ -3293,6 +3795,13 @@ export default function ClientPortalPage() {
     products: [],
     services: healthData?.services || {},
   }), [brandLabData, data, healthData]);
+  const controlTowerSnapshot = useMemo(() => buildControlTowerSnapshot({
+    data,
+    billingData,
+    healthData,
+    voiceQaData,
+    experimentSnapshot,
+  }), [data, billingData, healthData, voiceQaData, experimentSnapshot]);
 
   if (!data) {
     return (
@@ -3319,11 +3828,14 @@ export default function ClientPortalPage() {
     { id: "leads", icon: "◉", label: "Leads" },
     { id: "voice", icon: "🎙", label: "Voice" },
     { id: "analytics", icon: "📊", label: "Analytics" },
+    { id: "tower", icon: "🛰", label: "Control" },
     { id: "strategy", icon: "🎯", label: "Strategy" },
     { id: "experiments", icon: "🧪", label: "Experiments" },
     { id: "roi", icon: "💸", label: "ROI" },
     { id: "billing", icon: "💳", label: "Billing" },
     { id: "brandlab", icon: "✨", label: "Brand Lab" },
+    { id: "access", icon: "🔐", label: "Access" },
+    { id: "api", icon: "🧩", label: "API Hub" },
     { id: "playbooks", icon: "🧠", label: "Playbooks" },
     { id: "automations", icon: "⚡", label: "Automatiz." },
     { id: "operations", icon: "🛟", label: "Ops" },
@@ -3492,6 +4004,14 @@ export default function ClientPortalPage() {
                 filteredLeads={filteredLeads} settings={settings}
               />
             )}
+            {view === "tower" && (
+              <ControlTowerView
+                controlTowerData={controlTowerSnapshot}
+                onNavigate={setView}
+                runWorkflowAction={runWorkflowAction}
+                runningWorkflowId={runningWorkflowId}
+              />
+            )}
             {view === "strategy" && (
               <StrategyView
                 strategyData={strategySnapshot}
@@ -3538,6 +4058,27 @@ export default function ClientPortalPage() {
                 canAdmin={canAdmin}
                 connectCustomDomain={connectCustomDomain}
                 domainLoading={domainLoading}
+              />
+            )}
+            {view === "access" && (
+              <AccessCenterView
+                accessCenterData={accessCenterData}
+                canAdmin={canAdmin}
+                accessUserDrafts={accessUserDrafts}
+                setAccessUserDrafts={setAccessUserDrafts}
+                savePortalUserAccess={savePortalUserAccess}
+                resetPortalUserPassword={resetPortalUserPassword}
+                accessSavingUserId={accessSavingUserId}
+                passwordResettingUserId={passwordResettingUserId}
+              />
+            )}
+            {view === "api" && (
+              <ApiHubView
+                apiHubData={apiHubData}
+                webhookTesting={webhookTesting}
+                webhookTestResult={webhookTestResult}
+                testClientWebhook={testClientWebhook}
+                onNavigate={setView}
               />
             )}
             {view === "playbooks" && (

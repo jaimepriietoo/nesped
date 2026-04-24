@@ -64,6 +64,14 @@ const supabase = hasSupabase
 
 const pendingRecordings = new Map();
 const PENDING_RECORDING_TTL_MS = 24 * 60 * 60 * 1000;
+const RECORDING_RETENTION_DAYS = Math.max(
+  1,
+  Number(process.env.RECORDING_RETENTION_DAYS || 30)
+);
+const TRANSCRIPT_RETENTION_DAYS = Math.max(
+  1,
+  Number(process.env.TRANSCRIPT_RETENTION_DAYS || 90)
+);
 
 if (!hasSupabase) {
   console.log("⚠️ Supabase desactivado");
@@ -102,6 +110,8 @@ app.get("/healthz", (req, res) => {
       hasTwilioClient: Boolean(client),
       hasBaseUrl: Boolean(process.env.BASE_URL),
       hasTwilioNumber: Boolean(fallbackTwilioNumber),
+      recordingRetentionDays: RECORDING_RETENTION_DAYS,
+      transcriptRetentionDays: TRANSCRIPT_RETENTION_DAYS,
     },
     pendingRecordings: pendingRecordings.size,
     now: new Date().toISOString(),
@@ -281,7 +291,27 @@ DESPEDIDAS:
 - si la persona se despide o deja claro que se tiene que ir, respóndele con una despedida breve, cálida y natural
 - ejemplos: "adios", "hasta luego", "hablamos", "chao", "me tengo que ir", "nos vemos", "un saludo", "gracias, adios", "vale, hablamos luego"
 - cuando detectes una despedida, no reabras la conversación, no hagas preguntas y termina por completo
+
+LEGAL:
+- la llamada ya ha sido avisada como grabada y transcrita antes de entrar contigo
+- si la persona no quiere ser grabada o muestra reparos de privacidad, responde con empatía, ofrece contacto por otra vía y cierra sin insistir
 `.trim();
+}
+
+function getVoicePolicyUrl() {
+  const explicit = String(process.env.VOICE_PRIVACY_URL || "").trim();
+  if (explicit) return explicit;
+
+  const appUrl = String(process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/+$/, "");
+  return appUrl ? `${appUrl}/legal/voice-compliance` : "";
+}
+
+function buildVoiceLegalNotice() {
+  const baseNotice =
+    process.env.VOICE_LEGAL_NOTICE ||
+    "Aviso. Esta llamada puede ser grabada y transcrita con fines de calidad, seguridad, seguimiento comercial y mejora del servicio.";
+  const policyUrl = getVoicePolicyUrl();
+  return policyUrl ? `${baseNotice} Más información en ${policyUrl}.` : baseNotice;
 }
 
 function normalizeTranscriptText(value = "") {
@@ -473,11 +503,18 @@ function buildVoiceTwiml(clientId) {
     "https://",
     "wss://"
   )}/media-stream?client_id=${clientId}`;
+  const legalNotice = buildVoiceLegalNotice()
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 
   console.log("🌐 STREAM URL:", streamUrl);
 
   return `
 <Response>
+  <Say language="es-ES" voice="alice">${legalNotice}</Say>
+  <Pause length="1" />
   <Connect>
     <Stream url="${streamUrl}" />
   </Connect>

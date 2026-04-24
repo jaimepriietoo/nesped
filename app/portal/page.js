@@ -1689,6 +1689,7 @@ function InboxView({ inboxData, leads, onOpenLead }) {
 function VoiceCenterView({ voiceCenterData, leads, onOpenLead }) {
   const calls = voiceCenterData?.calls || [];
   const leadMap = new Map((leads || []).map(lead => [lead.id, lead]));
+  const compliance = voiceCenterData?.compliance || {};
 
   return (
     <div className="fade-up">
@@ -1726,6 +1727,29 @@ function VoiceCenterView({ voiceCenterData, leads, onOpenLead }) {
               <Badge color="blue">{value}</Badge>
             </div>
           ))}
+        </div>
+      </div>
+
+      <div className="card mb-4">
+        <div className="card-title">Cumplimiento de grabaciones</div>
+        <div className="grid-2">
+          <div className="card-sm">
+            <div className="text-sm font-semibold mb-1">Aviso legal activo</div>
+            <div className="text-xs text-dim" style={{ lineHeight: 1.6 }}>
+              {compliance.noticeText || "Las llamadas informan de que pueden ser grabadas y transcritas antes de conectar con la IA."}
+            </div>
+          </div>
+          <div className="card-sm">
+            <div className="text-sm font-semibold mb-1">Retención</div>
+            <div className="text-xs text-dim" style={{ lineHeight: 1.6 }}>
+              Grabaciones: {compliance.recordingRetentionDays || 30} días · Transcripciones: {compliance.transcriptRetentionDays || 90} días.
+            </div>
+            {compliance.policyUrl ? (
+              <a href={compliance.policyUrl} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm mt-2">
+                Ver política
+              </a>
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -2873,7 +2897,7 @@ function AccessCenterView({
         <StatCard title="Usuarios activos" value={summary.activeUsers || 0} sub="Con acceso operativo" accent="var(--c-green)" />
         <StatCard title="Usuarios inactivos" value={summary.inactiveUsers || 0} sub="Acceso pausado" accent="var(--c-amber)" />
         <StatCard title="Roles elevados" value={summary.elevatedUsers || 0} sub="Owner, admin o manager" accent="var(--c-purple)" />
-        <StatCard title="Sin password" value={summary.usersWithoutPassword || 0} sub="Requieren cierre de acceso" accent="var(--c-red)" />
+        <StatCard title="2FA exigido" value={summary.usersRequiringTwoFactor || 0} sub="Owner y admin protegidos" accent="var(--c-blue)" />
       </div>
 
       <div className="grid-2 mb-4">
@@ -2884,7 +2908,10 @@ function AccessCenterView({
             ["Cookie segura", policies.secureCookie ? "Sí" : "No"],
             ["SameSite", policies.sameSite || "lax"],
             ["Duración sesión", `${policies.maxAgeDays || 0} días`],
+            ["2FA elevado", policies.twoFactor?.requiredRoles?.join(", ") || "No"],
+            ["Canal 2FA", policies.twoFactor?.delivery || "no configurado"],
             ["Rate limit", policies.rateLimit ? "Activo" : "No"],
+            ["Backend rate limit", policies.rateLimitStrategy || "memory"],
             ["Same-origin guard", policies.sameOriginGuard ? "Activo" : "No"],
           ].map(([label, value]) => (
             <div key={label} className="pipeline-row">
@@ -2985,6 +3012,9 @@ function AccessCenterView({
                     <Badge color={user.hasPassword ? "green" : "amber"}>
                       {user.hasPassword ? "password ok" : "sin password"}
                     </Badge>
+                    {user.requiresTwoFactor ? (
+                      <Badge color="blue">2FA requerido</Badge>
+                    ) : null}
                   </div>
                 </div>
                 <div className="flex justify-between mt-3" style={{ gap: 12, flexWrap: "wrap" }}>

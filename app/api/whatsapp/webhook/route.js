@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import twilio from "twilio";
-import { getInternalApiHeaders } from "@/lib/server/internal-api";
+import { getSupabase } from "@/lib/supabase";
+import {
+  sendWhatsAppMessage as sendDirectWhatsAppMessage,
+  updateLeadDirect,
+} from "@/lib/server/automation-service";
 
 let openai = null;
+const supabase = getSupabase();
 
 function getOpenAI() {
   if (openai) return openai;
@@ -112,66 +117,98 @@ function safeJsonParse(text, fallback) {
   }
 }
 
-async function getLeadHistory(phone) {
+async function resolveClientContext(to = "") {
+  const normalizedTo = normalizePhone(to);
+  const { data, error } = await supabase
+    .from("clients")
+    .select("id,name,brand_name,twilio_number")
+    .limit(200);
+
+  if (error) {
+    throw new Error(error.message || "No se pudieron cargar clientes");
+  }
+
+  const clients = data || [];
+  const exactMatch = clients.find(
+    (client) => normalizePhone(client.twilio_number || "") === normalizedTo
+  );
+
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  if (clients.length === 1) {
+    return clients[0];
+  }
+
+  return null;
+}
+
+async function getLeadHistoryForClient(phone, clientId) {
   try {
-    const res = await fetch(
-      `${BASE_URL}/api/lead-events?phone=${encodeURIComponent(phone)}`,
-      { cache: "no-store" }
-    );
-    const json = await res.json();
-    return Array.isArray(json?.data) ? json.data : [];
+    const { data, error } = await supabase
+      .from("lead_events")
+      .select("*")
+      .eq("phone", phone)
+      .eq("client_id", clientId)
+      .order("created_at", { ascending: false })
+      .limit(80);
+
+    if (error) {
+      throw new Error(error.message || "No se pudo cargar el historial");
+    }
+
+    return data || [];
   } catch {
     return [];
   }
 }
 
-async function saveLeadEvent({ phone, type, message, meta = null }) {
+async function saveLeadEventForClient({
+  phone,
+  leadId = null,
+  clientId = "",
+  type,
+  message,
+  meta = null,
+}) {
   try {
-    await fetch(`${BASE_URL}/api/lead-events`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        phone,
-        type,
-        message: meta ? JSON.stringify({ message, meta }) : message,
-      }),
+    await supabase.from("lead_events").insert({
+      client_id: clientId,
+      lead_id: leadId,
+      phone,
+      type,
+      message: meta ? JSON.stringify({ message, meta }) : message,
     });
   } catch (err) {
     console.error("Error guardando evento:", err);
   }
 }
 
-async function findLeadByPhone(phone) {
-  try {
-    const res = await fetch(`${BASE_URL}/api/portal/overview`, {
-      cache: "no-store",
-    });
-    const json = await res.json();
-    const leads = Array.isArray(json?.leads) ? json.leads : [];
-    return (
-      leads.find((l) => String(l.telefono || "").replace(/[^\d+]/g, "") === String(phone).replace(/[^\d+]/g, "")) ||
-      null
-    );
-  } catch {
-    return null;
+async function findLeadByPhone(phone, clientId) {
+  const { data, error } = await supabase
+    .from("leads")
+    .select("*")
+    .eq("client_id", clientId)
+    .order("updated_at", { ascending: false })
+    .limit(500);
+
+  if (error) {
+    throw new Error(error.message || "No se pudieron cargar leads");
   }
+
+  const normalizedPhone = normalizePhone(phone);
+  return (
+    (data || []).find(
+      (lead) => normalizePhone(lead.telefono || "") === normalizedPhone
+    ) || null
+  );
 }
 
 async function patchLead(leadId, changes) {
   try {
-    const res = await fetch(`${BASE_URL}/api/leads/update`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        leadId,
-        ...changes,
-      }),
-    });
-    return await res.json();
+    await updateLeadDirect(leadId, changes);
+    return { success: true };
   } catch (err) {
     console.error("Error actualizando lead:", err);
     return { success: false };
@@ -458,19 +495,8 @@ Devuélveme solo la respuesta final que enviarías por WhatsApp.
 
 async function sendWhatsapp(to, message) {
   try {
-    const res = await fetch(`${BASE_URL}/api/automation/whatsapp-send`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...getInternalApiHeaders(),
-      },
-      body: JSON.stringify({
-        to,
-        message,
-      }),
-    });
-
-    return await res.json();
+    await sendDirectWhatsAppMessage(normalizePhone(to), message);
+    return { success: true };
   } catch (err) {
     console.error("Error enviando WhatsApp:", err);
     return { success: false };
@@ -635,14 +661,23 @@ export async function POST(req) {
 
     const inboundMessage = String(formData.get("Body") || "").trim();
     const from = String(formData.get("From") || "");
+    const to = String(formData.get("To") || "");
     const phone = normalizePhone(from);
 
     if (!phone || !inboundMessage) {
       return NextResponse.json({ success: false, message: "Faltan datos" });
     }
 
-    const lead = await findLeadByPhone(phone);
-    const history = await getLeadHistory(phone);
+    const clientContext = await resolveClientContext(to);
+    if (!clientContext?.id) {
+      return NextResponse.json(
+        { success: false, message: "No se pudo resolver el cliente del webhook" },
+        { status: 400 }
+      );
+    }
+
+    const lead = await findLeadByPhone(phone, clientContext.id);
+    const history = await getLeadHistoryForClient(phone, clientContext.id);
 
 const historyText = history
   .slice(0, 12)
@@ -659,7 +694,9 @@ const historyText = history
 
 const paymentAlreadySent = hasPaymentAlreadyBeenSent(history);
 
-    await saveLeadEvent({
+    await saveLeadEventForClient({
+      clientId: clientContext.id,
+      leadId: lead?.id || null,
       phone,
       type: "incoming_whatsapp",
       message: inboundMessage,
@@ -681,7 +718,9 @@ const reply = await generateSalesReply({
   analysis,
 });
 
-    await saveLeadEvent({
+    await saveLeadEventForClient({
+  clientId: clientContext.id,
+  leadId: lead?.id || null,
   phone,
   type: "ai_analysis",
   message: analysis.reason || "Análisis IA",
@@ -716,7 +755,9 @@ if (autoSendPayment) {
   eventType = "ai_payment_recovery";
 }
 
-await saveLeadEvent({
+await saveLeadEventForClient({
+  clientId: clientContext.id,
+  leadId: lead?.id || null,
   phone,
   type: eventType,
   message: finalReply,
@@ -749,6 +790,7 @@ await sendWhatsapp(phone, finalReply);
       success: true,
       analysis,
       reply,
+      clientId: clientContext.id,
     });
   } catch (err) {
     console.error("Webhook WhatsApp error:", err);

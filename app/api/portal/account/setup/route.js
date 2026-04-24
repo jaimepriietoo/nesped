@@ -1,7 +1,14 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { getSupabase } from "@/lib/supabase";
-import { hashPassword, setAuthCookies } from "@/lib/server/auth";
-import { requireRateLimit, requireSameOrigin } from "@/lib/server/security";
+import {
+  generateTwoFactorCode,
+  hashPassword,
+  requiresTwoFactor,
+  setAuthCookies,
+  setTwoFactorChallenge,
+} from "@/lib/server/auth";
+import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
+import { sendTwoFactorCode } from "@/lib/server/two-factor.mjs";
 import { stripe } from "@/lib/server/stripe-utils";
 
 function normalizeEmail(value = "") {
@@ -245,12 +252,12 @@ async function upsertPortalAccess({
 
   await supabase.from("clients").update(clientUpdate).eq("id", clientId);
 
-  await setAuthCookies({
+  return {
     email: targetEmail,
     clientId,
     role,
     clientName: clientName || clientId,
-  });
+  };
 }
 
 export async function GET(req) {
@@ -300,7 +307,7 @@ export async function POST(req) {
     );
     if (sameOriginError) return sameOriginError;
 
-    const rateLimitError = requireRateLimit(req, {
+    const rateLimitError = await requireRateLimitAsync(req, {
       namespace: "portal-account-setup",
       limit: 10,
       windowMs: 30 * 60 * 1000,
@@ -335,7 +342,7 @@ export async function POST(req) {
     if (ctx.ok) {
       const role = resolvePortalRole(ctx.role);
 
-      await upsertPortalAccess({
+      const access = await upsertPortalAccess({
         supabase: ctx.supabase,
         clientId: ctx.clientId,
         clientName: ctx.clientId,
@@ -346,6 +353,33 @@ export async function POST(req) {
         fullName: ctx.currentUser?.full_name || email,
         phone: ctx.currentUser?.phone || "",
       });
+
+      if (requiresTwoFactor(access.role)) {
+        const code = generateTwoFactorCode();
+        await setTwoFactorChallenge({
+          email: access.email,
+          clientId: access.clientId,
+          role: access.role,
+          clientName: access.clientName,
+          nextPath: "/portal",
+          code,
+        });
+        await sendTwoFactorCode({
+          email: access.email,
+          code,
+          clientName: access.clientName,
+          role: access.role,
+        });
+
+        return Response.json({
+          success: true,
+          requiresTwoFactor: true,
+          message: "Cuenta actualizada. Te hemos enviado un código para completar el acceso.",
+          redirectTo: "/login",
+        });
+      }
+
+      await setAuthCookies(access);
 
       return Response.json({
         success: true,
@@ -362,7 +396,7 @@ export async function POST(req) {
       email,
     });
 
-    await upsertPortalAccess({
+    const access = await upsertPortalAccess({
       supabase,
       clientId: client.id,
       clientName: client.name,
@@ -375,6 +409,34 @@ export async function POST(req) {
       stripeCustomerId:
         typeof session.customer === "string" ? session.customer : "",
     });
+
+    if (requiresTwoFactor(access.role)) {
+      const code = generateTwoFactorCode();
+      await setTwoFactorChallenge({
+        email: access.email,
+        clientId: access.clientId,
+        role: access.role,
+        clientName: access.clientName,
+        nextPath: "/portal",
+        code,
+      });
+      await sendTwoFactorCode({
+        email: access.email,
+        code,
+        clientName: access.clientName,
+        role: access.role,
+      });
+
+      return Response.json({
+        success: true,
+        requiresTwoFactor: true,
+        message:
+          "Cuenta creada correctamente. Te hemos enviado un código para confirmar el acceso del owner.",
+        redirectTo: "/login",
+      });
+    }
+
+    await setAuthCookies(access);
 
     return Response.json({
       success: true,

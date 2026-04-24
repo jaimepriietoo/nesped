@@ -19,7 +19,7 @@ export async function GET() {
         .order("created_at", { ascending: true }),
       ctx.supabase
         .from("users")
-        .select("email,role,created_at,password")
+        .select("email,role,created_at,password,password_hash")
         .eq("client_id", ctx.clientId),
       ctx.supabase
         .from("audit_logs")
@@ -57,4 +57,3 @@ export async function GET() {
     );
   }
 }
-

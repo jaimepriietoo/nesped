@@ -1,7 +1,7 @@
 import twilio from "twilio";
 import { getSupabase } from "@/lib/supabase";
 import { logEvent, observeRoute } from "@/lib/server/observability.mjs";
-import { requireRateLimit, requireSameOrigin } from "@/lib/server/security";
+import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 
 function normalizePhone(value = "") {
   return String(value || "").replace(/[^\d+]/g, "").trim();
@@ -20,7 +20,7 @@ async function handlePost(req) {
     );
     if (sameOriginError) return sameOriginError;
 
-    const ipRateLimitError = requireRateLimit(req, {
+    const ipRateLimitError = await requireRateLimitAsync(req, {
       namespace: "demo-call:ip",
       limit: 5,
       windowMs: 15 * 60 * 1000,
@@ -47,7 +47,7 @@ async function handlePost(req) {
       );
     }
 
-    const phoneRateLimitError = requireRateLimit(req, {
+    const phoneRateLimitError = await requireRateLimitAsync(req, {
       namespace: "demo-call:phone",
       limit: 2,
       windowMs: 30 * 60 * 1000,

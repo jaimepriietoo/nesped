@@ -1,5 +1,6 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { scoreVoiceCallQA } from "@/lib/portal-product";
+import { getVoiceCompliancePolicy } from "@/lib/server/compliance.mjs";
 
 function normalizePhone(value = "") {
   return String(value || "").replace(/[^\d+]/g, "").trim();
@@ -91,6 +92,7 @@ export async function GET() {
     return Response.json({
       success: true,
       data: {
+        compliance: getVoiceCompliancePolicy(),
         summary: {
           total: scoredCalls.length,
           withRecording: scoredCalls.filter((item) => item.recording_url).length,

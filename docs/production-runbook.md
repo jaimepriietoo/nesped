@@ -12,6 +12,7 @@ This checks:
 - critical environment variables
 - Next production build
 - route and portal integration safety at compile time
+- 2FA and voice compliance prerequisites
 
 ## 2. Rotate secrets first
 
@@ -67,11 +68,13 @@ npm run smoke -- https://tu-dominio.com
 ## 6. Manual production checks
 
 - login and logout
+- owner/admin login with 2FA code delivery
 - `/portal`
 - contratar plan
 - gestionar facturación
 - checkout success -> setup account
 - llamada demo
+- aviso legal reproducido antes de la conversación útil
 - recording visible in portal
 - WhatsApp webhook
 - nightly automation
@@ -82,8 +85,18 @@ npm run smoke -- https://tu-dominio.com
 - App readiness: `/api/ops/readiness`
 - Portal health: `/api/portal/health`
 - Voice server liveness: `/healthz`
+- Voice compliance page: `/legal/voice-compliance`
 
-## 8. Incident checklist
+## 8. E2E and rate limiting
+
+- Playwright public/login/portal shell: `npm run test:e2e`
+- Si escalas la capa pública, configura:
+  - `UPSTASH_REDIS_REST_URL`
+  - `UPSTASH_REDIS_REST_TOKEN`
+- Si quieres alertas operativas sin Sentry, configura:
+  - `OPS_ALERT_WEBHOOK_URL`
+
+## 9. Incident checklist
 
 If production breaks:
 

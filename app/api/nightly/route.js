@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { runComplianceRetentionSweep } from "@/lib/server/compliance.mjs";
 import { requirePortalRoleOrInternal } from "@/lib/server/security";
 import {
   getAllLeadsForAutomation,
@@ -142,10 +143,16 @@ export async function POST(req) {
       }
     }
 
-    const [funnelResult, onboardingResult, voiceResult] = await Promise.all([
+    const [
+      funnelResult,
+      onboardingResult,
+      voiceResult,
+      complianceResult,
+    ] = await Promise.all([
       runFunnelAutomation(),
       runOnboardingAutomation(),
       runVoiceCallsAutomation(),
+      runComplianceRetentionSweep(),
     ]);
 
     return NextResponse.json({
@@ -157,6 +164,7 @@ export async function POST(req) {
         funnel: funnelResult,
         onboarding: onboardingResult,
         voice: voiceResult,
+        compliance: complianceResult,
       },
     });
   } catch (err) {

@@ -436,6 +436,13 @@ export default function NespedLanding() {
                       La demo reproduce una llamada real con voz, deteccion de necesidad y captura del lead.
                     </div>
                   )}
+
+                  <div className="support-copy" style={{ fontSize: "0.88rem" }}>
+                    Al lanzar la demo aceptas que la llamada pueda ser grabada y transcrita con fines de calidad, seguridad y seguimiento comercial.{" "}
+                    <a href="/legal/voice-compliance" className="text-white underline underline-offset-4">
+                      Ver política de grabaciones
+                    </a>
+                  </div>
                 </SurfaceCard>
               </div>
             </GlassPanel>

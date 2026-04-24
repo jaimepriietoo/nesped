@@ -6,10 +6,15 @@ import { AppBackdrop, SiteHeader } from "@/components/site-chrome";
 
 export default function LoginPage() {
   const searchParams = useSearchParams();
+  const [step, setStep] = useState("credentials");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [debugCode, setDebugCode] = useState("");
 
   async function handleLogin(event) {
     event.preventDefault();
@@ -17,6 +22,8 @@ export default function LoginPage() {
     try {
       setLoading(true);
       setError("");
+      setMessage("");
+      setDebugCode("");
 
       const res = await fetch("/api/login", {
         method: "POST",
@@ -37,12 +44,79 @@ export default function LoginPage() {
         return;
       }
 
+      if (json.requiresTwoFactor) {
+        setStep("verify");
+        setMessage(
+          `Te hemos enviado un código de verificación a ${email}.`
+        );
+        setDebugCode(json.debugCode || "");
+        return;
+      }
+
       window.location.replace(json.redirectTo || "/portal");
     } catch (err) {
       console.error(err);
       setError("Error iniciando sesion");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleVerify(event) {
+    event.preventDefault();
+
+    try {
+      setLoading(true);
+      setError("");
+      setMessage("");
+
+      const res = await fetch("/api/login/2fa", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ code }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok || !json.success) {
+        setError(json.message || "Código incorrecto");
+        return;
+      }
+
+      window.location.replace(json.redirectTo || "/portal");
+    } catch (err) {
+      console.error(err);
+      setError("Error verificando el código");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function resendCode() {
+    try {
+      setResending(true);
+      setError("");
+      setMessage("");
+
+      const res = await fetch("/api/login/2fa/resend", {
+        method: "POST",
+      });
+
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.success) {
+        setError(json.message || "No se pudo reenviar el código");
+        return;
+      }
+
+      setMessage(`Te hemos enviado un nuevo código a ${email}.`);
+      setDebugCode(json.debugCode || "");
+    } catch (err) {
+      console.error(err);
+      setError("Error reenviando el código");
+    } finally {
+      setResending(false);
     }
   }
 
@@ -98,43 +172,98 @@ export default function LoginPage() {
                   </div>
                   <div>
                     <h2 className="section-title" style={{ fontSize: "2.35rem" }}>
-                      Acceso privado
+                      {step === "verify" ? "Verificación segura" : "Acceso privado"}
                     </h2>
                     <p className="support-copy">
-                      Usa el email y la contrasena del cliente para entrar a su panel.
+                      {step === "verify"
+                        ? "Los perfiles owner y admin confirman el acceso con un código temporal."
+                        : "Usa el email y la contrasena del cliente para entrar a su panel."}
                     </p>
                   </div>
                 </div>
 
-                <form onSubmit={handleLogin} className="stack-18">
-                  <div className="stack-12">
-                    <label className="subtle-label">Email</label>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="premium-input"
-                      placeholder="cliente@empresa.com"
-                    />
-                  </div>
+                {step === "verify" ? (
+                  <form onSubmit={handleVerify} className="stack-18">
+                    <div className="stack-12">
+                      <label className="subtle-label">Código de verificación</label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={code}
+                        onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                        className="premium-input"
+                        placeholder="123456"
+                      />
+                    </div>
 
-                  <div className="stack-12">
-                    <label className="subtle-label">Contrasena</label>
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="premium-input"
-                      placeholder="Tu acceso"
-                    />
-                  </div>
+                    {message ? <div className="status-pill success">{message}</div> : null}
+                    {error ? <div className="status-pill error">{error}</div> : null}
+                    {debugCode ? (
+                      <div className="status-pill info">
+                        Código debug local: <strong>{debugCode}</strong>
+                      </div>
+                    ) : null}
 
-                  {error ? <div className="status-pill error">{error}</div> : null}
+                    <button type="submit" disabled={loading} className="button-primary">
+                      {loading ? "Verificando..." : "Confirmar acceso"}
+                    </button>
 
-                  <button type="submit" disabled={loading} className="button-primary">
-                    {loading ? "Entrando..." : "Entrar al portal"}
-                  </button>
-                </form>
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        onClick={resendCode}
+                        disabled={resending}
+                        className="button-secondary"
+                      >
+                        {resending ? "Reenviando..." : "Reenviar código"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStep("credentials");
+                          setCode("");
+                          setError("");
+                          setMessage("");
+                          setDebugCode("");
+                        }}
+                        className="button-secondary"
+                      >
+                        Volver
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <form onSubmit={handleLogin} className="stack-18">
+                    <div className="stack-12">
+                      <label className="subtle-label">Email</label>
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="premium-input"
+                        placeholder="cliente@empresa.com"
+                      />
+                    </div>
+
+                    <div className="stack-12">
+                      <label className="subtle-label">Contrasena</label>
+                      <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="premium-input"
+                        placeholder="Tu acceso"
+                      />
+                    </div>
+
+                    {message ? <div className="status-pill success">{message}</div> : null}
+                    {error ? <div className="status-pill error">{error}</div> : null}
+
+                    <button type="submit" disabled={loading} className="button-primary">
+                      {loading ? "Entrando..." : "Entrar al portal"}
+                    </button>
+                  </form>
+                )}
               </div>
             </section>
           </div>

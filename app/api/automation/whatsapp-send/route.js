@@ -7,6 +7,18 @@ const client = twilio(
   process.env.TWILIO_AUTH_TOKEN
 );
 
+function normalizePhone(value = "") {
+  return String(value || "").replace(/[^\d+]/g, "").trim();
+}
+
+function normalizeWhatsAppAddress(value = "") {
+  const normalized = String(value || "").trim();
+  if (!normalized) return "";
+  return normalized.startsWith("whatsapp:")
+    ? normalized
+    : `whatsapp:${normalizePhone(normalized)}`;
+}
+
 export async function POST(req) {
   const unauthorized = requireInternalRequest(req);
   if (unauthorized) return unauthorized;
@@ -19,8 +31,8 @@ export async function POST(req) {
     }
 
     const msg = await client.messages.create({
-      from: "whatsapp:" + process.env.TWILIO_WHATSAPP_NUMBER,
-      to: "whatsapp:" + to,
+      from: normalizeWhatsAppAddress(process.env.TWILIO_WHATSAPP_NUMBER),
+      to: normalizeWhatsAppAddress(to),
       body: message,
     });
 

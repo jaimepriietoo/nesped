@@ -1,7 +1,14 @@
 import { getSupabase } from "@/lib/supabase";
-import { setAuthCookies, verifyPassword } from "@/lib/server/auth";
+import {
+  generateTwoFactorCode,
+  requiresTwoFactor,
+  setAuthCookies,
+  setTwoFactorChallenge,
+  verifyPassword,
+} from "@/lib/server/auth";
 import { logEvent, observeRoute } from "@/lib/server/observability.mjs";
-import { requireRateLimit, requireSameOrigin } from "@/lib/server/security";
+import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
+import { sendTwoFactorCode } from "@/lib/server/two-factor.mjs";
 import { findUser } from "@/lib/auth";
 
 async function handlePost(req) {
@@ -12,7 +19,7 @@ async function handlePost(req) {
     );
     if (sameOriginError) return sameOriginError;
 
-    const ipRateLimitError = requireRateLimit(req, {
+    const ipRateLimitError = await requireRateLimitAsync(req, {
       namespace: "login:ip",
       limit: 20,
       windowMs: 15 * 60 * 1000,
@@ -33,7 +40,7 @@ async function handlePost(req) {
       );
     }
 
-    const emailRateLimitError = requireRateLimit(req, {
+    const emailRateLimitError = await requireRateLimitAsync(req, {
       namespace: "login:email",
       limit: 8,
       windowMs: 15 * 60 * 1000,
@@ -88,11 +95,45 @@ async function handlePost(req) {
       .eq("id", authenticatedUser.client_id)
       .single();
 
+    const normalizedRole = authenticatedUser.role || "client";
+    const clientName = client?.name || authenticatedUser.client_id;
+    const redirectTo =
+      nextPath && nextPath.startsWith("/") && !nextPath.startsWith("//")
+        ? nextPath
+        : "/portal";
+
+    if (requiresTwoFactor(normalizedRole)) {
+      const code = generateTwoFactorCode();
+      await setTwoFactorChallenge({
+        email,
+        clientId: authenticatedUser.client_id,
+        role: normalizedRole,
+        clientName,
+        nextPath: redirectTo,
+        code,
+      });
+
+      const delivery = await sendTwoFactorCode({
+        email,
+        code,
+        clientName,
+        role: normalizedRole,
+      });
+
+      return Response.json({
+        success: true,
+        requiresTwoFactor: true,
+        challengeExpiresIn: 10 * 60,
+        verificationChannel: delivery.channel || "email",
+        debugCode: delivery.debugCode || "",
+      });
+    }
+
     await setAuthCookies({
       email,
       clientId: authenticatedUser.client_id,
-      role: authenticatedUser.role || "client",
-      clientName: client?.name || authenticatedUser.client_id,
+      role: normalizedRole,
+      clientName,
     });
 
     logEvent("info", "auth.login_succeeded", {
@@ -104,12 +145,9 @@ async function handlePost(req) {
     return Response.json({
       success: true,
       clientId: authenticatedUser.client_id,
-      clientName: client?.name || authenticatedUser.client_id,
-      role: authenticatedUser.role || "client",
-      redirectTo:
-        nextPath && nextPath.startsWith("/") && !nextPath.startsWith("//")
-          ? nextPath
-          : "/portal",
+      clientName,
+      role: normalizedRole,
+      redirectTo,
     });
   } catch (error) {
     logEvent("error", "auth.login_error", {

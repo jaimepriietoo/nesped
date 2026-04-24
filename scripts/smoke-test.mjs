@@ -89,6 +89,34 @@ async function run() {
       throw new Error("Login smoke test returned success=false");
     }
 
+    if (loginPayload.requiresTwoFactor) {
+      const twoFactorCode =
+        process.env.SMOKE_TEST_2FA_CODE || loginPayload.debugCode || "";
+
+      if (!twoFactorCode) {
+        throw new Error(
+          "Login requires 2FA but SMOKE_TEST_2FA_CODE is not configured."
+        );
+      }
+
+      const verifyResponse = await assertOk("/api/login/2fa", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          origin: baseUrl,
+          referer: `${baseUrl}/login`,
+        },
+        body: JSON.stringify({
+          code: String(twoFactorCode),
+        }),
+      });
+
+      const verifyPayload = await verifyResponse.json();
+      if (!verifyPayload?.success) {
+        throw new Error("2FA smoke test returned success=false");
+      }
+    }
+
     await assertOk("/api/session");
 
     const portalResponse = await request("/portal");

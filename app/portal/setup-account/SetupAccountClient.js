@@ -100,7 +100,10 @@ export default function SetupAccountClient() {
       setMessage(json.message || "Cuenta guardada correctamente.");
 
       setTimeout(() => {
-        router.push(json.redirectTo || "/portal");
+        const target = json.requiresTwoFactor
+          ? `${json.redirectTo || "/login"}?next=${encodeURIComponent("/portal")}`
+          : json.redirectTo || "/portal";
+        router.push(target);
         router.refresh();
       }, 900);
     } catch (err) {

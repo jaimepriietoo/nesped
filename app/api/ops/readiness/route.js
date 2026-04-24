@@ -1,5 +1,9 @@
+import { getVoiceCompliancePolicy } from "@/lib/server/compliance.mjs";
 import { buildEnvReadinessReport } from "@/lib/server/env.mjs";
-import { getSessionSecurityProfile } from "@/lib/server/auth";
+import {
+  getSessionSecurityProfile,
+  getTwoFactorSecurityProfile,
+} from "@/lib/server/auth";
 import { observeRoute } from "@/lib/server/observability.mjs";
 import { requirePortalRoleOrInternal } from "@/lib/server/security";
 
@@ -17,6 +21,8 @@ async function handleGet(req) {
       generatedAt: new Date().toISOString(),
       env: envReport,
       session: getSessionSecurityProfile(),
+      twoFactor: getTwoFactorSecurityProfile(),
+      voiceCompliance: getVoiceCompliancePolicy(),
       runtime: {
         nodeVersion: process.version,
         platform: process.platform,

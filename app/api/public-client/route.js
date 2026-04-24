@@ -10,10 +10,6 @@ function mapClient(client) {
     status: client.status,
     tagline: client.tagline,
     logoText: client.logo_text,
-    prompt: client.prompt || "",
-    webhook: client.webhook || "",
-    twilioNumber: client.twilio_number || "",
-    customDomain: client.custom_domain || "",
     theme: {
       accent: client.accent,
       accentText: client.accent_text,

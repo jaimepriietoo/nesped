@@ -1,6 +1,7 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { saveNextBestAction } from "@/lib/server/next-best-action-service";
 import { isAuthorizedInternalRequest } from "@/lib/server/internal-api";
+import { requireSameOrigin } from "@/lib/server/security";
  
 export async function POST(req) {
   try {
@@ -19,6 +20,12 @@ export async function POST(req) {
       clientId = body.clientId;
       actor = "system";
     } else {
+      const sameOriginError = requireSameOrigin(
+        req,
+        "Origen no permitido para generar acciones IA"
+      );
+      if (sameOriginError) return sameOriginError;
+
       const ctx = await getPortalContext();
       if (!ctx.ok) return Response.json({ success: false, message: ctx.message }, { status: 401 });
       supabase = ctx.supabase;

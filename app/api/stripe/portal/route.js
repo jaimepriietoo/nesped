@@ -1,13 +1,20 @@
 import { NextResponse } from "next/server";
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { requireSameOrigin } from "@/lib/server/security";
 import {
   BASE_URL,
   resolveClientStripeCustomer,
   stripe,
 } from "@/lib/server/stripe-utils";
 
-export async function POST() {
+export async function POST(req) {
   try {
+    const sameOriginError = requireSameOrigin(
+      req,
+      "Origen no permitido para abrir facturación"
+    );
+    if (sameOriginError) return sameOriginError;
+
     const ctx = await getPortalContext();
 
     if (!ctx.ok) {

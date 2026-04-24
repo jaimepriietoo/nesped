@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { requireSameOrigin } from "@/lib/server/security";
 import {
   BASE_URL,
   getClientBillingState,
@@ -11,6 +12,12 @@ import {
 
 export async function POST(req) {
   try {
+    const sameOriginError = requireSameOrigin(
+      req,
+      "Origen no permitido para abrir el checkout"
+    );
+    if (sameOriginError) return sameOriginError;
+
     const ctx = await getPortalContext();
 
     if (!ctx.ok) {

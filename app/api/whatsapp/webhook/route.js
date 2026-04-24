@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
+import twilio from "twilio";
 import { getInternalApiHeaders } from "@/lib/server/internal-api";
 
 let openai = null;
@@ -68,6 +69,39 @@ const PAYMENT_URL = process.env.PAYMENT_URL || "";
 
 function normalizePhone(phone = "") {
   return String(phone).replace(/^whatsapp:/, "").trim();
+}
+
+function buildTwilioValidationUrl(req) {
+  return new URL(req.url).toString();
+}
+
+function formDataToObject(formData) {
+  const params = {};
+
+  formData.forEach((value, key) => {
+    if (!(key in params)) {
+      params[key] = String(value);
+    }
+  });
+
+  return params;
+}
+
+function isValidTwilioWebhook(req, params) {
+  const authToken =
+    process.env.TWILIO_AUTH_TOKEN || process.env.AUTH_TOKEN || "";
+  const signature = req.headers.get("x-twilio-signature") || "";
+
+  if (!authToken || !signature) {
+    return false;
+  }
+
+  return twilio.validateRequest(
+    authToken,
+    signature,
+    buildTwilioValidationUrl(req),
+    params
+  );
 }
 
 function safeJsonParse(text, fallback) {
@@ -590,6 +624,15 @@ function selectProductTierFromAnalysis(lead, analysis) {
 export async function POST(req) {
   try {
     const formData = await req.formData();
+    const twilioParams = formDataToObject(formData);
+
+    if (!isValidTwilioWebhook(req, twilioParams)) {
+      return NextResponse.json(
+        { success: false, message: "Firma de webhook inválida" },
+        { status: 403 }
+      );
+    }
+
     const inboundMessage = String(formData.get("Body") || "").trim();
     const from = String(formData.get("From") || "");
     const phone = normalizePhone(from);

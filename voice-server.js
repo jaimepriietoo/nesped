@@ -4,6 +4,7 @@ const express = require("express");
 const http = require("http");
 const WebSocket = require("ws");
 const twilio = require("twilio");
+const crypto = require("crypto");
 const { createClient } = require("@supabase/supabase-js");
 
 console.log("VOICE SERVER ENTERPRISE FINAL - 2026-04-07");
@@ -36,6 +37,9 @@ const supabase = hasSupabase
     )
   : null;
 
+const pendingRecordings = new Map();
+const PENDING_RECORDING_TTL_MS = 24 * 60 * 60 * 1000;
+
 if (!hasSupabase) {
   console.log("⚠️ Supabase desactivado");
 }
@@ -43,6 +47,102 @@ if (!hasSupabase) {
 app.get("/", (req, res) => {
   res.send("NESPED Voice Server activo");
 });
+
+function safeEqual(left, right) {
+  const leftBuffer = Buffer.from(String(left || ""));
+  const rightBuffer = Buffer.from(String(right || ""));
+
+  if (leftBuffer.length === 0 || leftBuffer.length !== rightBuffer.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function getInternalApiToken() {
+  return (
+    process.env.INTERNAL_API_TOKEN ||
+    process.env.CRON_SECRET ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    ""
+  );
+}
+
+function isAuthorizedInternalRequest(req) {
+  const expected = getInternalApiToken();
+  const provided =
+    req.headers["x-nesped-internal-token"] ||
+    req.headers.authorization?.replace(/^Bearer\s+/i, "") ||
+    "";
+
+  if (!expected || !provided) {
+    return false;
+  }
+
+  return safeEqual(provided, expected);
+}
+
+function getPublicBaseUrl() {
+  return String(process.env.BASE_URL || "").replace(/\/+$/, "");
+}
+
+function getTwilioValidationUrl(req) {
+  const baseUrl = getPublicBaseUrl();
+
+  if (!baseUrl) {
+    return "";
+  }
+
+  return `${baseUrl}${req.originalUrl || req.url || ""}`;
+}
+
+function isValidTwilioHttpRequest(req) {
+  const validationUrl = getTwilioValidationUrl(req);
+
+  if (!authToken || !validationUrl) {
+    return false;
+  }
+
+  return twilio.validateExpressRequest(req, authToken, {
+    url: validationUrl,
+  });
+}
+
+function isValidTwilioWsRequest(req) {
+  const baseUrl = getPublicBaseUrl();
+  const signature = req.headers["x-twilio-signature"] || "";
+
+  if (!authToken || !baseUrl || !signature) {
+    return false;
+  }
+
+  return twilio.validateRequest(
+    authToken,
+    signature,
+    `${baseUrl}${req.url || ""}`,
+    {}
+  );
+}
+
+function getRecordingMediaUrl(recordingUrl = "") {
+  if (!recordingUrl) {
+    return "";
+  }
+
+  return /\.(mp3|wav)$/i.test(recordingUrl)
+    ? recordingUrl
+    : `${recordingUrl}.mp3`;
+}
+
+function cleanupPendingRecordings() {
+  const now = Date.now();
+
+  for (const [callSid, entry] of pendingRecordings.entries()) {
+    if (!entry?.updatedAt || now - entry.updatedAt > PENDING_RECORDING_TTL_MS) {
+      pendingRecordings.delete(callSid);
+    }
+  }
+}
 
 function getFallbackPrompt() {
   return `
@@ -218,6 +318,10 @@ async function getClientConfig(clientId) {
 }
 
 app.get("/call", async (req, res) => {
+  if (!isAuthorizedInternalRequest(req)) {
+    return res.status(401).send("No autorizado");
+  }
+
   try {
     const clientId = req.query.client_id || "demo";
     const cleanBaseUrl = (process.env.BASE_URL || "").replace(/\/+$/, "");
@@ -235,6 +339,7 @@ app.get("/call", async (req, res) => {
       record: true,
       recordingStatusCallback: `${cleanBaseUrl}/recording-status?client_id=${clientId}`,
       recordingStatusCallbackMethod: "POST",
+      recordingStatusCallbackEvent: "completed",
     });
 
     console.log("📞 Llamada iniciada:", call.sid, "cliente:", clientId);
@@ -246,27 +351,48 @@ app.get("/call", async (req, res) => {
 });
 
 app.post("/recording-status", async (req, res) => {
+  if (!isValidTwilioHttpRequest(req)) {
+    console.warn("🚫 recording-status rechazado por firma inválida");
+    return res.status(403).send("forbidden");
+  }
+
   try {
+    cleanupPendingRecordings();
+
     const recordingUrl = req.body?.RecordingUrl || "";
     const callSid = req.body?.CallSid || "";
     const recordingStatus = req.body?.RecordingStatus || "";
     const clientId = req.query.client_id || "demo";
+    const normalizedRecordingUrl = getRecordingMediaUrl(recordingUrl);
 
-    console.log("🎙️ Recording callback:", { recordingUrl, callSid, recordingStatus });
+    console.log("🎙️ Recording callback:", {
+      recordingUrl: normalizedRecordingUrl,
+      callSid,
+      recordingStatus,
+    });
 
-    if (supabase && callSid && recordingUrl) {
-      const { error } = await supabase
+    if (callSid && normalizedRecordingUrl) {
+      pendingRecordings.set(callSid, {
+        recordingUrl: normalizedRecordingUrl,
+        updatedAt: Date.now(),
+      });
+    }
+
+    if (supabase && callSid && normalizedRecordingUrl) {
+      const { data, error } = await supabase
         .from("calls")
         .update({
-          recording_url: `${recordingUrl}.mp3`,
+          recording_url: normalizedRecordingUrl,
         })
         .eq("call_sid", callSid)
-        .eq("client_id", clientId);
+        .eq("client_id", clientId)
+        .select("call_sid");
 
       if (error) {
         console.error("❌ Error guardando recording_url:", error.message);
-      } else {
+      } else if (Array.isArray(data) && data.length > 0) {
         console.log("✅ recording_url guardada en calls");
+        pendingRecordings.delete(callSid);
       }
     }
 
@@ -296,6 +422,11 @@ function buildVoiceTwiml(clientId) {
 }
 
 app.get("/voice", (req, res) => {
+  if (!isValidTwilioHttpRequest(req)) {
+    console.warn("🚫 GET /voice rechazado por firma inválida");
+    return res.status(403).send("forbidden");
+  }
+
   const clientId = req.query.client_id || "demo";
   console.log("GET /voice");
   console.log("🏢 Cliente detectado en /voice:", clientId);
@@ -306,6 +437,11 @@ app.get("/voice", (req, res) => {
 });
 
 app.post("/voice", (req, res) => {
+  if (!isValidTwilioHttpRequest(req)) {
+    console.warn("🚫 POST /voice rechazado por firma inválida");
+    return res.status(403).send("forbidden");
+  }
+
   const clientId = req.query.client_id || "demo";
   console.log("POST /voice");
   console.log("🏢 Cliente detectado en /voice:", clientId);
@@ -319,6 +455,12 @@ const wss = new WebSocket.Server({ server, path: "/media-stream" });
 console.log("✅ WebSocket /media-stream listo");
 
 wss.on("connection", async (twilioWs, req) => {
+  if (!isValidTwilioWsRequest(req)) {
+    console.warn("🚫 WebSocket /media-stream rechazado por firma inválida");
+    twilioWs.close();
+    return;
+  }
+
   const url = new URL(req.url, "https://dummy");
   const clientId = url.searchParams.get("client_id") || "demo";
 
@@ -381,12 +523,15 @@ wss.on("connection", async (twilioWs, req) => {
     }
 
     try {
+      cleanupPendingRecordings();
+
       const durationSeconds = Math.max(
         1,
         Math.round((Date.now() - callStartedAt) / 1000)
       );
 
       const transcript = transcriptParts.join("\n").trim();
+      const pendingRecording = callSid ? pendingRecordings.get(callSid) : null;
 
       await supabase.from("calls").insert({
         client_id: clientId,
@@ -406,7 +551,12 @@ wss.on("connection", async (twilioWs, req) => {
         summary_long: transcript
           ? `Resumen automático: ${callSummary}. Transcripción disponible para análisis.`
           : callSummary,
+        recording_url: pendingRecording?.recordingUrl || null,
       });
+
+      if (callSid && pendingRecording) {
+        pendingRecordings.delete(callSid);
+      }
 
       console.log("📞 Llamada guardada en Supabase");
     } catch (err) {

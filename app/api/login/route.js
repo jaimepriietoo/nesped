@@ -1,9 +1,24 @@
 import { getSupabase } from "@/lib/supabase";
 import { setAuthCookies, verifyPassword } from "@/lib/server/auth";
+import { requireRateLimit, requireSameOrigin } from "@/lib/server/security";
 import { findUser } from "@/lib/auth";
 
 export async function POST(req) {
   try {
+    const sameOriginError = requireSameOrigin(
+      req,
+      "Origen no permitido para iniciar sesión"
+    );
+    if (sameOriginError) return sameOriginError;
+
+    const ipRateLimitError = requireRateLimit(req, {
+      namespace: "login:ip",
+      limit: 20,
+      windowMs: 15 * 60 * 1000,
+      message: "Demasiados intentos de acceso. Espera unos minutos e inténtalo de nuevo.",
+    });
+    if (ipRateLimitError) return ipRateLimitError;
+
     const supabase = getSupabase();
     const body = await req.json();
     const email = String(body?.email || "").trim().toLowerCase();
@@ -16,6 +31,15 @@ export async function POST(req) {
         { status: 400 }
       );
     }
+
+    const emailRateLimitError = requireRateLimit(req, {
+      namespace: "login:email",
+      limit: 8,
+      windowMs: 15 * 60 * 1000,
+      keyParts: [email],
+      message: "Demasiados intentos para este usuario. Espera unos minutos e inténtalo de nuevo.",
+    });
+    if (emailRateLimitError) return emailRateLimitError;
 
     const { data: user, error } = await supabase
       .from("users")

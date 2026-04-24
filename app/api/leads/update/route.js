@@ -1,7 +1,14 @@
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { requireSameOrigin } from "@/lib/server/security";
  
 export async function PATCH(req) {
   try {
+    const sameOriginError = requireSameOrigin(
+      req,
+      "Origen no permitido para actualizar leads"
+    );
+    if (sameOriginError) return sameOriginError;
+
     const ctx = await getPortalContext();
     if (!ctx.ok) return Response.json({ success: false, message: ctx.message }, { status: 401 });
     if (!hasRole(ctx.role, ["owner","admin","manager","agent"])) return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });

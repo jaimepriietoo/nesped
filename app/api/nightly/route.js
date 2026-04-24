@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requirePortalRoleOrInternal } from "@/lib/server/security";
 import {
   getAllLeadsForAutomation,
   normalizePhone,
@@ -50,7 +51,10 @@ function buildTimedRecoveryMessage(lead, stage, paymentLink, bookingUrl) {
   return `Hola ${name}, te dejo el enlace directo por si quieres retomarlo:\n${paymentLink}`;
 }
 
-export async function POST() {
+export async function POST(req) {
+  const access = await requirePortalRoleOrInternal(req);
+  if (!access.ok) return access.response;
+
   try {
     const bookingUrl = process.env.BOOKING_URL || "";
     const leads = await getAllLeadsForAutomation();

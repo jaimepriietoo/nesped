@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { getInternalApiHeaders } from "@/lib/server/internal-api";
+import { requirePortalRoleOrInternal } from "@/lib/server/security";
 
 function getSupabase() {
   return createClient(
@@ -9,6 +10,9 @@ function getSupabase() {
 }
 
 export async function POST(req) {
+  const access = await requirePortalRoleOrInternal(req);
+  if (!access.ok) return access.response;
+
   try {
     const body = await req.json().catch(() => ({}));
     const onlyClientId = body?.clientId || null;

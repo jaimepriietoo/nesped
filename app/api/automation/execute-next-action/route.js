@@ -1,8 +1,15 @@
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
 import { executeNextBestAction } from "@/lib/server/next-best-action-service";
+import { requireSameOrigin } from "@/lib/server/security";
 
 export async function POST(req) {
   try {
+    const sameOriginError = requireSameOrigin(
+      req,
+      "Origen no permitido para ejecutar acciones"
+    );
+    if (sameOriginError) return sameOriginError;
+
     const ctx = await getPortalContext();
     if (!ctx.ok) {
       return Response.json(

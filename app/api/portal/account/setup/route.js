@@ -1,6 +1,7 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { getSupabase } from "@/lib/supabase";
 import { hashPassword, setAuthCookies } from "@/lib/server/auth";
+import { requireRateLimit, requireSameOrigin } from "@/lib/server/security";
 import { stripe } from "@/lib/server/stripe-utils";
 
 function normalizeEmail(value = "") {
@@ -293,6 +294,21 @@ export async function GET(req) {
 
 export async function POST(req) {
   try {
+    const sameOriginError = requireSameOrigin(
+      req,
+      "Origen no permitido para configurar la cuenta"
+    );
+    if (sameOriginError) return sameOriginError;
+
+    const rateLimitError = requireRateLimit(req, {
+      namespace: "portal-account-setup",
+      limit: 10,
+      windowMs: 30 * 60 * 1000,
+      message:
+        "Se han detectado demasiados intentos de configuración. Espera un momento antes de volver a intentarlo.",
+    });
+    if (rateLimitError) return rateLimitError;
+
     const ctx = await getPortalContext();
     const body = await req.json();
     const email = normalizeEmail(body?.email);

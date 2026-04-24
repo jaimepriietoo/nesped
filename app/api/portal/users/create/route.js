@@ -1,8 +1,15 @@
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
 import { hashPassword } from "@/lib/server/auth";
+import { requireSameOrigin } from "@/lib/server/security";
  
 export async function POST(req) {
   try {
+    const sameOriginError = requireSameOrigin(
+      req,
+      "Origen no permitido para crear usuarios"
+    );
+    if (sameOriginError) return sameOriginError;
+
     const ctx = await getPortalContext();
     if (!ctx.ok) return Response.json({ success: false, message: ctx.message }, { status: 401 });
     if (!hasRole(ctx.role, ["owner","admin"])) return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });

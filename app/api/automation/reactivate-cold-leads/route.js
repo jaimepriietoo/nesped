@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getInternalApiHeaders } from "@/lib/server/internal-api";
+import { requirePortalRoleOrInternal } from "@/lib/server/security";
 
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 const BOOKING_URL = process.env.BOOKING_URL || "";
@@ -52,7 +53,10 @@ async function sendWhatsapp(to, message) {
   });
 }
 
-export async function POST() {
+export async function POST(req) {
+  const access = await requirePortalRoleOrInternal(req);
+  if (!access.ok) return access.response;
+
   try {
     const overview = await getOverview();
     const leads = Array.isArray(overview?.leads) ? overview.leads : [];

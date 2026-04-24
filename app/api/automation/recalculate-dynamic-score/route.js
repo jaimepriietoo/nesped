@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requirePortalRoleOrInternal } from "@/lib/server/security";
 
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 
@@ -143,7 +144,10 @@ async function patchLead(leadId, changes) {
   return await res.json();
 }
 
-export async function POST() {
+export async function POST(req) {
+  const access = await requirePortalRoleOrInternal(req);
+  if (!access.ok) return access.response;
+
   try {
     const overview = await getOverview();
     const leads = Array.isArray(overview?.leads) ? overview.leads : [];

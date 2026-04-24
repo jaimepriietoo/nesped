@@ -10,19 +10,6 @@ export default function ClientLanding({ params }) {
 
   const clientId = params?.clientId;
 
-  async function loadClient() {
-    try {
-      const res = await fetch("/api/clients", { cache: "no-store" });
-      const json = await res.json();
-      const allClients = Array.isArray(json.data) ? json.data : [];
-      const found = allClients.find((c) => c.id === clientId) || null;
-      setClient(found);
-    } catch (err) {
-      console.error(err);
-      setClient(null);
-    }
-  }
-
   async function hacerLlamada() {
     try {
       setLoadingCall(true);
@@ -56,7 +43,29 @@ export default function ClientLanding({ params }) {
   }
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function loadClient() {
+      try {
+        const res = await fetch("/api/clients", { cache: "no-store" });
+        const json = await res.json();
+        const allClients = Array.isArray(json.data) ? json.data : [];
+        const found = allClients.find((c) => c.id === clientId) || null;
+        if (!cancelled) {
+          setClient(found);
+        }
+      } catch (err) {
+        console.error(err);
+        if (!cancelled) {
+          setClient(null);
+        }
+      }
+    }
+
     loadClient();
+    return () => {
+      cancelled = true;
+    };
   }, [clientId]);
 
   const theme = useMemo(() => {
@@ -86,11 +95,22 @@ export default function ClientLanding({ params }) {
       <header className="border-b border-white/10 bg-black/40 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-black text-lg font-bold">
-              {client.logoText || "N"}
-            </div>
+            {client.brandLogoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={client.brandLogoUrl}
+                alt={client.brandName || client.name}
+                className="h-11 w-11 rounded-2xl object-cover"
+              />
+            ) : (
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-black text-lg font-bold">
+                {client.logoText || "N"}
+              </div>
+            )}
             <div>
-              <div className="text-lg font-semibold tracking-tight">{client.name}</div>
+              <div className="text-lg font-semibold tracking-tight">
+                {client.brandName || client.name}
+              </div>
               <div className="text-xs text-white/45">{client.type}</div>
             </div>
           </div>
@@ -110,7 +130,7 @@ export default function ClientLanding({ params }) {
             </div>
 
             <h1 className="max-w-4xl text-5xl font-semibold tracking-tight md:text-7xl">
-              {client.name}
+              {client.brandName || client.name}
             </h1>
 
             <p className="mt-6 max-w-2xl text-lg leading-8 text-white/65 md:text-xl">
@@ -144,7 +164,8 @@ export default function ClientLanding({ params }) {
                 Recibe una llamada en directo
               </div>
               <p className="mt-3 text-sm leading-7 text-white/60">
-                Introduce tu número y prueba cómo responde la IA de {client.name}.
+                Introduce tu número y prueba cómo responde la IA de {client.brandName || client.name}.
+                {client.customDomain ? ` Dominio activo: ${client.customDomain}.` : ""}
               </p>
 
               <div className="mt-6 space-y-3">

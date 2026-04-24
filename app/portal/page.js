@@ -3,9 +3,12 @@
 import { useEffect, useEffectEvent, useMemo, useState, useRef } from "react";
 import {
   buildDerivedNotifications,
+  buildBrandLabWorkspace,
   buildLeadTimeline,
+  buildMessageExperimentSummary,
   buildOnboardingChecklist,
   buildOnboardingWorkspace,
+  buildStrategySnapshot,
   buildRoiSnapshot,
   computeUsagePressure,
 } from "@/lib/portal-product";
@@ -168,6 +171,67 @@ function getHealthLabel(level) {
     warning: "Atención",
     critical: "Crítico",
   }[String(level || "").toLowerCase()] || "Info";
+}
+
+const BRAND_THEME_PRESETS = [
+  {
+    id: "ocean",
+    label: "Ocean premium",
+    accent: "bg-blue-500/20",
+    accent_text: "text-blue-300",
+    button: "bg-white text-black hover:bg-white/90",
+    badge: "bg-emerald-500/15 text-emerald-300",
+  },
+  {
+    id: "graphite",
+    label: "Graphite luxe",
+    accent: "bg-white/10",
+    accent_text: "text-white",
+    button: "bg-zinc-100 text-black hover:bg-white/90",
+    badge: "bg-white/10 text-white",
+  },
+  {
+    id: "emerald",
+    label: "Emerald signal",
+    accent: "bg-emerald-500/20",
+    accent_text: "text-emerald-300",
+    button: "bg-emerald-300 text-black hover:bg-emerald-200",
+    badge: "bg-cyan-500/15 text-cyan-300",
+  },
+  {
+    id: "sunset",
+    label: "Sunset premium",
+    accent: "bg-amber-400/20",
+    accent_text: "text-amber-200",
+    button: "bg-amber-200 text-black hover:bg-amber-100",
+    badge: "bg-rose-500/15 text-rose-300",
+  },
+];
+
+function getBrandThemePresetId(form = {}) {
+  return (
+    BRAND_THEME_PRESETS.find(
+      (preset) =>
+        preset.accent === form?.accent &&
+        preset.accent_text === form?.accent_text &&
+        preset.button === form?.button &&
+        preset.badge === form?.badge
+    )?.id || "custom"
+  );
+}
+
+function applyBrandThemePreset(form = {}, presetId = "ocean") {
+  const preset =
+    BRAND_THEME_PRESETS.find((item) => item.id === presetId) ||
+    BRAND_THEME_PRESETS[0];
+
+  return {
+    ...(form || {}),
+    accent: preset.accent,
+    accent_text: preset.accent_text,
+    button: preset.button,
+    badge: preset.badge,
+  };
 }
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -1779,6 +1843,511 @@ function RoiView({ roiSnapshot, leadRevenue, ownerRevenue, openCheckout, openBil
   );
 }
 
+function StrategyView({ strategyData, onNavigate }) {
+  const summaryCards = strategyData?.summaryCards || [];
+  const benchmarkCards = strategyData?.benchmarkCards || [];
+  const insights = strategyData?.insights || [];
+  const products = strategyData?.productFocus || [];
+  const owners = strategyData?.ownerFocus || [];
+  const benchmarkHistory = strategyData?.benchmarkHistory || [];
+
+  const renderValue = (card) =>
+    card?.suffix === "EUR" ? fmtEur(card?.value || 0) : String(card?.value ?? "—");
+
+  return (
+    <div className="fade-up">
+      <div className="section-header mb-4">
+        <div>
+          <div className="section-title">Strategy room</div>
+          <div className="text-sm text-dim">{strategyData?.story || "Sin lectura estratégica todavía."}</div>
+        </div>
+        <Badge color="purple">{insights.length} insights</Badge>
+      </div>
+
+      <div className="stat-grid mb-4">
+        {summaryCards.map((card) => (
+          <StatCard
+            key={card.id}
+            title={card.label}
+            value={renderValue(card)}
+            sub={card.detail}
+            accent="var(--c-blue)"
+          />
+        ))}
+      </div>
+
+      <div className="grid-2 mb-4">
+        <div className="card">
+          <div className="card-title">Benchmarks operativos</div>
+          {benchmarkCards.length === 0 ? (
+            <div className="empty">Sin benchmarks disponibles.</div>
+          ) : (
+            benchmarkCards.map((item) => (
+              <div key={item.id} className="card-sm mb-2">
+                <div className="flex justify-between mb-1">
+                  <div className="text-sm font-semibold">{item.label}</div>
+                  <Badge color={getSeverityColor(item.status)}>{getHealthLabel(item.status)}</Badge>
+                </div>
+                <div className="flex items-center gap-2 mb-2" style={{ flexWrap: "wrap" }}>
+                  <Badge color="blue">{String(item.value)}</Badge>
+                  {item.target && <Badge color="default">Objetivo {String(item.target)}</Badge>}
+                  <Badge color={Number(item.delta) >= 0 ? "green" : "amber"}>
+                    {Number(item.delta) > 0 ? "+" : ""}
+                    {String(item.delta)}
+                  </Badge>
+                </div>
+                <div className="text-xs text-dim">{item.detail}</div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="card">
+          <div className="card-title">Movimientos recomendados</div>
+          {insights.length === 0 ? (
+            <div className="empty">Todavía no hay recomendaciones priorizadas.</div>
+          ) : (
+            insights.slice(0, 6).map((item) => (
+              <div key={item.id} className="card-sm mb-2">
+                <div className="flex justify-between mb-1">
+                  <div className="text-sm font-semibold">{item.title}</div>
+                  <Badge color="purple">{item.priority || 0}</Badge>
+                </div>
+                <div className="text-xs text-dim mb-2">{item.body}</div>
+                <div className="flex gap-2">
+                  <Badge color="default">{item.category || "general"}</Badge>
+                  {item.view && (
+                    <button onClick={() => onNavigate(item.view)} className="btn btn-ghost btn-sm">
+                      Abrir módulo
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="grid-2 mb-4">
+        <div className="card">
+          <div className="card-title">Foco por producto</div>
+          {products.length === 0 ? (
+            <div className="empty">Todavía no hay señal suficiente por producto.</div>
+          ) : (
+            products.map((product) => (
+              <div key={product.key || product.tier} className="pipeline-row">
+                <div className="flex-1">
+                  <div className="text-sm font-semibold">{product.name}</div>
+                  <div className="text-xs text-dim">
+                    {product.sales || 0} ventas · ticket medio {fmtEur(product.avgTicket || 0)}
+                  </div>
+                </div>
+                <Badge color="green">{fmtEur(product.revenue || 0)}</Badge>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="card">
+          <div className="card-title">Momentum del equipo</div>
+          {owners.length === 0 ? (
+            <div className="empty">Todavía no hay ranking operativo.</div>
+          ) : (
+            owners.map((owner, index) => (
+              <div key={`${owner.owner}:${index}`} className="pipeline-row">
+                <div className="flex-1">
+                  <div className="text-sm font-semibold">{owner.owner || "Equipo"}</div>
+                  <div className="text-xs text-dim">
+                    {owner.role || "—"} · {owner.payments_count || 0} pagos
+                  </div>
+                </div>
+                <Badge color={index === 0 ? "green" : "blue"}>{fmtEur(owner.revenue || 0)}</Badge>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-title">Histórico de benchmarks</div>
+        {benchmarkHistory.length === 0 ? (
+          <div className="empty">No hay snapshots históricos todavía.</div>
+        ) : (
+          benchmarkHistory.map((item) => (
+            <div key={item.id} className="pipeline-row">
+              <div className="flex-1">
+                <div className="text-sm font-semibold">{item.label}</div>
+                <div className="text-xs text-dim">{item.detail || "Snapshot estratégico guardado."}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-sm font-semibold">{String(item.value)}</div>
+                <div className="text-xs text-muted">{formatDate(item.created_at)}</div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ExperimentsView({ experiments, experimentsMeta }) {
+  const summary = experimentsMeta?.summary || {};
+  const channelBreakdown = experimentsMeta?.channelBreakdown || [];
+  const stageBreakdown = experimentsMeta?.stageBreakdown || [];
+  const suggestions = experimentsMeta?.suggestions || [];
+  const winner = summary?.winner || null;
+
+  return (
+    <div className="fade-up">
+      <div className="section-header mb-4">
+        <div>
+          <div className="section-title">Experiment lab</div>
+          <div className="text-sm text-dim">A/B testing y aprendizaje comercial con señal real del cliente.</div>
+        </div>
+        <Badge color="blue">{summary?.activeVariants || 0} variantes vivas</Badge>
+      </div>
+
+      <div className="stat-grid mb-4">
+        <StatCard title="Variantes" value={summary?.totalVariants || 0} sub="Activas en librería" accent="var(--c-blue)" />
+        <StatCard title="Enviados" value={summary?.totalSent || 0} sub="Volumen total medido" accent="var(--c-purple)" />
+        <StatCard title="Replies" value={summary?.totalReplies || 0} sub={`${summary?.replyRate || 0}% de reply rate`} accent="var(--c-green)" />
+        <StatCard title="Conversión" value={summary?.totalConverted || 0} sub={`${summary?.conversionRate || 0}% de conversión`} accent="var(--c-amber)" />
+      </div>
+
+      <div className="grid-2 mb-4">
+        <div className="card">
+          <div className="card-title">Ganador actual</div>
+          {!winner ? (
+            <div className="empty">Aún no hay una variante ganadora con señal suficiente.</div>
+          ) : (
+            <div className="card-sm">
+              <div className="flex justify-between mb-1">
+                <div className="text-sm font-semibold">{winner.name}</div>
+                <Badge color={winner.confidence === "high" ? "green" : winner.confidence === "medium" ? "amber" : "blue"}>
+                  {winner.confidence || "low"}
+                </Badge>
+              </div>
+              <div className="text-xs text-dim mb-2">{winner.channel} · {winner.stage}</div>
+              <div className="text-sm text-dim mb-2">{winner.content}</div>
+              <div className="flex gap-2" style={{ flexWrap: "wrap" }}>
+                <Badge color="blue">{winner.sent || 0} enviados</Badge>
+                <Badge color="green">{winner.reply_rate || 0}% reply</Badge>
+                <Badge color="purple">{winner.conversion_rate || 0}% conv.</Badge>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="card">
+          <div className="card-title">Siguientes tests</div>
+          {suggestions.length === 0 ? (
+            <div className="empty">No hay sugerencias de test por ahora.</div>
+          ) : (
+            suggestions.map((item) => (
+              <div key={item.id} className="card-sm mb-2">
+                <div className="text-sm font-semibold mb-1">{item.title}</div>
+                <div className="text-xs text-dim">{item.body}</div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="grid-2 mb-4">
+        <div className="card">
+          <div className="card-title">Rendimiento por canal</div>
+          {channelBreakdown.length === 0 ? (
+            <div className="empty">Sin datos por canal todavía.</div>
+          ) : (
+            channelBreakdown.map((item) => (
+              <div key={item.channel} className="pipeline-row">
+                <div className="flex-1">
+                  <div className="text-sm font-semibold">{item.channel}</div>
+                  <div className="text-xs text-dim">{item.variants} variantes activas</div>
+                </div>
+                <Badge color="green">{item.reply_rate || 0}% reply</Badge>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="card">
+          <div className="card-title">Rendimiento por etapa</div>
+          {stageBreakdown.length === 0 ? (
+            <div className="empty">Sin etapas medidas todavía.</div>
+          ) : (
+            stageBreakdown.map((item) => (
+              <div key={item.stage} className="pipeline-row">
+                <div className="flex-1">
+                  <div className="text-sm font-semibold">{item.stage}</div>
+                  <div className="text-xs text-dim">{item.sent || 0} envíos</div>
+                </div>
+                <Badge color="purple">{item.conversion_rate || 0}% conv.</Badge>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-title">Variantes activas</div>
+        {experiments.length === 0 ? (
+          <div className="empty">Todavía no hay variantes activas.</div>
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Variante</th>
+                  <th>Canal</th>
+                  <th>Etapa</th>
+                  <th>Enviados</th>
+                  <th>Reply</th>
+                  <th>Conversión</th>
+                </tr>
+              </thead>
+              <tbody>
+                {experiments.map((variant) => (
+                  <tr key={variant.id}>
+                    <td className="bold">
+                      {variant.name}
+                      <div className="text-xs text-muted">{truncateText(variant.content, 90)}</div>
+                    </td>
+                    <td><Badge color="default">{variant.channel}</Badge></td>
+                    <td><Badge color="blue">{variant.stage}</Badge></td>
+                    <td>{variant.sent || 0}</td>
+                    <td><Badge color="green">{variant.reply_rate || 0}%</Badge></td>
+                    <td><Badge color="purple">{variant.conversion_rate || 0}%</Badge></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BrandLabView({
+  brandLabData,
+  brandingForm,
+  setBrandingForm,
+  saveBranding,
+  portalSettingsForm,
+  setPortalSettingsForm,
+  savePortalSettings,
+  portalSettingsSaving,
+  canAdmin,
+  connectCustomDomain,
+  domainLoading,
+}) {
+  const preview = brandLabData?.preview || {};
+  const livePreview = {
+    ...preview,
+    brandName: brandingForm?.brand_name || preview.brandName || "Nesped",
+    logoText:
+      brandingForm?.logo_text ||
+      preview.logoText ||
+      (brandingForm?.brand_name || preview.brandName || "N").slice(0, 1).toUpperCase(),
+    logoUrl: brandingForm?.brand_logo_url || preview.logoUrl || "",
+    primaryColor: brandingForm?.primary_color || preview.primaryColor || "#ffffff",
+    secondaryColor: brandingForm?.secondary_color || preview.secondaryColor || "#030303",
+    tagline: portalSettingsForm?.tagline || preview.tagline || "Revenue OS premium",
+    customDomain: brandingForm?.custom_domain || preview.customDomain || "",
+    theme: {
+      accent: brandingForm?.accent || preview.theme?.accent || BRAND_THEME_PRESETS[0].accent,
+      accentText:
+        brandingForm?.accent_text ||
+        preview.theme?.accentText ||
+        BRAND_THEME_PRESETS[0].accent_text,
+      button:
+        brandingForm?.button || preview.theme?.button || BRAND_THEME_PRESETS[0].button,
+      badge:
+        brandingForm?.badge || preview.theme?.badge || BRAND_THEME_PRESETS[0].badge,
+    },
+  };
+
+  const integrations = brandLabData?.integrations || [];
+  const catalog = brandLabData?.catalog || [];
+  const suggestions = brandLabData?.suggestions || [];
+  const themePresetId = getBrandThemePresetId(brandingForm);
+
+  return (
+    <div className="fade-up">
+      <div className="section-header mb-4">
+        <div>
+          <div className="section-title">Brand Lab</div>
+          <div className="text-sm text-dim">White-label, integraciones y presencia premium del cliente final.</div>
+        </div>
+        <Badge color={brandLabData?.readinessState === "ready" ? "green" : brandLabData?.readinessState === "progress" ? "amber" : "blue"}>
+          {brandLabData?.readinessScore || 0}% listo
+        </Badge>
+      </div>
+
+      <div className="grid-2 mb-4">
+        <div
+          className="card"
+          style={{
+            background: `linear-gradient(135deg, ${livePreview.secondaryColor}, rgba(5,7,10,0.98))`,
+            borderColor: `${livePreview.primaryColor}30`,
+          }}
+        >
+          <div className="card-title">Vista previa pública</div>
+          <div className="card-sm mb-3" style={{ borderColor: `${livePreview.primaryColor}25` }}>
+            <div className="flex items-center justify-between mb-4" style={{ gap: 12 }}>
+              <div className="flex items-center gap-3">
+                {livePreview.logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={livePreview.logoUrl} alt={livePreview.brandName} style={{ width: 44, height: 44, borderRadius: 14, objectFit: "cover" }} />
+                ) : (
+                  <div className="sidebar-logo-icon" style={{ width: 44, height: 44, borderRadius: 14 }}>
+                    {livePreview.logoText}
+                  </div>
+                )}
+                <div>
+                  <div className="text-sm font-semibold">{livePreview.brandName}</div>
+                  <div className="text-xs text-dim">{livePreview.customDomain || livePreview.previewUrl || "White-label preview"}</div>
+                </div>
+              </div>
+              <div className={`rounded-full px-3 py-1 text-xs ${livePreview.theme.badge}`}>Activo</div>
+            </div>
+            <div className={`mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 ${livePreview.theme.accent} px-4 py-2 text-xs uppercase tracking-[0.22em] ${livePreview.theme.accentText}`}>
+              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+              Atención con IA premium
+            </div>
+            <div style={{ fontSize: 32, lineHeight: 1.05, fontWeight: 600, letterSpacing: "-0.03em", marginBottom: 12 }}>
+              {livePreview.brandName}
+            </div>
+            <div className="text-sm text-dim mb-4">{livePreview.tagline}</div>
+            <div className="flex gap-2" style={{ flexWrap: "wrap" }}>
+              <button className={`rounded-2xl px-5 py-3 text-sm font-semibold transition ${livePreview.theme.button}`}>Probar demo</button>
+              <button className="btn btn-ghost btn-sm">Acceso clientes</button>
+            </div>
+          </div>
+          <div className="grid-2">
+            <div className="card-sm">
+              <div className="text-xs text-muted mb-2">Preview</div>
+              <div className="text-sm font-semibold">{livePreview.previewUrl || "—"}</div>
+            </div>
+            <div className="card-sm">
+              <div className="text-xs text-muted mb-2">Login</div>
+              <div className="text-sm font-semibold">{preview.loginUrl || "/login"}</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-title">Siguientes mejoras de marca</div>
+          {suggestions.length === 0 ? (
+            <div className="empty">La base de white-label ya está bastante cerrada.</div>
+          ) : (
+            suggestions.map((item) => (
+              <div key={item.id} className="card-sm mb-2">
+                <div className="text-sm font-semibold mb-1">{item.title}</div>
+                <div className="text-xs text-dim">{item.body}</div>
+              </div>
+            ))
+          )}
+          <div className="divider" />
+          <div className="text-xs text-muted mb-2 text-upper">Integraciones activas</div>
+          {integrations.map((integration) => (
+            <div key={integration.id} className="pipeline-row">
+              <div className="flex-1">
+                <div className="text-sm font-semibold">{integration.name}</div>
+                <div className="text-xs text-dim">{integration.detail}</div>
+              </div>
+              <Badge color={integration.ready ? "green" : "amber"}>{integration.ready ? "listo" : "pendiente"}</Badge>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid-2 mb-4">
+        <div className="card">
+          <div className="card-title">White-label y tema</div>
+          <div className="flex-col gap-3" style={{ display: "flex" }}>
+            {[["Nombre de marca", "brand_name", "text"], ["Logo text / iniciales", "logo_text", "text"], ["URL del logo", "brand_logo_url", "text"], ["Color principal", "primary_color", "text"], ["Color secundario", "secondary_color", "text"], ["Dominio propio", "custom_domain", "text"]].map(([label, key, type]) => (
+              <div key={key}>
+                <label className="text-xs text-muted mb-1" style={{ display: "block" }}>{label}</label>
+                <input type={type} disabled={!canAdmin} value={brandingForm?.[key] || ""} onChange={e => setBrandingForm(f => ({ ...(f || {}), [key]: e.target.value }))} className="input" />
+              </div>
+            ))}
+            <div>
+              <label className="text-xs text-muted mb-1" style={{ display: "block" }}>Preset visual</label>
+              <select
+                disabled={!canAdmin}
+                value={themePresetId}
+                className="select"
+                onChange={(e) => {
+                  if (e.target.value === "custom") return;
+                  setBrandingForm((current) => applyBrandThemePreset(current, e.target.value));
+                }}
+              >
+                {BRAND_THEME_PRESETS.map((preset) => (
+                  <option key={preset.id} value={preset.id}>{preset.label}</option>
+                ))}
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+            {canAdmin && (
+              <div className="flex gap-2" style={{ flexWrap: "wrap" }}>
+                <button onClick={saveBranding} className="btn btn-primary">Guardar branding</button>
+                <button onClick={connectCustomDomain} disabled={domainLoading || !brandingForm?.custom_domain} className="btn btn-ghost">
+                  {domainLoading ? "Conectando..." : "Conectar dominio"}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-title">Canales e integraciones</div>
+          <div className="flex-col gap-3" style={{ display: "flex" }}>
+            {[["Tagline", "tagline", "text"], ["Número Twilio", "twilio_number", "text"], ["Webhook", "webhook", "text"], ["Email informe diario", "daily_report_email", "email"], ["Email informe semanal", "weekly_report_email", "email"]].map(([label, key, type]) => (
+              <div key={key}>
+                <label className="text-xs text-muted mb-1" style={{ display: "block" }}>{label}</label>
+                <input type={type} disabled={!canAdmin} value={portalSettingsForm?.[key] ?? ""} onChange={e => setPortalSettingsForm(f => ({ ...(f || {}), [key]: e.target.value }))} className="input" />
+              </div>
+            ))}
+            {canAdmin && (
+              <button onClick={savePortalSettings} disabled={portalSettingsSaving} className="btn btn-primary" style={{ alignSelf: "flex-start" }}>
+                {portalSettingsSaving ? "Guardando..." : "Guardar canales"}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-title">Catálogo activo</div>
+        {catalog.length === 0 ? (
+          <div className="empty">No hay productos activos cargados.</div>
+        ) : (
+          <div className="grid-3">
+            {catalog.map((product) => (
+              <div key={product.id} className="card-sm">
+                <div className="flex justify-between mb-2">
+                  <div className="text-sm font-semibold">{product.name}</div>
+                  <Badge color={product.active ? "green" : "amber"}>{product.tier}</Badge>
+                </div>
+                <div className="text-xs text-dim mb-3">{product.description || "Sin descripción todavía."}</div>
+                <div className="text-lg font-semibold mb-3">{fmtEur(product.price || 0)}</div>
+                <div className="flex gap-2" style={{ flexWrap: "wrap" }}>
+                  {(product.features || []).map((feature) => (
+                    <Badge key={feature} color="default">{feature}</Badge>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function BillingView({ data, billingData, revenue, usagePressure, openCheckout, openBillingPortal, billingLoading }) {
   const client = data?.client || {};
   const activeSubscription = billingData?.activeSubscription || null;
@@ -2227,6 +2796,7 @@ export default function ClientPortalPage() {
   const [upsellStats, setUpsellStats] = useState(null);
   const [appointmentStats, setAppointmentStats] = useState(null);
   const [messageExperiments, setMessageExperiments] = useState([]);
+  const [messageExperimentsMeta, setMessageExperimentsMeta] = useState(null);
   const [reactivationStats, setReactivationStats] = useState(null);
   const [voiceStats, setVoiceStats] = useState(null);
   const [priorityStats, setPriorityStats] = useState(null);
@@ -2238,8 +2808,11 @@ export default function ClientPortalPage() {
   const [voiceQaData, setVoiceQaData] = useState(null);
   const [voiceCenterData, setVoiceCenterData] = useState(null);
   const [inboxData, setInboxData] = useState(null);
+  const [strategyData, setStrategyData] = useState(null);
+  const [brandLabData, setBrandLabData] = useState(null);
   const [portalSettingsForm, setPortalSettingsForm] = useState(null);
   const [portalSettingsSaving, setPortalSettingsSaving] = useState(false);
+  const [domainLoading, setDomainLoading] = useState(false);
   const [selectedLeadMemory, setSelectedLeadMemory] = useState(null);
   const [newUser, setNewUser] = useState({ full_name: "", email: "", role: "agent", phone: "", password: "" });
   const [showAccountSetup, setShowAccountSetup] = useState(false);
@@ -2309,6 +2882,8 @@ export default function ClientPortalPage() {
     loadUpsellStats();
     loadAppointmentStats();
     loadMessageExperiments();
+    loadStrategyData();
+    loadBrandLabData();
   }
 
   async function loadOverview() {
@@ -2321,7 +2896,22 @@ export default function ClientPortalPage() {
       const json = await res.json();
       if (json?.success) {
         setData(json);
-        if (json?.client) setBrandingForm({ brand_name: json.client.brand_name || "", brand_logo_url: json.client.brand_logo_url || "", primary_color: json.client.primary_color || "#ffffff", secondary_color: json.client.secondary_color || "#030303", owner_email: json.client.owner_email || "", industry: json.client.industry || "" });
+        if (json?.client) {
+          setBrandingForm({
+            brand_name: json.client.brand_name || "",
+            brand_logo_url: json.client.brand_logo_url || "",
+            primary_color: json.client.primary_color || "#ffffff",
+            secondary_color: json.client.secondary_color || "#030303",
+            owner_email: json.client.owner_email || "",
+            industry: json.client.industry || "",
+            logo_text: json.client.logo_text || "",
+            custom_domain: json.client.custom_domain || "",
+            accent: json.client.accent || BRAND_THEME_PRESETS[0].accent,
+            accent_text: json.client.accent_text || BRAND_THEME_PRESETS[0].accent_text,
+            button: json.client.button || BRAND_THEME_PRESETS[0].button,
+            badge: json.client.badge || BRAND_THEME_PRESETS[0].badge,
+          });
+        }
       }
     } catch (e) { console.error(e); }
   }
@@ -2335,12 +2925,28 @@ export default function ClientPortalPage() {
   async function loadVoiceQa() { try { const r = await fetch("/api/portal/voice-qa", { cache: "no-store" }); const j = await r.json(); if (j.success) setVoiceQaData(j.data); } catch {} }
   async function loadVoiceCenterData() { try { const r = await fetch("/api/portal/voice-center", { cache: "no-store" }); const j = await r.json(); if (j.success) setVoiceCenterData(j.data); } catch {} }
   async function loadInboxData() { try { const r = await fetch("/api/portal/inbox", { cache: "no-store" }); const j = await r.json(); if (j.success) setInboxData(j.data); } catch {} }
+  async function loadStrategyData() { try { const r = await fetch("/api/portal/strategy", { cache: "no-store" }); const j = await r.json(); if (j.success) setStrategyData(j.data); } catch {} }
+  async function loadBrandLabData() { try { const r = await fetch("/api/portal/brand-lab", { cache: "no-store" }); const j = await r.json(); if (j.success) setBrandLabData(j.data); } catch {} }
   async function loadReactivationStats() { try { const r = await fetch("/api/analytics/reactivation-stats", { cache: "no-store" }); const j = await r.json(); if (j.success) setReactivationStats(j.data); } catch {} }
   async function loadVoiceStats() { try { const r = await fetch("/api/analytics/voice-stats", { cache: "no-store" }); const j = await r.json(); if (j.success) setVoiceStats(j.data); } catch {} }
   async function loadPriorityStats() { try { const r = await fetch("/api/analytics/priority-stats", { cache: "no-store" }); const j = await r.json(); if (j.success) setPriorityStats(j.data); } catch {} }
   async function loadUpsellStats() { try { const r = await fetch("/api/analytics/upsells", { cache: "no-store" }); const j = await r.json(); if (j.success) setUpsellStats(j.data); } catch {} }
   async function loadAppointmentStats() { try { const r = await fetch("/api/analytics/appointment-stats", { cache: "no-store" }); const j = await r.json(); if (j.success) setAppointmentStats(j.data); } catch {} }
-  async function loadMessageExperiments() { try { const r = await fetch("/api/analytics/message-experiments", { cache: "no-store" }); const j = await r.json(); if (j.success) setMessageExperiments(j.data || []); } catch {} }
+  async function loadMessageExperiments() {
+    try {
+      const r = await fetch("/api/analytics/message-experiments", { cache: "no-store" });
+      const j = await r.json();
+      if (j.success) {
+        setMessageExperiments(j.data || []);
+        setMessageExperimentsMeta({
+          summary: j.summary || null,
+          channelBreakdown: j.channelBreakdown || [],
+          stageBreakdown: j.stageBreakdown || [],
+          suggestions: j.suggestions || [],
+        });
+      }
+    } catch {}
+  }
 
   async function openLead(lead) {
     setSelectedLead(lead);
@@ -2501,7 +3107,7 @@ export default function ClientPortalPage() {
     const res = await fetch("/api/portal/branding/update", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(brandingForm) });
     const json = await res.json();
     if (!json.success) { alert(json.message || "Error guardando branding."); return; }
-    await loadOverview(); alert("Branding actualizado.");
+    await loadOverview(); await loadBrandLabData(); alert("Branding actualizado.");
   }
 
   async function savePortalSettings() {
@@ -2511,11 +3117,37 @@ export default function ClientPortalPage() {
       const json = await readJsonResponse(res);
       await loadOverview();
       await loadHealthData();
+      await loadBrandLabData();
+      await loadStrategyData();
       alert(json.message || "Ajustes operativos actualizados.");
     } catch (e) {
       alert(e.message || "Error guardando ajustes.");
     } finally {
       setPortalSettingsSaving(false);
+    }
+  }
+
+  async function connectCustomDomain() {
+    if (!brandingForm?.custom_domain) {
+      alert("Indica primero un dominio.");
+      return;
+    }
+
+    try {
+      setDomainLoading(true);
+      const res = await fetch("/api/portal/domain/connect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain: brandingForm.custom_domain }),
+      });
+      const json = await readJsonResponse(res);
+      await loadOverview();
+      await loadBrandLabData();
+      alert(json.message || "Dominio actualizado.");
+    } catch (error) {
+      alert(error.message || "No se pudo conectar el dominio.");
+    } finally {
+      setDomainLoading(false);
     }
   }
 
@@ -2626,6 +3258,41 @@ export default function ClientPortalPage() {
   const onboardingWorkspace = useMemo(() => buildOnboardingWorkspace({ data, billingData, healthData, playbookData }), [data, billingData, healthData, playbookData]);
   const notifications = useMemo(() => buildDerivedNotifications({ data, billingData, healthData, voiceQaData }), [data, billingData, healthData, voiceQaData]);
   const roiSnapshot = useMemo(() => buildRoiSnapshot({ data, revenue, billingData, leadRevenue, ownerRevenue }), [data, revenue, billingData, leadRevenue, ownerRevenue]);
+  const experimentSnapshot = useMemo(() => messageExperimentsMeta || buildMessageExperimentSummary({ variants: messageExperiments }), [messageExperiments, messageExperimentsMeta]);
+  const strategySnapshot = useMemo(() => {
+    const base = buildStrategySnapshot({
+      client: data?.client || {},
+      settings: data?.settings || {},
+      leads: data?.leads || [],
+      calls: data?.calls || [],
+      payments: [],
+      benchmarks: data?.benchmarks || [],
+      experiments: experimentSnapshot,
+      productPerformance: strategyData?.productFocus || [],
+      ownerRanking: ownerRevenue?.ranking || strategyData?.ownerFocus || [],
+    });
+
+    if (!strategyData) {
+      return base;
+    }
+
+    return {
+      ...strategyData,
+      benchmarkCards: base.benchmarkCards,
+      ownerFocus: ownerRevenue?.ranking?.length
+        ? ownerRevenue.ranking.slice(0, 6)
+        : strategyData.ownerFocus || base.ownerFocus,
+      experiments: experimentSnapshot?.summary || strategyData.experiments || null,
+      benchmarkHistory: strategyData.benchmarkHistory || base.benchmarkHistory,
+      story: strategyData.story || base.story,
+    };
+  }, [strategyData, data, experimentSnapshot, ownerRevenue]);
+  const brandLabWorkspace = useMemo(() => brandLabData || buildBrandLabWorkspace({
+    client: data?.client || {},
+    settings: data?.settings || {},
+    products: [],
+    services: healthData?.services || {},
+  }), [brandLabData, data, healthData]);
 
   if (!data) {
     return (
@@ -2652,8 +3319,11 @@ export default function ClientPortalPage() {
     { id: "leads", icon: "◉", label: "Leads" },
     { id: "voice", icon: "🎙", label: "Voice" },
     { id: "analytics", icon: "📊", label: "Analytics" },
+    { id: "strategy", icon: "🎯", label: "Strategy" },
+    { id: "experiments", icon: "🧪", label: "Experiments" },
     { id: "roi", icon: "💸", label: "ROI" },
     { id: "billing", icon: "💳", label: "Billing" },
+    { id: "brandlab", icon: "✨", label: "Brand Lab" },
     { id: "playbooks", icon: "🧠", label: "Playbooks" },
     { id: "automations", icon: "⚡", label: "Automatiz." },
     { id: "operations", icon: "🛟", label: "Ops" },
@@ -2822,6 +3492,18 @@ export default function ClientPortalPage() {
                 filteredLeads={filteredLeads} settings={settings}
               />
             )}
+            {view === "strategy" && (
+              <StrategyView
+                strategyData={strategySnapshot}
+                onNavigate={setView}
+              />
+            )}
+            {view === "experiments" && (
+              <ExperimentsView
+                experiments={messageExperiments}
+                experimentsMeta={experimentSnapshot}
+              />
+            )}
             {view === "roi" && (
               <RoiView
                 roiSnapshot={roiSnapshot}
@@ -2841,6 +3523,21 @@ export default function ClientPortalPage() {
                 openCheckout={openCheckout}
                 openBillingPortal={openBillingPortal}
                 billingLoading={billingLoading}
+              />
+            )}
+            {view === "brandlab" && (
+              <BrandLabView
+                brandLabData={brandLabWorkspace}
+                brandingForm={brandingForm}
+                setBrandingForm={setBrandingForm}
+                saveBranding={saveBranding}
+                portalSettingsForm={portalSettingsForm}
+                setPortalSettingsForm={setPortalSettingsForm}
+                savePortalSettings={savePortalSettings}
+                portalSettingsSaving={portalSettingsSaving}
+                canAdmin={canAdmin}
+                connectCustomDomain={connectCustomDomain}
+                domainLoading={domainLoading}
               />
             )}
             {view === "playbooks" && (

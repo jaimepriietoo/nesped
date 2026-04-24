@@ -1,19 +1,38 @@
-import { prisma } from "@/lib/prisma";
+import { getPortalContext } from "@/lib/portal-auth";
+import { getClientMessageExperimentSnapshot } from "@/lib/server/portal-phase-two";
  
 export async function GET() {
   try {
-    const variants = await prisma.messageVariant.findMany({ where: { active: true } });
-    const results = await prisma.messageExperimentResult.findMany({ orderBy: { created_at: "desc" }, take: 500 });
- 
-    const enriched = variants.map(v => {
-      const vResults = results.filter(r => r.variant_id === v.id);
-      const sent = vResults.filter(r => r.event_type === "sent").length;
-      const replied = vResults.filter(r => r.event_type === "reply").length;
-      const converted = vResults.filter(r => r.event_type === "converted").length;
-      return { ...v, sent, replied, converted, reply_rate: sent > 0 ? Math.round((replied / sent) * 100) : 0, conversion_rate: sent > 0 ? Math.round((converted / sent) * 100) : 0 };
+    const ctx = await getPortalContext();
+    if (!ctx.ok) {
+      return Response.json(
+        { success: false, message: ctx.message || "No autorizado" },
+        { status: 401 }
+      );
+    }
+
+    const { data: leads, error } = await ctx.supabase
+      .from("leads")
+      .select("id")
+      .eq("client_id", ctx.clientId)
+      .limit(1000);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const snapshot = await getClientMessageExperimentSnapshot({
+      leadIds: (leads || []).map((lead) => lead.id).filter(Boolean),
     });
- 
-    return Response.json({ success: true, data: enriched });
+
+    return Response.json({
+      success: true,
+      data: snapshot.variants,
+      summary: snapshot.summary,
+      channelBreakdown: snapshot.channelBreakdown,
+      stageBreakdown: snapshot.stageBreakdown,
+      suggestions: snapshot.suggestions,
+    });
   } catch (err) {
     return Response.json({ success: false, message: err.message }, { status: 500 });
   }

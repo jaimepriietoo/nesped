@@ -1,41 +1,48 @@
-import { getSupabase } from "@/lib/supabase";
-import { getPaidLeadRows, groupPaidLeadRows } from "@/lib/server/payments";
+import { getPortalContext } from "@/lib/portal-auth";
+import {
+  buildOwnerRevenueRanking,
+  getClientPaymentRows,
+} from "@/lib/server/portal-phase-two";
  
 export async function GET() {
   try {
-    const supabase = getSupabase();
-    const rows = await getPaidLeadRows(1000);
-    const grouped = groupPaidLeadRows(rows);
- 
-    // Enrich with lead owner from Supabase
-    const leadIds = grouped.map(r => r.lead_id).filter(Boolean);
-    let ownerMap = {};
-    if (leadIds.length > 0) {
-      const { data: leads } = await supabase.from("leads").select("id, owner").in("id", leadIds);
-      (leads || []).forEach(l => { ownerMap[l.id] = l.owner || "Sin asignar"; });
+    const ctx = await getPortalContext();
+    if (!ctx.ok) {
+      return Response.json(
+        { success: false, message: ctx.message || "No autorizado" },
+        { status: 401 }
+      );
     }
- 
-    // Group by owner
-    const byOwner = new Map();
-    for (const row of grouped) {
-      const owner = ownerMap[row.lead_id] || row.customer_name || "Sin asignar";
-      if (!byOwner.has(owner)) byOwner.set(owner, { owner, revenue: 0, paid_leads: 0, payments_count: 0, last_payment_at: null });
-      const cur = byOwner.get(owner);
-      cur.revenue += row.total_revenue;
-      cur.paid_leads += 1;
-      cur.payments_count += row.payments_count;
-      if (!cur.last_payment_at || new Date(row.last_payment_at) > new Date(cur.last_payment_at)) cur.last_payment_at = row.last_payment_at;
+
+    const payments = await getClientPaymentRows(ctx.clientId, 1000);
+    const leadIds = [...new Set(payments.map((row) => row.lead_id).filter(Boolean))];
+
+    const [leadRes, userRes] = await Promise.all([
+      leadIds.length > 0
+        ? ctx.supabase
+            .from("leads")
+            .select("id,owner")
+            .eq("client_id", ctx.clientId)
+            .in("id", leadIds)
+        : Promise.resolve({ data: [], error: null }),
+      ctx.supabase
+        .from("portal_users")
+        .select("full_name,role")
+        .eq("client_id", ctx.clientId),
+    ]);
+
+    const errors = [leadRes.error, userRes.error].filter(Boolean);
+    if (errors.length > 0) {
+      throw new Error(errors[0].message || "No se pudo cargar el ranking");
     }
- 
-    const ranking = Array.from(byOwner.values())
-      .map(r => ({ ...r, avg_ticket: r.paid_leads > 0 ? r.revenue / r.paid_leads : 0 }))
-      .sort((a, b) => b.revenue - a.revenue);
- 
-    const totalRevenue = ranking.reduce((s, r) => s + r.revenue, 0);
-    const totalOwners = ranking.length;
-    const bestOwner = ranking[0] || null;
- 
-    return Response.json({ success: true, data: { totalRevenue, totalOwners, bestOwner, ranking } });
+
+    const ranking = buildOwnerRevenueRanking({
+      leads: leadRes.data || [],
+      payments,
+      users: userRes.data || [],
+    });
+
+    return Response.json({ success: true, data: ranking });
   } catch (err) {
     return Response.json({ success: false, message: err.message }, { status: 500 });
   }

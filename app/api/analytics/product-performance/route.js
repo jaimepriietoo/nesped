@@ -1,51 +1,26 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-
-function safeParse(value) {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
-}
+import { getPortalContext } from "@/lib/portal-auth";
+import { getClientProductPerformance } from "@/lib/server/portal-phase-two";
 
 export async function GET() {
   try {
-    const paymentEvents = await prisma.leadEvent.findMany({
-      where: {
-        type: "payment_completed",
-      },
-      orderBy: {
-        created_at: "desc",
-      },
-      take: 500,
-    });
-
-    const productMap = new Map();
-
-    for (const event of paymentEvents) {
-      const parsed = safeParse(event.message || "{}") || {};
-      const tier = parsed.product_tier || "unknown";
-      const amount = Number(parsed.amount_total || 0);
-
-      if (!productMap.has(tier)) {
-        productMap.set(tier, {
-          tier,
-          sales: 0,
-          revenue: 0,
-        });
-      }
-
-      const current = productMap.get(tier);
-      current.sales += 1;
-      current.revenue += amount;
+    const ctx = await getPortalContext();
+    if (!ctx.ok) {
+      return NextResponse.json(
+        { success: false, message: ctx.message || "No autorizado" },
+        { status: 401 }
+      );
     }
 
-    const rows = Array.from(productMap.values()).sort((a, b) => b.revenue - a.revenue);
+    const snapshot = await getClientProductPerformance({
+      clientId: ctx.clientId,
+      limit: 1000,
+    });
 
     return NextResponse.json({
       success: true,
-      data: rows,
+      data: snapshot.rows,
+      summary: snapshot.summary,
     });
   } catch (err) {
     console.error(err);

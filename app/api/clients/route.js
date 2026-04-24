@@ -19,10 +19,13 @@ export async function GET() {
     const clients = (data || []).map((client) => ({
       id: client.id,
       name: client.name,
+      brandName: client.brand_name || client.name,
+      brandLogoUrl: client.brand_logo_url || "",
       type: client.type,
       status: client.status,
       tagline: client.tagline,
       logoText: client.logo_text,
+      customDomain: client.custom_domain || "",
       theme: {
         accent: client.accent,
         accentText: client.accent_text,

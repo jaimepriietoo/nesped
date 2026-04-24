@@ -1,4 +1,5 @@
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { requireSameOrigin } from "@/lib/server/security";
 
 function withValue(value, transform = (item) => item) {
   return value === undefined ? undefined : transform(value);
@@ -12,6 +13,11 @@ function cleanObject(input = {}) {
 
 export async function PATCH(req) {
   try {
+    const sameOriginError = requireSameOrigin(req);
+    if (sameOriginError) {
+      return sameOriginError;
+    }
+
     const ctx = await getPortalContext();
     if (!ctx.ok) {
       return Response.json(
@@ -41,6 +47,14 @@ export async function PATCH(req) {
       twilio_number: withValue(body.twilio_number, (value) => String(value || "").trim()),
       webhook: withValue(body.webhook, (value) => String(value || "").trim()),
       tagline: withValue(body.tagline, (value) => String(value || "").trim()),
+      logo_text: withValue(body.logo_text, (value) => String(value || "").trim()),
+      custom_domain: withValue(body.custom_domain, (value) =>
+        String(value || "").trim().toLowerCase()
+      ),
+      accent: withValue(body.accent, (value) => String(value || "").trim()),
+      accent_text: withValue(body.accent_text, (value) => String(value || "").trim()),
+      button: withValue(body.button, (value) => String(value || "").trim()),
+      badge: withValue(body.badge, (value) => String(value || "").trim()),
       updated_at: new Date().toISOString(),
     });
 

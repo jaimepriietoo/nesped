@@ -1,8 +1,17 @@
-import { getPaidLeadRows } from "@/lib/server/payments";
+import { getPortalContext } from "@/lib/portal-auth";
+import { getClientPaymentRows } from "@/lib/server/portal-phase-two";
  
 export async function GET() {
   try {
-    const rows = await getPaidLeadRows(1000);
+    const ctx = await getPortalContext();
+    if (!ctx.ok) {
+      return Response.json(
+        { success: false, message: ctx.message || "No autorizado" },
+        { status: 401 }
+      );
+    }
+
+    const rows = await getClientPaymentRows(ctx.clientId, 1000);
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).getTime();

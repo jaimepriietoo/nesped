@@ -378,6 +378,32 @@ const CSS = `
   }
   .topbar-search input::placeholder { color: var(--text-3); }
   .topbar-meta { display: flex; align-items: center; gap: 8px; }
+  .mobile-nav {
+    display: none;
+    gap: 8px;
+    padding: 12px 20px 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .mobile-nav .nav-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.04);
+    color: var(--text-2);
+    border-radius: 999px;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .mobile-nav .nav-chip.active {
+    color: var(--text);
+    border-color: rgba(121,168,255,0.24);
+    background: rgba(121,168,255,0.12);
+  }
 
   .content { flex: 1; overflow-y: auto; padding: 28px; }
 
@@ -646,6 +672,19 @@ const CSS = `
     .sidebar { display: none; }
     .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
     .col-span-2 { grid-column: span 1; }
+    .portal { padding: 8px; }
+    .main { border-radius: 24px; }
+    .topbar {
+      padding: 16px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      min-height: unset;
+    }
+    .topbar-search { min-width: 100%; order: 3; }
+    .topbar-search input { width: 100%; }
+    .topbar-meta { width: 100%; flex-wrap: wrap; }
+    .content { padding: 18px 16px 28px; }
+    .mobile-nav { display: flex; }
   }
 `;
 
@@ -1634,9 +1673,22 @@ function OnboardingView({ workspace, onNavigate }) {
   );
 }
 
-function InboxView({ inboxData, leads, onOpenLead }) {
+function InboxView({
+  inboxData,
+  leads,
+  onOpenLead,
+  canReply,
+  conversationDrafts,
+  setConversationDrafts,
+  onSuggestConversation,
+  onSendConversation,
+  onAssignThread,
+  conversationSendingId,
+  conversationSuggestingId,
+}) {
   const threads = inboxData?.threads || [];
   const leadMap = new Map((leads || []).map(lead => [lead.id, lead]));
+  const [activeChannels, setActiveChannels] = useState({});
 
   return (
     <div className="fade-up">
@@ -1651,6 +1703,19 @@ function InboxView({ inboxData, leads, onOpenLead }) {
         <div className="card-title">Inbox multicanal</div>
         {threads.length === 0 ? <div className="empty">Todavía no hay conversaciones trazadas para este cliente.</div> : threads.map(thread => (
           <div key={thread.id} className="card-sm mb-2">
+            {(() => {
+              const activeChannel =
+                activeChannels?.[thread.id] ||
+                (thread.phone ? "whatsapp" : thread.email ? "email" : "sms");
+              const draft = conversationDrafts?.[thread.id] || {};
+              const activeText = draft?.[activeChannel] || "";
+              const canEmail = Boolean(thread.email);
+              const canPhone = Boolean(thread.phone);
+              const alternatives = draft?.alternatives || [];
+              const quickReplies = draft?.quickReplies || [];
+
+              return (
+                <>
             <div className="flex justify-between mb-2" style={{ gap: 12 }}>
               <div style={{ flex: 1 }}>
                 <div className="flex items-center gap-2 mb-1" style={{ flexWrap: "wrap" }}>
@@ -1667,7 +1732,10 @@ function InboxView({ inboxData, leads, onOpenLead }) {
               <div className="flex flex-col items-end gap-2">
                 <Badge color={getPriorityColor(thread.next_action_priority)}>{thread.next_action_priority || "media"}</Badge>
                 <div className="text-mono text-xs text-muted">Score {thread.score || 0}</div>
-                <button onClick={() => { const lead = leadMap.get(thread.leadId); if (lead) onOpenLead(lead); }} className="btn btn-primary btn-sm">Abrir lead</button>
+                <div className="flex gap-2" style={{ flexWrap: "wrap", justifyContent: "flex-end" }}>
+                  <button onClick={() => onAssignThread(thread)} className="btn btn-ghost btn-sm">Takeover</button>
+                  <button onClick={() => { const lead = leadMap.get(thread.leadId); if (lead) onOpenLead(lead); }} className="btn btn-primary btn-sm">Abrir lead</button>
+                </div>
               </div>
             </div>
             <div className="grid-3 mb-2">
@@ -1682,6 +1750,106 @@ function InboxView({ inboxData, leads, onOpenLead }) {
                 </Badge>
               ))}
             </div>
+            {canReply ? (
+              <div className="card-sm mt-3">
+                <div className="flex justify-between items-center mb-2" style={{ gap: 12, flexWrap: "wrap" }}>
+                  <div className="text-sm font-semibold">Responder desde portal</div>
+                  <div className="toggle-group">
+                    {[
+                      canPhone ? ["whatsapp", "WhatsApp"] : null,
+                      canPhone ? ["sms", "SMS"] : null,
+                      canEmail ? ["email", "Email"] : null,
+                    ].filter(Boolean).map(([id, label]) => (
+                      <button
+                        key={id}
+                        className={`toggle-btn ${activeChannel === id ? "active" : ""}`}
+                        onClick={() => setActiveChannels((current) => ({ ...(current || {}), [thread.id]: id }))}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {activeChannel === "email" ? (
+                  <input
+                    value={draft?.emailSubject || ""}
+                    onChange={(e) =>
+                      setConversationDrafts((current) => ({
+                        ...(current || {}),
+                        [thread.id]: {
+                          ...(current?.[thread.id] || {}),
+                          emailSubject: e.target.value,
+                        },
+                      }))
+                    }
+                    className="input mb-2"
+                    placeholder="Asunto del email"
+                  />
+                ) : null}
+                <textarea
+                  value={activeText}
+                  onChange={(e) =>
+                    setConversationDrafts((current) => ({
+                      ...(current || {}),
+                      [thread.id]: {
+                        ...(current?.[thread.id] || {}),
+                        [activeChannel]: e.target.value,
+                      },
+                    }))
+                  }
+                  className="textarea"
+                  rows={4}
+                  placeholder={`Escribe o genera una respuesta por ${activeChannel}`}
+                />
+                {alternatives.length > 0 ? (
+                  <div className="flex gap-2 mt-2" style={{ flexWrap: "wrap" }}>
+                    {alternatives.map((item) => (
+                      <button
+                        key={item}
+                        className="btn btn-ghost btn-sm"
+                        onClick={() =>
+                          setConversationDrafts((current) => ({
+                            ...(current || {}),
+                            [thread.id]: {
+                              ...(current?.[thread.id] || {}),
+                              [activeChannel]: item,
+                            },
+                          }))
+                        }
+                      >
+                        Variar copy
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                {quickReplies.length > 0 ? (
+                  <div className="flex gap-2 mt-2" style={{ flexWrap: "wrap" }}>
+                    {quickReplies.map((item) => (
+                      <Badge key={item} color="default">{item}</Badge>
+                    ))}
+                  </div>
+                ) : null}
+                <div className="flex gap-2 mt-3" style={{ flexWrap: "wrap" }}>
+                  <button
+                    onClick={() => onSuggestConversation(thread, activeChannel, thread.waitingForReply ? "close" : "followup")}
+                    disabled={conversationSuggestingId === `${thread.id}:${activeChannel}`}
+                    className="btn btn-ghost btn-sm"
+                  >
+                    {conversationSuggestingId === `${thread.id}:${activeChannel}` ? "Generando..." : "Sugerencia IA"}
+                  </button>
+                  <button
+                    onClick={() => onSendConversation(thread, activeChannel)}
+                    disabled={conversationSendingId === `${thread.id}:${activeChannel}`}
+                    className="btn btn-primary btn-sm"
+                  >
+                    {conversationSendingId === `${thread.id}:${activeChannel}` ? "Enviando..." : `Enviar ${activeChannel}`}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+                </>
+              );
+            })()}
           </div>
         ))}
       </div>
@@ -1700,7 +1868,8 @@ function VoiceCenterView({ voiceCenterData, leads, onOpenLead }) {
         <StatCard title="Llamadas" value={voiceCenterData?.summary?.total || 0} sub="Total analizadas" accent="var(--c-blue)" />
         <StatCard title="Grabadas" value={voiceCenterData?.summary?.withRecording || 0} sub="Con audio disponible" accent="var(--c-purple)" />
         <StatCard title="Score medio" value={voiceCenterData?.summary?.avgScore || 0} sub="QA agregada" accent="var(--c-green)" />
-        <StatCard title="Duración media" value={formatSeconds(voiceCenterData?.summary?.avgDuration || 0)} sub="Media por llamada" accent="var(--c-amber)" />
+        <StatCard title="Compliance medio" value={voiceCenterData?.summary?.avgCompliance || 0} sub="Salud legal de la capa voz" accent="var(--c-amber)" />
+        <StatCard title="Duración media" value={formatSeconds(voiceCenterData?.summary?.avgDuration || 0)} sub="Media por llamada" accent="var(--c-cyan)" />
       </div>
 
       <div className="grid-2 mb-4">
@@ -1718,18 +1887,53 @@ function VoiceCenterView({ voiceCenterData, leads, onOpenLead }) {
         </div>
 
         <div className="card">
-          <div className="card-title">Resumen del centro de voz</div>
-          {[
-            ["Leads capturados", voiceCenterData?.summary?.capturedLeads || 0],
-            ["Con grabación", voiceCenterData?.summary?.withRecording || 0],
-            ["Top performers", calls.filter(item => (item.qa?.overall || 0) >= 75).length],
-            ["A revisar", calls.filter(item => (item.qa?.overall || 0) < 55).length],
-          ].map(([label, value]) => (
-            <div key={label} className="pipeline-row">
-              <span className="text-sm text-dim flex-1">{label}</span>
-              <Badge color="blue">{value}</Badge>
-            </div>
-          ))}
+          <div className="card-title">Objeciones más repetidas</div>
+          {(voiceCenterData?.commonObjections || []).length === 0 ? (
+            <div className="empty">Todavía no hay objeciones clasificadas.</div>
+          ) : (
+            voiceCenterData.commonObjections.map((issue) => (
+              <div key={issue.label} className="pipeline-row">
+                <div className="flex-1">
+                  <div className="text-sm font-semibold">{issue.label}</div>
+                  <div className="text-xs text-dim">Detectada en transcripción o resumen.</div>
+                </div>
+                <Badge color="amber">{issue.count}</Badge>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="grid-2 mb-4">
+        <div className="card">
+          <div className="card-title">Ranking por owner</div>
+          {(voiceCenterData?.ranking || []).length === 0 ? (
+            <div className="empty">Sin ranking todavía.</div>
+          ) : (
+            voiceCenterData.ranking.map((item, index) => (
+              <div key={`${item.owner}:${index}`} className="pipeline-row">
+                <div className="flex-1">
+                  <div className="text-sm font-semibold">{item.owner}</div>
+                  <div className="text-xs text-dim">{item.calls} llamadas · compliance {item.avgCompliance || 0}</div>
+                </div>
+                <Badge color={index === 0 ? "green" : "blue"}>{item.avgScore || 0}/100</Badge>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="card">
+          <div className="card-title">Coach comercial</div>
+          {(voiceCenterData?.coach || []).length === 0 ? (
+            <div className="empty">Todavía no hay coaching agregado.</div>
+          ) : (
+            voiceCenterData.coach.map((item) => (
+              <div key={item.owner} className="card-sm mb-2">
+                <div className="text-sm font-semibold mb-1">{item.owner}</div>
+                <div className="text-xs text-dim">{item.summary}</div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
@@ -1766,6 +1970,9 @@ function VoiceCenterView({ voiceCenterData, leads, onOpenLead }) {
                   <div className="text-sm font-semibold">{call.leadName}</div>
                   <Badge color={call.qa?.overall >= 75 ? "green" : call.qa?.overall >= 55 ? "amber" : "red"}>{call.qa?.overall || 0}/100</Badge>
                   <Badge color="blue">{call.status || "unknown"}</Badge>
+                  <Badge color={call.compliance?.score >= 75 ? "green" : call.compliance?.score >= 60 ? "amber" : "red"}>
+                    compliance {call.compliance?.score || 0}
+                  </Badge>
                 </div>
                 <div className="text-xs text-dim">{call.phone || "Sin teléfono"} · {formatDate(call.created_at)} · {formatSeconds(call.duration_seconds)}</div>
               </div>
@@ -1789,13 +1996,26 @@ function VoiceCenterView({ voiceCenterData, leads, onOpenLead }) {
             ) : (
               <div className="text-xs text-dim mb-2">Sin grabación disponible para esta llamada.</div>
             )}
+            {(call.objections || []).length > 0 ? (
+              <div className="flex gap-2 mb-2" style={{ flexWrap: "wrap" }}>
+                {call.objections.map((item) => (
+                  <Badge key={item} color="amber">{item}</Badge>
+                ))}
+              </div>
+            ) : null}
             {call.transcript && (
               <div className="card-sm mb-2">
                 <div className="text-xs text-muted mb-2">Transcripción</div>
                 <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 12, color: "var(--text-2)", lineHeight: 1.6, maxHeight: 180, overflow: "auto" }}>{truncateText(call.transcript, 1200)}</pre>
               </div>
             )}
-            <div className="text-xs text-dim">Mejora sugerida: {call.qa?.recommendation || "Mantener la línea actual."}</div>
+            <div className="text-xs text-dim mb-1">Mejora sugerida: {call.qa?.recommendation || "Mantener la línea actual."}</div>
+            <div className="text-xs text-dim mb-1">Siguiente paso: {call.nextStep || "Mantener seguimiento."}</div>
+            {call.memory?.last_objection || call.memory?.last_summary ? (
+              <div className="text-xs text-dim">
+                Memoria del lead: {call.memory?.last_objection || call.memory?.last_summary}
+              </div>
+            ) : null}
           </div>
         ))}
       </div>
@@ -1971,7 +2191,7 @@ function GrowthView({ growthData, onNavigate }) {
   );
 }
 
-function CopilotView({ copilotData, onNavigate }) {
+function CopilotView({ copilotData, onNavigate, runWorkflowAction }) {
   const summary = copilotData?.summary || {};
   const nextMoves = copilotData?.nextMoves || [];
   const scripts = copilotData?.scripts || [];
@@ -1997,6 +2217,16 @@ function CopilotView({ copilotData, onNavigate }) {
         <StatCard title="Sin owner" value={summary.noOwnerLeads || 0} sub="Hueco operativo claro" accent="var(--c-red)" />
       </div>
 
+      <div className="card mb-4">
+        <div className="card-title">Haz esto ahora</div>
+        <div className="flex gap-2" style={{ flexWrap: "wrap" }}>
+          <button onClick={() => runWorkflowAction("runAutomaticFunnel")} className="btn btn-primary btn-sm">Lanza secuencia</button>
+          <button onClick={() => runWorkflowAction("runVoiceCalls")} className="btn btn-ghost btn-sm">Modo closer</button>
+          <button onClick={() => onNavigate("inbox")} className="btn btn-ghost btn-sm">Mandar mensaje</button>
+          <button onClick={() => onNavigate("team")} className="btn btn-ghost btn-sm">Asignar owner</button>
+        </div>
+      </div>
+
       <div className="grid-2 mb-4">
         <div className="card">
           <div className="card-title">Qué haría hoy</div>
@@ -2010,11 +2240,23 @@ function CopilotView({ copilotData, onNavigate }) {
                   <Badge color={getPriorityColor(item.priority)}>{item.priority}</Badge>
                 </div>
                 <div className="text-xs text-dim mb-2">{item.body}</div>
-                {item.view ? (
-                  <button onClick={() => onNavigate(item.view)} className="btn btn-ghost btn-sm">
-                    Abrir módulo
-                  </button>
-                ) : null}
+                <div className="flex gap-2" style={{ flexWrap: "wrap" }}>
+                  {item.view ? (
+                    <button onClick={() => onNavigate(item.view)} className="btn btn-ghost btn-sm">
+                      Abrir módulo
+                    </button>
+                  ) : null}
+                  {item.view === "inbox" ? (
+                    <button onClick={() => onNavigate("inbox")} className="btn btn-primary btn-sm">
+                      Manda mensaje
+                    </button>
+                  ) : null}
+                  {item.view === "team" ? (
+                    <button onClick={() => onNavigate("team")} className="btn btn-primary btn-sm">
+                      Asignar owner
+                    </button>
+                  ) : null}
+                </div>
               </div>
             ))
           )}
@@ -3055,10 +3297,15 @@ function AccessCenterView({
   canAdmin,
   accessUserDrafts,
   setAccessUserDrafts,
+  permissionDrafts,
+  togglePermissionScope,
   savePortalUserAccess,
+  saveFinePermissions,
   resetPortalUserPassword,
   accessSavingUserId,
+  permissionSavingUserId,
   passwordResettingUserId,
+  exportAuditLog,
 }) {
   const summary = accessCenterData?.summary || {};
   const users = accessCenterData?.users || [];
@@ -3066,6 +3313,7 @@ function AccessCenterView({
   const roleMatrix = accessCenterData?.roleMatrix || [];
   const recommendations = accessCenterData?.recommendations || [];
   const auditLogs = accessCenterData?.auditLogs || [];
+  const permissionMatrix = accessCenterData?.permissionMatrix || { rows: [], catalog: [] };
 
   return (
     <div className="fade-up">
@@ -3074,9 +3322,12 @@ function AccessCenterView({
           <div className="section-title">Access Center</div>
           <div className="text-sm text-dim">Gobierna usuarios, roles, contraseñas y postura de seguridad del cliente.</div>
         </div>
-        <Badge color={summary.recommendations > 0 ? "amber" : "green"}>
-          {summary.recommendations || 0} recomendaciones
-        </Badge>
+        <div className="flex gap-2" style={{ flexWrap: "wrap" }}>
+          <Badge color={summary.recommendations > 0 ? "amber" : "green"}>
+            {summary.recommendations || 0} recomendaciones
+          </Badge>
+          <button onClick={exportAuditLog} className="btn btn-ghost btn-sm">Exportar audit</button>
+        </div>
       </div>
 
       <div className="stat-grid mb-4">
@@ -3218,6 +3469,34 @@ function AccessCenterView({
                     </div>
                   )}
                 </div>
+                <div className="divider" />
+                <div className="text-xs text-muted mb-2 text-upper">RBAC fino</div>
+                <div className="grid-2">
+                  {(permissionMatrix.catalog || []).map((grant) => {
+                    const enabled = (permissionDrafts?.[user.id] || []).includes(grant.id);
+                    return (
+                      <label key={`${user.id}:${grant.id}`} className="pipeline-row" style={{ borderBottom: "none", cursor: canAdmin ? "pointer" : "default" }}>
+                        <div className="flex-1">
+                          <div className="text-sm font-semibold">{grant.label}</div>
+                          <div className="text-xs text-dim">{grant.area}</div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={enabled}
+                          disabled={!canAdmin}
+                          onChange={() => togglePermissionScope(user.id, grant.id)}
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
+                {canAdmin ? (
+                  <div className="flex justify-end mt-3">
+                    <button onClick={() => saveFinePermissions(user.id)} disabled={permissionSavingUserId === user.id} className="btn btn-ghost btn-sm">
+                      {permissionSavingUserId === user.id ? "Guardando permisos..." : "Guardar RBAC"}
+                    </button>
+                  </div>
+                ) : null}
               </div>
             );
           })
@@ -3331,6 +3610,329 @@ function EnterpriseView({ enterpriseData, onNavigate }) {
             ) : null}
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function WorkflowsView({ workflowsData, onNavigate, runWorkflowAction, runningWorkflowId }) {
+  const summary = workflowsData?.summary || {};
+  const templates = workflowsData?.templates || [];
+  const flows = workflowsData?.flows || [];
+  const logs = workflowsData?.logs || [];
+  const simulations = workflowsData?.simulations || [];
+  const reportBuilder = workflowsData?.reportBuilder || [];
+
+  return (
+    <div className="fade-up">
+      <div className="section-header mb-4">
+        <div>
+          <div className="section-title">Workflow Builder</div>
+          <div className="text-sm text-dim">Triggers, condiciones, ramas, logs, reintentos y plantillas operativas por sector.</div>
+        </div>
+        <Badge color={summary.atRisk > 0 ? "amber" : "green"}>{summary.totalFlows || 0} flows</Badge>
+      </div>
+
+      <div className="stat-grid mb-4">
+        <StatCard title="Flows" value={summary.totalFlows || 0} sub="Orquestaciones activas" accent="var(--c-blue)" />
+        <StatCard title="En riesgo" value={summary.atRisk || 0} sub="Necesitan intervención" accent="var(--c-red)" />
+        <StatCard title="Retry queue" value={summary.retryQueue || 0} sub="Pendientes de reintento" accent="var(--c-amber)" />
+        <StatCard title="Templates" value={summary.liveTemplates || 0} sub="Plantillas por vertical" accent="var(--c-purple)" />
+      </div>
+
+      <div className="grid-2 mb-4">
+        <div className="card">
+          <div className="card-title">Plantillas por sector</div>
+          {templates.map((item) => (
+            <div key={item.id} className="card-sm mb-2">
+              <div className="text-sm font-semibold mb-1">{item.title}</div>
+              <div className="text-xs text-dim mb-1">Trigger: {item.trigger}</div>
+              <div className="text-xs text-dim">{item.body}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="card">
+          <div className="card-title">Simulation lab</div>
+          {simulations.map((item) => (
+            <div key={item.id} className="card-sm mb-2">
+              <div className="text-sm font-semibold mb-1">{item.title}</div>
+              <div className="text-xs text-dim">{item.outcome}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="card mb-4">
+        <div className="card-title">Flows visuales</div>
+        {flows.map((flow) => (
+          <div key={flow.id} className="card-sm mb-3">
+            <div className="flex justify-between mb-2" style={{ gap: 12 }}>
+              <div style={{ flex: 1 }}>
+                <div className="flex items-center gap-2 mb-1" style={{ flexWrap: "wrap" }}>
+                  <div className="text-sm font-semibold">{flow.name}</div>
+                  <Badge color={getSeverityColor(flow.status)}>{getHealthLabel(flow.status)}</Badge>
+                  <Badge color="blue">{flow.eligible || 0} elegibles</Badge>
+                </div>
+                <div className="text-xs text-dim mb-2">Trigger: {flow.trigger}</div>
+                <div className="flex gap-2" style={{ flexWrap: "wrap" }}>
+                  {(flow.nodes || []).map((node) => (
+                    <Badge key={node} color="default">{node}</Badge>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-2" style={{ flexWrap: "wrap", justifyContent: "flex-end" }}>
+                {flow.view ? <button onClick={() => onNavigate(flow.view)} className="btn btn-ghost btn-sm">Abrir módulo</button> : null}
+                {flow.actionId ? (
+                  <button onClick={() => runWorkflowAction(flow.actionId)} disabled={runningWorkflowId === flow.actionId} className="btn btn-primary btn-sm">
+                    {runningWorkflowId === flow.actionId ? "Ejecutando..." : "Ejecutar"}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            <div className="grid-2">
+              <div>
+                <div className="text-xs text-muted mb-2">Condiciones</div>
+                <div className="flex gap-2" style={{ flexWrap: "wrap" }}>
+                  {(flow.conditions || []).map((item) => <Badge key={item} color="blue">{item}</Badge>)}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-muted mb-2">Acciones</div>
+                <div className="flex gap-2" style={{ flexWrap: "wrap" }}>
+                  {(flow.actions || []).map((item) => <Badge key={item} color="purple">{item}</Badge>)}
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid-2">
+        <div className="card">
+          <div className="card-title">Logs recientes</div>
+          {logs.length === 0 ? <div className="empty">Sin logs recientes.</div> : logs.map((item) => (
+            <div key={item.id} className="pipeline-row">
+              <div className="flex-1">
+                <div className="text-sm font-semibold">{item.action}</div>
+                <div className="text-xs text-dim">{item.entity_type} · {item.actor}</div>
+              </div>
+              <div className="text-xs text-muted">{formatDate(item.created_at)}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="card">
+          <div className="card-title">Report builder</div>
+          {reportBuilder.map((item) => (
+            <div key={item.id} className="card-sm mb-2">
+              <div className="text-sm font-semibold mb-1">{item.title}</div>
+              <div className="text-xs text-dim">{item.body}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function IntegrationsCenterView({ integrationsData }) {
+  const summary = integrationsData?.summary || {};
+  const connectors = integrationsData?.connectors || [];
+  const identity = integrationsData?.identity || [];
+  const privacy = integrationsData?.privacy || [];
+  const recipes = integrationsData?.recipes || [];
+  const enterprise = integrationsData?.enterprise || [];
+
+  return (
+    <div className="fade-up">
+      <div className="section-header mb-4">
+        <div>
+          <div className="section-title">Integrations Center</div>
+          <div className="text-sm text-dim">Conectores de agenda, CRM, ads, identidad, privacidad y stack partner.</div>
+        </div>
+        <Badge color={summary.configured >= 4 ? "green" : "amber"}>{summary.configured || 0}/{summary.connectors || 0} conectadas</Badge>
+      </div>
+
+      <div className="stat-grid mb-4">
+        <StatCard title="Conectores" value={summary.connectors || 0} sub="Mapa principal" accent="var(--c-blue)" />
+        <StatCard title="Configuradas" value={summary.configured || 0} sub="Con señal real" accent="var(--c-green)" />
+        <StatCard title="Identity ready" value={summary.identityReady || 0} sub="SSO / SCIM" accent="var(--c-purple)" />
+        <StatCard title="Privacy ready" value={summary.privacyReady || 0} sub="Retención y compliance" accent="var(--c-amber)" />
+      </div>
+
+      <div className="grid-2 mb-4">
+        <div className="card">
+          <div className="card-title">Conectores</div>
+          {connectors.map((item) => (
+            <div key={item.id} className="pipeline-row">
+              <div className="flex-1">
+                <div className="text-sm font-semibold">{item.name}</div>
+                <div className="text-xs text-dim">{item.detail}</div>
+              </div>
+              <Badge color={item.ready ? "green" : "amber"}>{item.ready ? "ready" : "pending"}</Badge>
+            </div>
+          ))}
+        </div>
+        <div className="card">
+          <div className="card-title">Identity & enterprise</div>
+          {[...identity, ...enterprise].map((item) => (
+            <div key={item.id} className="card-sm mb-2">
+              <div className="flex justify-between mb-1">
+                <div className="text-sm font-semibold">{item.name || item.title}</div>
+                {"ready" in item ? <Badge color={item.ready ? "green" : "amber"}>{item.ready ? "ready" : "pending"}</Badge> : null}
+              </div>
+              <div className="text-xs text-dim">{item.detail || item.body}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid-2">
+        <div className="card">
+          <div className="card-title">Privacidad y residencia</div>
+          {privacy.map((item) => (
+            <div key={item.id} className="pipeline-row">
+              <div className="flex-1">
+                <div className="text-sm font-semibold">{item.title}</div>
+                <div className="text-xs text-dim">{item.body}</div>
+              </div>
+              <Badge color={item.ready ? "green" : "amber"}>{item.ready ? "listo" : "falta"}</Badge>
+            </div>
+          ))}
+        </div>
+        <div className="card">
+          <div className="card-title">Recetas operativas</div>
+          {recipes.map((item) => (
+            <div key={item.id} className="card-sm mb-2">
+              <div className="text-sm font-semibold mb-1">{item.title}</div>
+              <div className="text-xs text-dim">{item.body}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RevenueOsView({ revenueOsData, openCheckout, openBillingPortal, billingLoading }) {
+  const summary = revenueOsData?.summary || {};
+  const leakageMap = revenueOsData?.leakageMap || [];
+  const usageBilling = revenueOsData?.usageBilling || [];
+  const upgradeSignals = revenueOsData?.upgradeSignals || [];
+  const benchmark = revenueOsData?.benchmark || {};
+  const partnerProgram = revenueOsData?.partnerProgram || [];
+
+  return (
+    <div className="fade-up">
+      <div className="flex gap-2 mb-4" style={{ flexWrap: "wrap" }}>
+        <button onClick={() => openCheckout("pro")} disabled={billingLoading} className="btn btn-primary">
+          {billingLoading ? "Abriendo..." : "Subir plan"}
+        </button>
+        <button onClick={openBillingPortal} disabled={billingLoading} className="btn btn-ghost">
+          Billing por uso
+        </button>
+      </div>
+
+      <div className="stat-grid mb-4">
+        <StatCard title="Revenue" value={fmtEur(summary.totalRevenue || 0)} sub="Ingreso ya trazado" accent="var(--c-green)" />
+        <StatCard title="Fuga estimada" value={fmtEur(summary.leakedRevenue || 0)} sub="Dinero en riesgo hoy" accent="var(--c-red)" />
+        <StatCard title="Seats activos" value={summary.activeSeats || 0} sub="Equipo con acceso" accent="var(--c-blue)" />
+        <StatCard title="Leads calientes" value={summary.hotOpenLeads || 0} sub="Listos para monetizar" accent="var(--c-purple)" />
+        <StatCard title="Facturas pendientes" value={summary.pendingInvoices || 0} sub="Fricción de cobro" accent="var(--c-amber)" />
+      </div>
+
+      <div className="grid-2 mb-4">
+        <div className="card">
+          <div className="card-title">Revenue leak map</div>
+          {leakageMap.map((item) => (
+            <div key={item.id} className="card-sm mb-2">
+              <div className="flex justify-between mb-1">
+                <div className="text-sm font-semibold">{item.title}</div>
+                <Badge color={item.id === "billing" ? "red" : "blue"}>{String(item.value)}</Badge>
+              </div>
+              <div className="text-xs text-dim">{item.body}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="card">
+          <div className="card-title">Billing por uso</div>
+          {usageBilling.map((item) => (
+            <div key={item.id} className="pipeline-row">
+              <div className="flex-1">
+                <div className="text-sm font-semibold">{item.label}</div>
+                <div className="text-xs text-dim">{item.detail}</div>
+              </div>
+              <Badge color="purple">{item.value}</Badge>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid-2 mb-4">
+        <div className="card">
+          <div className="card-title">Upsell y trials</div>
+          {upgradeSignals.map((item) => (
+            <div key={item.id} className="card-sm mb-2">
+              <div className="text-sm font-semibold mb-1">{item.title}</div>
+              <div className="text-xs text-dim">{item.body}</div>
+            </div>
+          ))}
+        </div>
+        <div className="card">
+          <div className="card-title">Benchmark sectorial</div>
+          <div className="card-sm mb-2">
+            <div className="flex justify-between mb-1">
+              <div className="text-sm font-semibold">{benchmark.label || "Sector"}</div>
+              <Badge color={(benchmark.percentile || 0) >= 70 ? "green" : "amber"}>{benchmark.percentile || 0}p</Badge>
+            </div>
+            <div className="text-xs text-dim">{benchmark.story}</div>
+          </div>
+          {partnerProgram.map((item) => (
+            <div key={item.id} className="card-sm mb-2">
+              <div className="text-sm font-semibold mb-1">{item.title}</div>
+              <div className="text-xs text-dim">{item.body}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CommandPalette({ open, query, setQuery, actions, onRun }) {
+  if (!open) return null;
+
+  return (
+    <div className="modal-overlay" onClick={() => onRun(null)}>
+      <div className="modal fade-up" onClick={(event) => event.stopPropagation()}>
+        <div className="modal-title">
+          Command palette
+          <button className="btn btn-ghost btn-sm" onClick={() => onRun(null)}>Cerrar</button>
+        </div>
+        <input
+          autoFocus
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          className="input mb-3"
+          placeholder="Busca vistas, automatizaciones o acciones..."
+        />
+        <div className="flex-col gap-2" style={{ display: "flex" }}>
+          {actions.length === 0 ? (
+            <div className="empty">Sin resultados para esa búsqueda.</div>
+          ) : (
+            actions.map((action) => (
+              <button key={action.id} className="nav-item" style={{ border: "1px solid var(--border)" }} onClick={() => onRun(action)}>
+                <span className="nav-icon">{action.icon || "⌘"}</span>
+                <div style={{ flex: 1 }}>
+                  <div className="text-sm font-semibold">{action.label}</div>
+                  <div className="text-xs text-dim">{action.detail}</div>
+                </div>
+              </button>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );
@@ -3536,16 +4138,26 @@ export default function ClientPortalPage() {
   const [brandLabData, setBrandLabData] = useState(null);
   const [accessCenterData, setAccessCenterData] = useState(null);
   const [apiHubData, setApiHubData] = useState(null);
+  const [workflowsData, setWorkflowsData] = useState(null);
+  const [integrationsData, setIntegrationsData] = useState(null);
+  const [revenueOsData, setRevenueOsData] = useState(null);
   const [portalSettingsForm, setPortalSettingsForm] = useState(null);
   const [portalSettingsSaving, setPortalSettingsSaving] = useState(false);
   const [domainLoading, setDomainLoading] = useState(false);
   const [accessUserDrafts, setAccessUserDrafts] = useState({});
+  const [permissionDrafts, setPermissionDrafts] = useState({});
   const [accessSavingUserId, setAccessSavingUserId] = useState("");
+  const [permissionSavingUserId, setPermissionSavingUserId] = useState("");
   const [passwordResettingUserId, setPasswordResettingUserId] = useState("");
   const [webhookTesting, setWebhookTesting] = useState(false);
   const [webhookTestResult, setWebhookTestResult] = useState(null);
   const [runningWorkflowId, setRunningWorkflowId] = useState("");
   const [selectedLeadMemory, setSelectedLeadMemory] = useState(null);
+  const [conversationDrafts, setConversationDrafts] = useState({});
+  const [conversationSendingId, setConversationSendingId] = useState("");
+  const [conversationSuggestingId, setConversationSuggestingId] = useState("");
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [commandQuery, setCommandQuery] = useState("");
   const [newUser, setNewUser] = useState({ full_name: "", email: "", role: "agent", phone: "", password: "" });
   const [showAccountSetup, setShowAccountSetup] = useState(false);
   const [accountSetupForm, setAccountSetupForm] = useState({ email: "", password: "", confirmPassword: "" });
@@ -3606,6 +4218,35 @@ export default function ClientPortalPage() {
     );
   }, [accessCenterData]);
 
+  useEffect(() => {
+    const permissionRows = accessCenterData?.permissionMatrix?.rows || [];
+    if (!permissionRows.length) return;
+
+    setPermissionDrafts(
+      Object.fromEntries(
+        permissionRows.map((row) => [row.userId, [...(row.scopes || [])]])
+      )
+    );
+  }, [accessCenterData]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const onKeyDown = (event) => {
+      const key = String(event.key || "").toLowerCase();
+      if ((event.metaKey || event.ctrlKey) && key === "k") {
+        event.preventDefault();
+        setCommandOpen((current) => !current);
+      }
+      if (key === "escape") {
+        setCommandOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   function loadAll() {
     loadOverview();
     loadRevenue();
@@ -3630,6 +4271,9 @@ export default function ClientPortalPage() {
     loadBrandLabData();
     loadAccessCenterData();
     loadApiHubData();
+    loadWorkflowsData();
+    loadIntegrationsData();
+    loadRevenueOsData();
   }
 
   async function loadOverview() {
@@ -3678,6 +4322,9 @@ export default function ClientPortalPage() {
   async function loadBrandLabData() { try { const r = await fetch("/api/portal/brand-lab", { cache: "no-store" }); const j = await r.json(); if (j.success) setBrandLabData(j.data); } catch {} }
   async function loadAccessCenterData() { try { const r = await fetch("/api/portal/access-center", { cache: "no-store" }); const j = await r.json(); if (j.success) setAccessCenterData(j.data); } catch {} }
   async function loadApiHubData() { try { const r = await fetch("/api/portal/api-hub", { cache: "no-store" }); const j = await r.json(); if (j.success) setApiHubData(j.data); } catch {} }
+  async function loadWorkflowsData() { try { const r = await fetch("/api/portal/workflows", { cache: "no-store" }); const j = await r.json(); if (j.success) setWorkflowsData(j.data); } catch {} }
+  async function loadIntegrationsData() { try { const r = await fetch("/api/portal/integrations-center", { cache: "no-store" }); const j = await r.json(); if (j.success) setIntegrationsData(j.data); } catch {} }
+  async function loadRevenueOsData() { try { const r = await fetch("/api/portal/revenue-os", { cache: "no-store" }); const j = await r.json(); if (j.success) setRevenueOsData(j.data); } catch {} }
   async function loadReactivationStats() { try { const r = await fetch("/api/analytics/reactivation-stats", { cache: "no-store" }); const j = await r.json(); if (j.success) setReactivationStats(j.data); } catch {} }
   async function loadVoiceStats() { try { const r = await fetch("/api/analytics/voice-stats", { cache: "no-store" }); const j = await r.json(); if (j.success) setVoiceStats(j.data); } catch {} }
   async function loadPriorityStats() { try { const r = await fetch("/api/analytics/priority-stats", { cache: "no-store" }); const j = await r.json(); if (j.success) setPriorityStats(j.data); } catch {} }
@@ -3947,6 +4594,120 @@ export default function ClientPortalPage() {
     }
   }
 
+  async function saveFinePermissions(userId) {
+    const scopes = permissionDrafts?.[userId] || [];
+    try {
+      setPermissionSavingUserId(userId);
+      const res = await fetch("/api/portal/permissions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, scopes }),
+      });
+      const json = await readJsonResponse(res);
+      await loadAccessCenterData();
+      alert(json.message || "Permisos actualizados.");
+    } catch (error) {
+      alert(error.message || "No se pudieron guardar los permisos.");
+    } finally {
+      setPermissionSavingUserId("");
+    }
+  }
+
+  function togglePermissionScope(userId, scopeId) {
+    setPermissionDrafts((current) => {
+      const currentScopes = new Set(current?.[userId] || []);
+      if (currentScopes.has(scopeId)) {
+        currentScopes.delete(scopeId);
+      } else {
+        currentScopes.add(scopeId);
+      }
+
+      return {
+        ...(current || {}),
+        [userId]: [...currentScopes],
+      };
+    });
+  }
+
+  async function suggestConversation(thread, channel = "whatsapp", goal = "followup") {
+    try {
+      setConversationSuggestingId(`${thread.id}:${channel}`);
+      const res = await fetch("/api/portal/conversations/suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadId: thread.leadId, channel, goal }),
+      });
+      const json = await readJsonResponse(res);
+      setConversationDrafts((current) => ({
+        ...(current || {}),
+        [thread.id]: {
+          ...(current?.[thread.id] || {}),
+          [channel]: json.data?.primary || "",
+          emailSubject: json.data?.subject || current?.[thread.id]?.emailSubject || "",
+          quickReplies: json.data?.quickReplies || [],
+          alternatives: json.data?.alternatives || [],
+        },
+      }));
+    } catch (error) {
+      alert(error.message || "No se pudo generar la sugerencia.");
+    } finally {
+      setConversationSuggestingId("");
+    }
+  }
+
+  async function sendConversation(thread, channel = "whatsapp") {
+    const draft = conversationDrafts?.[thread.id] || {};
+    const message = String(draft?.[channel] || "").trim();
+
+    if (!message) {
+      alert("Escribe o genera un mensaje antes de enviarlo.");
+      return;
+    }
+
+    try {
+      setConversationSendingId(`${thread.id}:${channel}`);
+      const res = await fetch("/api/portal/conversations/respond", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          leadId: thread.leadId,
+          channel,
+          message,
+          subject: draft?.emailSubject || "",
+          takeover: true,
+        }),
+      });
+      const json = await readJsonResponse(res);
+      await loadOverview();
+      await loadInboxData();
+      if (selectedLead?.id === thread.leadId) {
+        await openLead(selectedLead);
+      }
+      alert(json.message || "Mensaje enviado.");
+    } catch (error) {
+      alert(error.message || "No se pudo enviar el mensaje.");
+    } finally {
+      setConversationSendingId("");
+    }
+  }
+
+  async function assignThreadToCurrentUser(thread) {
+    try {
+      await saveLeadChanges(thread.leadId, {
+        owner: data?.currentUser?.full_name || data?.currentUser?.email || data?.currentUser?.name || "",
+        ultima_accion: "Takeover manual desde inbox",
+      });
+      await loadInboxData();
+      alert("Hilo asignado.");
+    } catch (error) {
+      alert(error.message || "No se pudo asignar el hilo.");
+    }
+  }
+
+  function exportAuditLog() {
+    window.location.href = "/api/portal/audit/export";
+  }
+
   async function testClientWebhook() {
     try {
       setWebhookTesting(true);
@@ -4038,6 +4799,13 @@ export default function ClientPortalPage() {
     } finally {
       setRunningWorkflowId("");
     }
+  }
+
+  function runCommandAction(action) {
+    setCommandOpen(false);
+    setCommandQuery("");
+    if (!action) return;
+    action.run?.();
   }
 
   async function saveAccountSetup() {
@@ -4166,6 +4934,96 @@ export default function ClientPortalPage() {
     experimentSnapshot,
   }), [data, billingData, healthData, voiceQaData, experimentSnapshot]);
 
+  const navItems = [
+    { id: "dashboard", icon: "⬡", label: "Dashboard" },
+    { id: "onboarding", icon: "🚀", label: "Onboarding" },
+    { id: "inbox", icon: "💬", label: "Inbox" },
+    { id: "notifications", icon: "🔔", label: "Alertas" },
+    { id: "pipeline", icon: "◈", label: "Pipeline" },
+    { id: "leads", icon: "◉", label: "Leads" },
+    { id: "voice", icon: "🎙", label: "Voice" },
+    { id: "analytics", icon: "📊", label: "Analytics" },
+    { id: "tower", icon: "🛰", label: "Control" },
+    { id: "workflows", icon: "🧬", label: "Workflows" },
+    { id: "strategy", icon: "🎯", label: "Strategy" },
+    { id: "experiments", icon: "🧪", label: "Experiments" },
+    { id: "growth", icon: "📈", label: "Growth" },
+    { id: "copilot", icon: "🧭", label: "Copilot" },
+    { id: "roi", icon: "💸", label: "ROI" },
+    { id: "revenueos", icon: "🪙", label: "Revenue OS" },
+    { id: "billing", icon: "💳", label: "Billing" },
+    { id: "brandlab", icon: "✨", label: "Brand Lab" },
+    { id: "access", icon: "🔐", label: "Access" },
+    { id: "enterprise", icon: "🏛", label: "Enterprise" },
+    { id: "api", icon: "🧩", label: "API Hub" },
+    { id: "integrations", icon: "🔌", label: "Integrations" },
+    { id: "playbooks", icon: "🧠", label: "Playbooks" },
+    { id: "automations", icon: "⚡", label: "Automatiz." },
+    { id: "operations", icon: "🛟", label: "Ops" },
+    { id: "team", icon: "👥", label: "Equipo" },
+    { id: "settings", icon: "⚙", label: "Ajustes" },
+  ];
+
+  const commandBaseActions = [
+    ...navItems.map((item) => ({
+      id: `view:${item.id}`,
+      icon: item.icon,
+      label: item.label,
+      detail: `Abrir ${item.label}`,
+      keywords: `${item.label} ${item.id}`.toLowerCase(),
+      run: () => setView(item.id),
+    })),
+    {
+      id: "action:funnel",
+      icon: "⚡",
+      label: "Lanzar funnel",
+      detail: "Ejecuta la secuencia automática del funnel.",
+      keywords: "funnel workflow automatizacion secuencia",
+      run: () => runWorkflowAction("runAutomaticFunnel"),
+    },
+    {
+      id: "action:voice",
+      icon: "🎙",
+      label: "Lanzar voice outreach",
+      detail: "Dispara la automatización de voz sobre leads calientes.",
+      keywords: "voice llamadas outreach closer",
+      run: () => runWorkflowAction("runVoiceCalls"),
+    },
+    {
+      id: "action:nba",
+      icon: "🧠",
+      label: "Recalcular siguientes acciones",
+      detail: "Refresca la cola de NBA para el cliente actual.",
+      keywords: "nba siguiente accion recalculate",
+      run: () => runWorkflowAction("recalculateAllNextActions"),
+    },
+    {
+      id: "action:billing",
+      icon: "💳",
+      label: "Abrir facturación",
+      detail: "Entra en el portal de Stripe/Billing.",
+      keywords: "billing stripe facturacion",
+      run: () => openBillingPortal(),
+    },
+    {
+      id: "action:nightly",
+      icon: "🌙",
+      label: "Ejecutar nightly",
+      detail: "Corre el proceso nocturno manualmente.",
+      keywords: "nightly ops proceso nocturno",
+      run: () => runNightly(),
+    },
+  ];
+
+  const commandQueryNormalized = String(commandQuery || "").trim().toLowerCase();
+  const commandActions = !commandQueryNormalized
+    ? commandBaseActions.slice(0, 18)
+    : commandBaseActions.filter((item) =>
+        [item.label, item.detail, item.keywords].some((value) =>
+          String(value || "").toLowerCase().includes(commandQueryNormalized)
+        )
+      );
+
   if (!data) {
     return (
       <>
@@ -4181,33 +5039,6 @@ export default function ClientPortalPage() {
   const currentRole = data.currentRole || "viewer";
   const canEdit = ["owner", "admin", "manager", "agent"].includes(currentRole);
   const canAdmin = ["owner", "admin"].includes(currentRole);
-
-  const navItems = [
-    { id: "dashboard", icon: "⬡", label: "Dashboard" },
-    { id: "onboarding", icon: "🚀", label: "Onboarding" },
-    { id: "inbox", icon: "💬", label: "Inbox" },
-    { id: "notifications", icon: "🔔", label: "Alertas" },
-    { id: "pipeline", icon: "◈", label: "Pipeline" },
-    { id: "leads", icon: "◉", label: "Leads" },
-    { id: "voice", icon: "🎙", label: "Voice" },
-    { id: "analytics", icon: "📊", label: "Analytics" },
-    { id: "tower", icon: "🛰", label: "Control" },
-    { id: "strategy", icon: "🎯", label: "Strategy" },
-    { id: "experiments", icon: "🧪", label: "Experiments" },
-    { id: "growth", icon: "📈", label: "Growth" },
-    { id: "copilot", icon: "🧭", label: "Copilot" },
-    { id: "roi", icon: "💸", label: "ROI" },
-    { id: "billing", icon: "💳", label: "Billing" },
-    { id: "brandlab", icon: "✨", label: "Brand Lab" },
-    { id: "access", icon: "🔐", label: "Access" },
-    { id: "enterprise", icon: "🏛", label: "Enterprise" },
-    { id: "api", icon: "🧩", label: "API Hub" },
-    { id: "playbooks", icon: "🧠", label: "Playbooks" },
-    { id: "automations", icon: "⚡", label: "Automatiz." },
-    { id: "operations", icon: "🛟", label: "Ops" },
-    { id: "team", icon: "👥", label: "Equipo" },
-    { id: "settings", icon: "⚙", label: "Ajustes" },
-  ];
 
   async function logout() {
     try {
@@ -4291,7 +5122,21 @@ export default function ClientPortalPage() {
               </Badge>
               <Badge color="blue">{filteredLeads.length} leads</Badge>
             </div>
+            <button className="btn btn-ghost btn-sm" onClick={() => setCommandOpen(true)}>⌘ Command</button>
             <button className="btn btn-ghost btn-sm" onClick={logout}>Salir</button>
+          </div>
+
+          <div className="mobile-nav">
+            {navItems.slice(0, 12).map((item) => (
+              <button
+                key={item.id}
+                className={`nav-chip ${view === item.id ? "active" : ""}`}
+                onClick={() => setView(item.id)}
+              >
+                <span>{item.icon}</span>
+                {item.label}
+              </button>
+            ))}
           </div>
 
           {/* Account setup banner */}
@@ -4337,6 +5182,14 @@ export default function ClientPortalPage() {
                 inboxData={inboxData}
                 leads={data?.leads || []}
                 onOpenLead={openLead}
+                canReply={canEdit}
+                conversationDrafts={conversationDrafts}
+                setConversationDrafts={setConversationDrafts}
+                onSuggestConversation={suggestConversation}
+                onSendConversation={sendConversation}
+                onAssignThread={assignThreadToCurrentUser}
+                conversationSendingId={conversationSendingId}
+                conversationSuggestingId={conversationSuggestingId}
               />
             )}
             {view === "notifications" && (
@@ -4387,6 +5240,14 @@ export default function ClientPortalPage() {
                 runningWorkflowId={runningWorkflowId}
               />
             )}
+            {view === "workflows" && (
+              <WorkflowsView
+                workflowsData={workflowsData}
+                onNavigate={setView}
+                runWorkflowAction={runWorkflowAction}
+                runningWorkflowId={runningWorkflowId}
+              />
+            )}
             {view === "strategy" && (
               <StrategyView
                 strategyData={strategySnapshot}
@@ -4409,6 +5270,7 @@ export default function ClientPortalPage() {
               <CopilotView
                 copilotData={copilotSnapshot}
                 onNavigate={setView}
+                runWorkflowAction={runWorkflowAction}
               />
             )}
             {view === "roi" && (
@@ -4416,6 +5278,14 @@ export default function ClientPortalPage() {
                 roiSnapshot={roiSnapshot}
                 leadRevenue={leadRevenue}
                 ownerRevenue={ownerRevenue}
+                openCheckout={openCheckout}
+                openBillingPortal={openBillingPortal}
+                billingLoading={billingLoading}
+              />
+            )}
+            {view === "revenueos" && (
+              <RevenueOsView
+                revenueOsData={revenueOsData}
                 openCheckout={openCheckout}
                 openBillingPortal={openBillingPortal}
                 billingLoading={billingLoading}
@@ -4457,6 +5327,11 @@ export default function ClientPortalPage() {
                 resetPortalUserPassword={resetPortalUserPassword}
                 accessSavingUserId={accessSavingUserId}
                 passwordResettingUserId={passwordResettingUserId}
+                permissionDrafts={permissionDrafts}
+                togglePermissionScope={togglePermissionScope}
+                saveFinePermissions={saveFinePermissions}
+                permissionSavingUserId={permissionSavingUserId}
+                exportAuditLog={exportAuditLog}
               />
             )}
             {view === "enterprise" && (
@@ -4473,6 +5348,9 @@ export default function ClientPortalPage() {
                 testClientWebhook={testClientWebhook}
                 onNavigate={setView}
               />
+            )}
+            {view === "integrations" && (
+              <IntegrationsCenterView integrationsData={integrationsData} />
             )}
             {view === "playbooks" && (
               <PlaybooksView
@@ -4542,6 +5420,14 @@ export default function ClientPortalPage() {
             onRecalculatePriority={recalculatePriority}
           />
         )}
+
+        <CommandPalette
+          open={commandOpen}
+          query={commandQuery}
+          setQuery={setCommandQuery}
+          actions={commandActions}
+          onRun={runCommandAction}
+        />
       </div>
     </>
   );

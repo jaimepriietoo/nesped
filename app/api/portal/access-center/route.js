@@ -1,4 +1,5 @@
 import { getPortalContext } from "@/lib/portal-auth";
+import { prisma } from "@/lib/prisma";
 import { buildAccessCenterData } from "@/lib/server/portal-phase-three";
 
 export async function GET() {
@@ -39,12 +40,22 @@ export async function GET() {
       throw new Error(errors[0].message || "No se pudo cargar Access Center");
     }
 
+    const userIds = (portalUsersRes.data || []).map((user) => user.id).filter(Boolean);
+    const permissionRows =
+      userIds.length > 0
+        ? await prisma.userPermission.findMany({
+            where: { user_id: { in: userIds } },
+            orderBy: { created_at: "desc" },
+          })
+        : [];
+
     return Response.json({
       success: true,
       data: buildAccessCenterData({
         portalUsers: portalUsersRes.data || [],
         authUsers: authUsersRes.data || [],
         auditLogs: auditRes.data || [],
+        permissionRows,
       }),
     });
   } catch (error) {

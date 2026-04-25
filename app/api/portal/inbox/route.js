@@ -19,7 +19,7 @@ export async function GET() {
       ctx.supabase
         .from("leads")
         .select(
-          "id,nombre,telefono,status,owner,score,interes,predicted_close_probability,next_action,next_action_priority,valor_estimado,necesidad,created_at,updated_at"
+          "id,nombre,email,telefono,status,owner,score,interes,predicted_close_probability,next_action,next_action_priority,valor_estimado,necesidad,created_at,updated_at"
         )
         .eq("client_id", ctx.clientId)
         .order("updated_at", { ascending: false })

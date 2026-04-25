@@ -5,7 +5,10 @@ import { useEffect, useEffectEvent, useMemo, useState, useRef } from "react";
 import {
   buildDerivedNotifications,
   buildBrandLabWorkspace,
+  buildCopilotWorkspace,
   buildControlTowerSnapshot,
+  buildEnterpriseWorkspace,
+  buildGrowthWorkspace,
   buildLeadTimeline,
   buildMessageExperimentSummary,
   buildOnboardingChecklist,
@@ -1879,6 +1882,189 @@ function RoiView({ roiSnapshot, leadRevenue, ownerRevenue, openCheckout, openBil
   );
 }
 
+function GrowthView({ growthData, onNavigate }) {
+  const summary = growthData?.summary || {};
+  const scoreboard = growthData?.scoreboard || [];
+  const levers = growthData?.levers || [];
+  const campaigns = growthData?.campaigns || [];
+
+  return (
+    <div className="fade-up">
+      <div className="section-header mb-4">
+        <div>
+          <div className="section-title">Growth Engine</div>
+          <div className="text-sm text-dim">{growthData?.story || "Lectura de crecimiento no disponible todavía."}</div>
+        </div>
+        <Badge color={summary.hotLeads >= 5 ? "green" : "blue"}>
+          {summary.hotLeads || 0} leads calientes
+        </Badge>
+      </div>
+
+      <div className="stat-grid mb-4">
+        <StatCard title="Revenue trazado" value={fmtEur(summary.totalRevenue || 0)} sub="Ingreso confirmado" accent="var(--c-green)" />
+        <StatCard title="Pipeline activo" value={fmtEur(summary.pipelineValue || 0)} sub="Valor potencial en curso" accent="var(--c-blue)" />
+        <StatCard title="Win rate" value={`${summary.leadWinRate || 0}%`} sub="Ganados sobre total de leads" accent="var(--c-amber)" />
+        <StatCard title="Cobertura de voz" value={`${summary.callCaptureRate || 0}%`} sub="Llamada a lead capturado" accent="var(--c-purple)" />
+        <StatCard title="Progreso meta leads" value={`${summary.monthlyLeadProgress || 0}%`} sub="Ritmo frente a objetivo mensual" accent="var(--c-cyan)" />
+        <StatCard title="Cobertura experimentos" value={`${summary.experimentCoverage || 0}%`} sub="Pruebas activas con señal" accent="var(--c-blue)" />
+      </div>
+
+      <div className="grid-2 mb-4">
+        <div className="card">
+          <div className="card-title">Marcadores clave</div>
+          {scoreboard.map((item) => (
+            <div key={item.id} className="pipeline-row">
+              <div className="flex-1">
+                <div className="text-sm font-semibold">{item.label}</div>
+                <div className="text-xs text-dim">{item.detail}</div>
+              </div>
+              <Badge color="blue">{item.value}</Badge>
+            </div>
+          ))}
+        </div>
+
+        <div className="card">
+          <div className="card-title">Growth levers</div>
+          {levers.length === 0 ? (
+            <div className="empty">Sin palancas priorizadas todavía.</div>
+          ) : (
+            levers.map((item) => (
+              <div key={item.id} className="card-sm mb-2">
+                <div className="flex justify-between mb-1">
+                  <div className="text-sm font-semibold">{item.title}</div>
+                  <Badge color={getSeverityColor(item.level)}>{item.value}</Badge>
+                </div>
+                <div className="text-xs text-dim mb-2">{item.body}</div>
+                {item.view ? (
+                  <button onClick={() => onNavigate(item.view)} className="btn btn-ghost btn-sm">
+                    Abrir módulo
+                  </button>
+                ) : null}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-title">Campañas recomendadas</div>
+        {campaigns.length === 0 ? (
+          <div className="empty">Sin campañas sugeridas todavía.</div>
+        ) : (
+          campaigns.map((item) => (
+            <div key={item.id} className="card-sm mb-2">
+              <div className="flex justify-between mb-1">
+                <div className="text-sm font-semibold">{item.title}</div>
+                <Badge color="purple">{item.audience}</Badge>
+              </div>
+              <div className="text-xs text-dim mb-2">{item.body}</div>
+              {item.view ? (
+                <button onClick={() => onNavigate(item.view)} className="btn btn-primary btn-sm">
+                  Ejecutar desde módulo
+                </button>
+              ) : null}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CopilotView({ copilotData, onNavigate }) {
+  const summary = copilotData?.summary || {};
+  const nextMoves = copilotData?.nextMoves || [];
+  const scripts = copilotData?.scripts || [];
+  const watchouts = copilotData?.watchouts || [];
+  const wins = copilotData?.wins || [];
+
+  return (
+    <div className="fade-up">
+      <div className="section-header mb-4">
+        <div>
+          <div className="section-title">Copilot</div>
+          <div className="text-sm text-dim">{copilotData?.briefing || "Sin briefing automático todavía."}</div>
+        </div>
+        <Badge color={summary.confidence >= 75 ? "green" : summary.confidence >= 60 ? "amber" : "blue"}>
+          {summary.confidence || 0}% confianza
+        </Badge>
+      </div>
+
+      <div className="stat-grid mb-4">
+        <StatCard title="Focos de hoy" value={summary.todayFocusCount || 0} sub="Acciones de mayor impacto" accent="var(--c-blue)" />
+        <StatCard title="Leads calientes" value={summary.hotLeads || 0} sub="Listos para empujar cierre" accent="var(--c-green)" />
+        <StatCard title="Leads estancados" value={summary.staleLeads || 0} sub="Sin movimiento reciente" accent="var(--c-amber)" />
+        <StatCard title="Sin owner" value={summary.noOwnerLeads || 0} sub="Hueco operativo claro" accent="var(--c-red)" />
+      </div>
+
+      <div className="grid-2 mb-4">
+        <div className="card">
+          <div className="card-title">Qué haría hoy</div>
+          {nextMoves.length === 0 ? (
+            <div className="empty">Sin movimientos sugeridos ahora mismo.</div>
+          ) : (
+            nextMoves.map((item) => (
+              <div key={item.id} className="card-sm mb-2">
+                <div className="flex justify-between mb-1">
+                  <div className="text-sm font-semibold">{item.title}</div>
+                  <Badge color={getPriorityColor(item.priority)}>{item.priority}</Badge>
+                </div>
+                <div className="text-xs text-dim mb-2">{item.body}</div>
+                {item.view ? (
+                  <button onClick={() => onNavigate(item.view)} className="btn btn-ghost btn-sm">
+                    Abrir módulo
+                  </button>
+                ) : null}
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="card">
+          <div className="card-title">Scripts sugeridos</div>
+          {scripts.map((item) => (
+            <div key={item.id} className="card-sm mb-2">
+              <div className="flex justify-between mb-1">
+                <div className="text-sm font-semibold">{item.title}</div>
+                <Badge color="purple">{item.channel}</Badge>
+              </div>
+              <div className="text-xs text-dim" style={{ lineHeight: 1.7 }}>{item.body}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid-2">
+        <div className="card">
+          <div className="card-title">Watchouts</div>
+          {watchouts.map((item) => (
+            <div key={item.id} className="pipeline-row">
+              <div className="flex-1">
+                <div className="text-sm font-semibold">{item.title}</div>
+                <div className="text-xs text-dim">{item.body}</div>
+              </div>
+              <Badge color={getSeverityColor(item.level)}>{getHealthLabel(item.level)}</Badge>
+            </div>
+          ))}
+        </div>
+
+        <div className="card">
+          <div className="card-title">Wins recientes</div>
+          {wins.map((item) => (
+            <div key={item.id} className="pipeline-row">
+              <div className="flex-1">
+                <div className="text-sm font-semibold">{item.title}</div>
+                <div className="text-xs text-dim">{item.detail}</div>
+              </div>
+              <Badge color="green">{item.value}</Badge>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StrategyView({ strategyData, onNavigate }) {
   const summaryCards = strategyData?.summaryCards || [];
   const benchmarkCards = strategyData?.benchmarkCards || [];
@@ -3041,6 +3227,115 @@ function AccessCenterView({
   );
 }
 
+function EnterpriseView({ enterpriseData, onNavigate }) {
+  const summary = enterpriseData?.summary || {};
+  const controls = enterpriseData?.controls || [];
+  const risks = enterpriseData?.risks || [];
+  const serviceMap = enterpriseData?.serviceMap || [];
+  const rollout = enterpriseData?.rollout || [];
+  const auditHighlights = enterpriseData?.auditHighlights || [];
+
+  return (
+    <div className="fade-up">
+      <div className="section-header mb-4">
+        <div>
+          <div className="section-title">Enterprise Readiness</div>
+          <div className="text-sm text-dim">Gobierno, seguridad, integraciones y white-label para operar como cuenta enterprise real.</div>
+        </div>
+        <Badge color={summary.readiness >= 80 ? "green" : summary.readiness >= 60 ? "amber" : "red"}>
+          {summary.readiness || 0}% listo
+        </Badge>
+      </div>
+
+      <div className="stat-grid mb-4">
+        <StatCard title="Usuarios activos" value={summary.activeUsers || 0} sub="Con acceso operativo" accent="var(--c-blue)" />
+        <StatCard title="Roles elevados" value={summary.elevatedUsers || 0} sub="Owner, admin o manager" accent="var(--c-purple)" />
+        <StatCard title="Cobertura 2FA" value={`${summary.twoFactorCoverage || 0}%`} sub="Sobre perfiles elevados" accent="var(--c-green)" />
+        <StatCard title="Eventos auditados" value={summary.auditEvents || 0} sub="Señal reciente de trazabilidad" accent="var(--c-amber)" />
+      </div>
+
+      <div className="grid-2 mb-4">
+        <div className="card">
+          <div className="card-title">Controles enterprise</div>
+          {controls.map((item) => (
+            <div key={item.id} className="pipeline-row">
+              <div className="flex-1">
+                <div className="text-sm font-semibold">{item.title}</div>
+                <div className="text-xs text-dim">{item.detail}</div>
+              </div>
+              <Badge color={getSeverityColor(item.status)}>{getHealthLabel(item.status)}</Badge>
+            </div>
+          ))}
+        </div>
+
+        <div className="card">
+          <div className="card-title">Mapa de servicios</div>
+          {serviceMap.map((item) => (
+            <div key={item.id} className="pipeline-row">
+              <div className="flex-1">
+                <div className="text-sm font-semibold" style={{ textTransform: "capitalize" }}>{item.name}</div>
+                <div className="text-xs text-dim">{item.detail}</div>
+              </div>
+              <Badge color={item.ready ? "green" : "amber"}>{item.ready ? "ready" : "pending"}</Badge>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid-2 mb-4">
+        <div className="card">
+          <div className="card-title">Riesgos y huecos</div>
+          {risks.length === 0 ? (
+            <div className="empty">No hay huecos enterprise graves ahora mismo.</div>
+          ) : (
+            risks.map((item) => (
+              <div key={item.id} className="card-sm mb-2">
+                <div className="flex justify-between mb-1">
+                  <div className="text-sm font-semibold">{item.title}</div>
+                  <Badge color={getSeverityColor(item.level)}>{getHealthLabel(item.level)}</Badge>
+                </div>
+                <div className="text-xs text-dim">{item.body}</div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="card">
+          <div className="card-title">Audit highlights</div>
+          {auditHighlights.length === 0 ? (
+            <div className="empty">Sin eventos recientes.</div>
+          ) : (
+            auditHighlights.map((item) => (
+              <div key={item.id} className="pipeline-row">
+                <div className="flex-1">
+                  <div className="text-sm font-semibold">{item.title}</div>
+                  <div className="text-xs text-dim">{item.body}</div>
+                </div>
+                <div className="text-xs text-muted">{formatDate(item.created_at)}</div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-title">Rollout recomendado</div>
+        {rollout.map((item) => (
+          <div key={item.id} className="card-sm mb-2">
+            <div className="text-sm font-semibold mb-1">{item.title}</div>
+            <div className="text-xs text-dim mb-2">{item.body}</div>
+            {item.view ? (
+              <button onClick={() => onNavigate(item.view)} className="btn btn-primary btn-sm">
+                Abrir módulo
+              </button>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ApiHubView({ apiHubData, webhookTesting, webhookTestResult, testClientWebhook, onNavigate }) {
   const summary = apiHubData?.summary || {};
   const endpoints = apiHubData?.endpoints || [];
@@ -3235,6 +3530,9 @@ export default function ClientPortalPage() {
   const [voiceCenterData, setVoiceCenterData] = useState(null);
   const [inboxData, setInboxData] = useState(null);
   const [strategyData, setStrategyData] = useState(null);
+  const [growthData, setGrowthData] = useState(null);
+  const [enterpriseData, setEnterpriseData] = useState(null);
+  const [copilotData, setCopilotData] = useState(null);
   const [brandLabData, setBrandLabData] = useState(null);
   const [accessCenterData, setAccessCenterData] = useState(null);
   const [apiHubData, setApiHubData] = useState(null);
@@ -3325,6 +3623,9 @@ export default function ClientPortalPage() {
     loadUpsellStats();
     loadAppointmentStats();
     loadMessageExperiments();
+    loadGrowthData();
+    loadEnterpriseData();
+    loadCopilotData();
     loadStrategyData();
     loadBrandLabData();
     loadAccessCenterData();
@@ -3370,6 +3671,9 @@ export default function ClientPortalPage() {
   async function loadVoiceQa() { try { const r = await fetch("/api/portal/voice-qa", { cache: "no-store" }); const j = await r.json(); if (j.success) setVoiceQaData(j.data); } catch {} }
   async function loadVoiceCenterData() { try { const r = await fetch("/api/portal/voice-center", { cache: "no-store" }); const j = await r.json(); if (j.success) setVoiceCenterData(j.data); } catch {} }
   async function loadInboxData() { try { const r = await fetch("/api/portal/inbox", { cache: "no-store" }); const j = await r.json(); if (j.success) setInboxData(j.data); } catch {} }
+  async function loadGrowthData() { try { const r = await fetch("/api/portal/growth", { cache: "no-store" }); const j = await r.json(); if (j.success) setGrowthData(j.data); } catch {} }
+  async function loadEnterpriseData() { try { const r = await fetch("/api/portal/enterprise", { cache: "no-store" }); const j = await r.json(); if (j.success) setEnterpriseData(j.data); } catch {} }
+  async function loadCopilotData() { try { const r = await fetch("/api/portal/copilot", { cache: "no-store" }); const j = await r.json(); if (j.success) setCopilotData(j.data); } catch {} }
   async function loadStrategyData() { try { const r = await fetch("/api/portal/strategy", { cache: "no-store" }); const j = await r.json(); if (j.success) setStrategyData(j.data); } catch {} }
   async function loadBrandLabData() { try { const r = await fetch("/api/portal/brand-lab", { cache: "no-store" }); const j = await r.json(); if (j.success) setBrandLabData(j.data); } catch {} }
   async function loadAccessCenterData() { try { const r = await fetch("/api/portal/access-center", { cache: "no-store" }); const j = await r.json(); if (j.success) setAccessCenterData(j.data); } catch {} }
@@ -3826,6 +4130,34 @@ export default function ClientPortalPage() {
     products: [],
     services: healthData?.services || {},
   }), [brandLabData, data, healthData]);
+  const growthSnapshot = useMemo(() => growthData || buildGrowthWorkspace({
+    client: data?.client || {},
+    settings: data?.settings || {},
+    leads: data?.leads || [],
+    calls: data?.calls || [],
+    payments: billingData?.payments || revenue?.payments || [],
+    experiments: experimentSnapshot || {},
+    products: leadRevenue?.products || [],
+    services: healthData?.services || {},
+  }), [growthData, data, billingData, revenue, experimentSnapshot, leadRevenue, healthData]);
+  const enterpriseSnapshot = useMemo(() => enterpriseData || buildEnterpriseWorkspace({
+    client: data?.client || {},
+    settings: data?.settings || {},
+    portalUsers: accessCenterData?.users || data?.users || [],
+    authUsers: data?.users || [],
+    auditLogs: accessCenterData?.auditTrail || [],
+    services: healthData?.services || {},
+    security: accessCenterData?.security || {},
+    domainStatus: null,
+  }), [enterpriseData, data, accessCenterData, healthData]);
+  const copilotSnapshot = useMemo(() => copilotData || buildCopilotWorkspace({
+    client: data?.client || {},
+    leads: data?.leads || [],
+    calls: data?.calls || [],
+    alerts: data?.alerts || [],
+    insights: strategyData?.benchmarkHistory || [],
+    payments: billingData?.payments || revenue?.payments || [],
+  }), [copilotData, data, strategyData, billingData, revenue]);
   const controlTowerSnapshot = useMemo(() => buildControlTowerSnapshot({
     data,
     billingData,
@@ -3862,10 +4194,13 @@ export default function ClientPortalPage() {
     { id: "tower", icon: "🛰", label: "Control" },
     { id: "strategy", icon: "🎯", label: "Strategy" },
     { id: "experiments", icon: "🧪", label: "Experiments" },
+    { id: "growth", icon: "📈", label: "Growth" },
+    { id: "copilot", icon: "🧭", label: "Copilot" },
     { id: "roi", icon: "💸", label: "ROI" },
     { id: "billing", icon: "💳", label: "Billing" },
     { id: "brandlab", icon: "✨", label: "Brand Lab" },
     { id: "access", icon: "🔐", label: "Access" },
+    { id: "enterprise", icon: "🏛", label: "Enterprise" },
     { id: "api", icon: "🧩", label: "API Hub" },
     { id: "playbooks", icon: "🧠", label: "Playbooks" },
     { id: "automations", icon: "⚡", label: "Automatiz." },
@@ -4064,6 +4399,18 @@ export default function ClientPortalPage() {
                 experimentsMeta={experimentSnapshot}
               />
             )}
+            {view === "growth" && (
+              <GrowthView
+                growthData={growthSnapshot}
+                onNavigate={setView}
+              />
+            )}
+            {view === "copilot" && (
+              <CopilotView
+                copilotData={copilotSnapshot}
+                onNavigate={setView}
+              />
+            )}
             {view === "roi" && (
               <RoiView
                 roiSnapshot={roiSnapshot}
@@ -4110,6 +4457,12 @@ export default function ClientPortalPage() {
                 resetPortalUserPassword={resetPortalUserPassword}
                 accessSavingUserId={accessSavingUserId}
                 passwordResettingUserId={passwordResettingUserId}
+              />
+            )}
+            {view === "enterprise" && (
+              <EnterpriseView
+                enterpriseData={enterpriseSnapshot}
+                onNavigate={setView}
               />
             )}
             {view === "api" && (

@@ -1,4 +1,5 @@
 import { getPortalContext } from "@/lib/portal-auth";
+import { safeUpsertClientSettings } from "@/lib/client-settings";
 import { getSupabase } from "@/lib/supabase";
 import {
   generateTwoFactorCode,
@@ -121,7 +122,8 @@ async function ensureClientForCheckout({ supabase, session, email }) {
     throw new Error(clientError.message || "No se pudo crear el cliente");
   }
 
-  await supabase.from("client_settings").upsert(
+  const { error: settingsError } = await safeUpsertClientSettings(
+    supabase,
     {
       client_id: clientId,
       weekly_report_email: email || null,
@@ -129,6 +131,12 @@ async function ensureClientForCheckout({ supabase, session, email }) {
     },
     { onConflict: "client_id" }
   );
+
+  if (settingsError) {
+    throw new Error(
+      settingsError.message || "No se pudo crear la configuración inicial del cliente"
+    );
+  }
 
   return {
     id: clientId,

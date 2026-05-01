@@ -1,4 +1,5 @@
 import { getPortalContext } from "@/lib/portal-auth";
+import { safeLoadClientSettings } from "@/lib/client-settings";
 import { prisma } from "@/lib/prisma";
 import {
   buildEnvReadinessReport,
@@ -48,11 +49,7 @@ async function handleGet() {
         .select("id,brand_name,name,twilio_number,webhook,stripe_customer_id")
         .eq("id", ctx.clientId)
         .single(),
-      ctx.supabase
-        .from("client_settings")
-        .select("daily_report_email,weekly_report_email")
-        .eq("client_id", ctx.clientId)
-        .maybeSingle(),
+      safeLoadClientSettings(ctx.supabase, ctx.clientId),
       ctx.supabase
         .from("leads")
         .select("id,created_at")
@@ -85,7 +82,7 @@ async function handleGet() {
     ]);
 
     const client = clientRes.data || null;
-    const settings = settingsRes.data || null;
+    const settings = settingsRes?.data || null;
     const latestLead = leadRes.data || null;
     const latestCall = callRes.data || null;
     const alerts = alertsRes.data || [];

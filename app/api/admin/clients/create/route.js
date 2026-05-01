@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { safeUpsertClientSettings } from "@/lib/client-settings";
 import { getAdminContext } from "@/lib/server/auth";
 
 function getSupabase() {
@@ -65,11 +66,19 @@ export async function POST(req) {
       );
     }
 
-    await supabase.from("client_settings").insert({
-      client_id: id,
-      weekly_report_email: owner_email || null,
-      daily_report_email: owner_email || null,
-    });
+    const { error: settingsError } = await safeUpsertClientSettings(
+      supabase,
+      {
+        client_id: id,
+        weekly_report_email: owner_email || null,
+        daily_report_email: owner_email || null,
+      },
+      { onConflict: "client_id" }
+    );
+
+    if (settingsError) {
+      console.error("Error creando client_settings:", settingsError.message);
+    }
 
     return Response.json({ success: true, data });
   } catch (error) {

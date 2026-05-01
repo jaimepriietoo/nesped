@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
+import { safeUpsertClientSettings } from "@/lib/client-settings";
 import { getAdminContext, hashPassword } from "@/lib/server/auth";
 
 function getSupabase() {
@@ -206,9 +207,11 @@ export async function POST(req) {
       daily_report_email: ownerEmail || null,
     };
 
-    const { error: settingsError } = await supabase
-      .from("client_settings")
-      .upsert(settingsPayload, { onConflict: "client_id" });
+    const { error: settingsError } = await safeUpsertClientSettings(
+      supabase,
+      settingsPayload,
+      { onConflict: "client_id" }
+    );
 
     if (settingsError) {
       console.error("Error creando client_settings:", settingsError.message);
@@ -355,9 +358,11 @@ export async function PATCH(req) {
       daily_report_email: ownerEmail || null,
     };
 
-    const { error: settingsError } = await supabase
-      .from("client_settings")
-      .upsert(settingsPayload, { onConflict: "client_id" });
+    const { error: settingsError } = await safeUpsertClientSettings(
+      supabase,
+      settingsPayload,
+      { onConflict: "client_id" }
+    );
 
     if (settingsError) {
       console.error("Error actualizando client_settings:", settingsError.message);

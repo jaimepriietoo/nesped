@@ -1,4 +1,5 @@
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { safeUpsertClientSettings } from "@/lib/client-settings";
 import { requireSameOrigin } from "@/lib/server/security";
 
 function withValue(value, transform = (item) => item) {
@@ -92,9 +93,11 @@ export async function PATCH(req) {
     }
 
     if (Object.keys(settingsPayload).length > 1) {
-      const { error } = await ctx.supabase
-        .from("client_settings")
-        .upsert(settingsPayload, { onConflict: "client_id" });
+      const { error } = await safeUpsertClientSettings(
+        ctx.supabase,
+        settingsPayload,
+        { onConflict: "client_id" }
+      );
 
       if (error) {
         throw new Error(error.message);

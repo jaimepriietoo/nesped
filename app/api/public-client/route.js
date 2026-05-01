@@ -1,4 +1,5 @@
 import { getSupabase } from "@/lib/supabase";
+import { getClientById, isDemoClientId, mapClientToPublicShape } from "@/lib/clients";
 
 const supabase = getSupabase();
 
@@ -54,9 +55,14 @@ export async function GET(req) {
       query = data || null;
     }
 
+    const fallbackClient =
+      !query && subdomain && isDemoClientId(subdomain)
+        ? mapClientToPublicShape(getClientById(subdomain))
+        : null;
+
     return Response.json({
       success: true,
-      client: query ? mapClient(query) : null,
+      client: query ? mapClient(query) : fallbackClient,
     });
   } catch (error) {
     console.error("public-client error:", error);

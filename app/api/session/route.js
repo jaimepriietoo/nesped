@@ -1,4 +1,5 @@
 import { getSupabase } from "@/lib/supabase";
+import { getClientById, isDemoClientId, mapClientToPublicShape } from "@/lib/clients";
 import { getAuthenticatedUserContext } from "@/lib/server/auth";
 import { observeRoute } from "@/lib/server/observability.mjs";
 
@@ -38,12 +39,16 @@ async function handleGet() {
     .single();
 
   if (error || !data) {
+    const fallbackClient = isDemoClientId(clientId)
+      ? mapClientToPublicShape(getClientById(clientId))
+      : null;
+
     return Response.json({
-      success: false,
+      success: Boolean(fallbackClient),
       authenticated: true,
       clientId,
-      clientName: clientId,
-      client: null,
+      clientName: fallbackClient?.name || clientId,
+      client: fallbackClient,
     });
   }
 

@@ -1,5 +1,6 @@
 import twilio from "twilio";
 import { getSupabase } from "@/lib/supabase";
+import { ensureDemoWorkspace, isDemoClientId } from "@/lib/clients";
 import { logEvent, observeRoute } from "@/lib/server/observability.mjs";
 import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 
@@ -76,8 +77,11 @@ async function handlePost(req) {
       );
     }
 
-    if (clientId !== "demo") {
-      const supabase = getSupabase();
+    const supabase = getSupabase();
+
+    if (isDemoClientId(clientId)) {
+      await ensureDemoWorkspace(supabase, clientId);
+    } else if (clientId !== "demo") {
       const { data: client } = await supabase
         .from("clients")
         .select("id")

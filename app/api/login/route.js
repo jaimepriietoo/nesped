@@ -10,6 +10,7 @@ import { logEvent, observeRoute } from "@/lib/server/observability.mjs";
 import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 import { sendTwoFactorCode } from "@/lib/server/two-factor.mjs";
 import { findUser } from "@/lib/auth";
+import { ensureDemoWorkspace, isDemoClientId } from "@/lib/clients";
 
 async function handlePost(req) {
   try {
@@ -70,10 +71,14 @@ async function handlePost(req) {
       const legacyUser = findUser(email, password);
 
       if (legacyUser) {
+        if (isDemoClientId(legacyUser.clientId)) {
+          await ensureDemoWorkspace(supabase, legacyUser.clientId);
+        }
         authenticatedUser = {
           email: legacyUser.email,
           client_id: legacyUser.clientId,
           role: legacyUser.role || "client",
+          clientName: legacyUser.clientName || legacyUser.clientId,
         };
       }
     }
@@ -96,7 +101,8 @@ async function handlePost(req) {
       .single();
 
     const normalizedRole = authenticatedUser.role || "client";
-    const clientName = client?.name || authenticatedUser.client_id;
+    const clientName =
+      client?.name || authenticatedUser.clientName || authenticatedUser.client_id;
     const redirectTo =
       nextPath && nextPath.startsWith("/") && !nextPath.startsWith("//")
         ? nextPath

@@ -1,4 +1,5 @@
 import { getSupabase } from "@/lib/supabase";
+import { CLIENT_LIST, mapClientToPublicShape } from "@/lib/clients";
 
 const supabase = getSupabase();
 
@@ -34,9 +35,14 @@ export async function GET() {
       },
     }));
 
+    const existingIds = new Set(clients.map((client) => client.id));
+    const seededClients = CLIENT_LIST.filter((client) => !existingIds.has(client.id)).map(
+      mapClientToPublicShape
+    );
+
     return Response.json({
       success: true,
-      data: clients,
+      data: [...clients, ...seededClients],
     });
   } catch (error) {
     return Response.json(

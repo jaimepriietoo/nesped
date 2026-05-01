@@ -252,6 +252,25 @@ const TRANSCRIPT_RETENTION_DAYS = Math.max(
   Number(process.env.TRANSCRIPT_RETENTION_DAYS || 90)
 );
 
+const DEMO_CLIENT_CONFIGS = {
+  demo: {
+    id: "demo",
+    name: "NESPED Demo",
+  },
+  globetelecom: {
+    id: "globetelecom",
+    name: "Globetelecom",
+  },
+  clinica: {
+    id: "clinica",
+    name: "Clínica Dental",
+  },
+  inmobiliaria: {
+    id: "inmobiliaria",
+    name: "Inmobiliaria Pérez",
+  },
+};
+
 if (!hasSupabase) {
   console.log("⚠️ Supabase desactivado");
 }
@@ -477,6 +496,27 @@ LEGAL:
 `.trim();
 }
 
+function getDemoClientConfig(clientId = "") {
+  return DEMO_CLIENT_CONFIGS[String(clientId || "").trim()] || null;
+}
+
+function injectClientNameIntoPrompt(clientName = "", prompt = "") {
+  const safeName = String(clientName || "").trim();
+  const basePrompt = String(prompt || getFallbackPrompt()).trim();
+
+  if (!safeName) {
+    return basePrompt;
+  }
+
+  return `
+Actúas en nombre de ${safeName}.
+Si el usuario pregunta quién llama o de parte de qué empresa hablas, responde con naturalidad que llamas de ${safeName}.
+Mantén ese contexto durante toda la conversación.
+
+${basePrompt}
+  `.trim();
+}
+
 function getVoicePolicyUrl() {
   const explicit = String(process.env.VOICE_PRIVACY_URL || "").trim();
   if (explicit) return explicit;
@@ -534,11 +574,16 @@ function detectFarewellIntent(value = "") {
 }
 
 async function getClientConfig(clientId) {
+  const fallbackClient = getDemoClientConfig(clientId);
+
   if (!supabase) {
     return {
-      id: clientId || "demo",
-      name: "NESPED Demo",
-      prompt: getFallbackPrompt(),
+      id: fallbackClient?.id || clientId || "demo",
+      name: fallbackClient?.name || "NESPED Demo",
+      prompt: injectClientNameIntoPrompt(
+        fallbackClient?.name || "NESPED Demo",
+        getFallbackPrompt()
+      ),
       webhook: "",
       twilioNumber: fallbackTwilioNumber,
     };
@@ -559,9 +604,12 @@ async function getClientConfig(clientId) {
       );
 
       return {
-        id: clientId || "demo",
-        name: "NESPED Demo",
-        prompt: getFallbackPrompt(),
+        id: fallbackClient?.id || clientId || "demo",
+        name: fallbackClient?.name || "NESPED Demo",
+        prompt: injectClientNameIntoPrompt(
+          fallbackClient?.name || "NESPED Demo",
+          getFallbackPrompt()
+        ),
         webhook: "",
         twilioNumber: fallbackTwilioNumber,
       };
@@ -569,8 +617,11 @@ async function getClientConfig(clientId) {
 
     return {
       id: data.id,
-      name: data.name || "Cliente",
-      prompt: data.prompt || getFallbackPrompt(),
+      name: data.brand_name || data.name || fallbackClient?.name || "Cliente",
+      prompt: injectClientNameIntoPrompt(
+        data.brand_name || data.name || fallbackClient?.name || "Cliente",
+        data.prompt || getFallbackPrompt()
+      ),
       webhook: data.webhook || "",
       twilioNumber: data.twilio_number || fallbackTwilioNumber,
     };
@@ -578,9 +629,12 @@ async function getClientConfig(clientId) {
     reportVoiceError(err, "voice.client_config.exception", { clientId });
 
     return {
-      id: clientId || "demo",
-      name: "NESPED Demo",
-      prompt: getFallbackPrompt(),
+      id: fallbackClient?.id || clientId || "demo",
+      name: fallbackClient?.name || "NESPED Demo",
+      prompt: injectClientNameIntoPrompt(
+        fallbackClient?.name || "NESPED Demo",
+        getFallbackPrompt()
+      ),
       webhook: "",
       twilioNumber: fallbackTwilioNumber,
     };

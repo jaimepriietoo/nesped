@@ -330,6 +330,7 @@ function safeEqual(left, right) {
 function getInternalApiToken() {
   return (
     process.env.INTERNAL_API_TOKEN ||
+    process.env.NESPED_SESSION_SECRET ||
     process.env.CRON_SECRET ||
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     ""
@@ -392,6 +393,54 @@ function isValidTwilioWsRequest(req) {
   );
 }
 
+function base64UrlEncode(value) {
+  return Buffer.from(String(value || "")).toString("base64url");
+}
+
+function base64UrlDecode(value) {
+  return Buffer.from(String(value || ""), "base64url").toString("utf8");
+}
+
+function signVoicePayload(payload) {
+  return crypto
+    .createHmac("sha256", getInternalApiToken() || "nesped-voice-stream")
+    .update(payload)
+    .digest("base64url");
+}
+
+function createVoiceStreamToken(clientId = "") {
+  const issuedAt = Date.now();
+  const expiresAt = issuedAt + 5 * 60 * 1000;
+  const body = base64UrlEncode(
+    JSON.stringify({
+      clientId: String(clientId || "demo"),
+      issuedAt,
+      expiresAt,
+    })
+  );
+
+  return `${body}.${signVoicePayload(body)}`;
+}
+
+function readVoiceStreamToken(token = "") {
+  if (!token || !String(token).includes(".")) return null;
+
+  const [body, signature] = String(token).split(".");
+  const expected = signVoicePayload(body);
+  if (!safeEqual(signature, expected)) return null;
+
+  try {
+    const payload = JSON.parse(base64UrlDecode(body));
+    const now = Date.now();
+    if (!payload?.clientId || !payload?.expiresAt || payload.expiresAt <= now) {
+      return null;
+    }
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
 function getRecordingMediaUrl(recordingUrl = "") {
   if (!recordingUrl) {
     return "";
@@ -416,7 +465,8 @@ function getFallbackPrompt() {
   return `
 Eres un asistente telefónico humano, natural y profesional. No pareces una IA. Suenas como una persona real hablando por teléfono.
 
-Hablas en español de forma cercana, relajada y natural. Usas frases cortas, tono humano y expresiones reales.
+Hablas en español de España, con castellano natural de España. Nunca suenas latinoamericano ni usas giros de México o de otros países.
+Usas frases cortas, tono humano y expresiones reales de España como "vale", "perfecto", "claro", "te cuento", "sin problema", "fenomenal".
 
 Tu objetivo es:
 1. atender la llamada
@@ -433,6 +483,8 @@ ESTILO:
 - No suenas formal ni técnico
 - No haces listas largas
 - No das respuestas tipo chatbot
+- Suenas cálido, seguro y realista, como una persona amable del equipo comercial
+- Metes pequeñas variaciones naturales y cierres cortos
 
 COMPORTAMIENTO:
 - Saluda de forma breve y natural
@@ -453,6 +505,7 @@ RITMO:
 - No respondas a pausas cortas
 - Si la frase queda a medias, espera
 - No te precipites
+- Deja micro pausas naturales y evita sonar acelerado
 
 CAPTURA DE LEAD:
 Recoge, de forma natural:
@@ -526,11 +579,10 @@ function getVoicePolicyUrl() {
 }
 
 function buildVoiceLegalNotice() {
-  const baseNotice =
+  return (
     process.env.VOICE_LEGAL_NOTICE ||
-    "Aviso. Esta llamada puede ser atendida por un asistente de voz con IA y puede ser grabada y transcrita para calidad, seguridad, seguimiento comercial y mejora del servicio. Si prefieres no continuar en estas condiciones, indicalo y te ofreceremos una alternativa de contacto.";
-  const policyUrl = getVoicePolicyUrl();
-  return policyUrl ? `${baseNotice} Más información en ${policyUrl}.` : baseNotice;
+    "Aviso: esta llamada puede ser atendida por IA y puede grabarse o transcribirse para calidad, seguridad y seguimiento comercial. Si prefieres continuar por otra vía, dímelo en cualquier momento."
+  );
 }
 
 function normalizeTranscriptText(value = "") {
@@ -741,10 +793,13 @@ app.post("/recording-status", async (req, res) => {
 
 function buildVoiceTwiml(clientId) {
   const cleanBaseUrl = (process.env.BASE_URL || "").replace(/\/+$/, "");
+  const streamToken = createVoiceStreamToken(clientId);
   const streamUrl = `${cleanBaseUrl.replace(
     "https://",
     "wss://"
-  )}/media-stream?client_id=${clientId}`;
+  )}/media-stream?client_id=${clientId}&stream_token=${encodeURIComponent(
+    streamToken
+  )}`;
   const legalNotice = buildVoiceLegalNotice()
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -755,8 +810,7 @@ function buildVoiceTwiml(clientId) {
 
   return `
 <Response>
-  <Say language="es-ES" voice="alice">${legalNotice}</Say>
-  <Pause length="1" />
+  <Say language="es-ES" voice="Polly.Conchita-Neural">${legalNotice}</Say>
   <Connect>
     <Stream url="${streamUrl}" />
   </Connect>
@@ -798,14 +852,16 @@ const wss = new WebSocket.Server({ server, path: "/media-stream" });
 console.log("✅ WebSocket /media-stream listo");
 
 wss.on("connection", async (twilioWs, req) => {
-  if (!isValidTwilioWsRequest(req)) {
-    console.warn("🚫 WebSocket /media-stream rechazado por firma inválida");
+  const url = new URL(req.url, "https://dummy");
+  const clientId = url.searchParams.get("client_id") || "demo";
+  const streamToken = url.searchParams.get("stream_token") || "";
+  const tokenPayload = readVoiceStreamToken(streamToken);
+
+  if (!tokenPayload || tokenPayload.clientId !== clientId) {
+    console.warn("🚫 WebSocket /media-stream rechazado por token inválido");
     twilioWs.close();
     return;
   }
-
-  const url = new URL(req.url, "https://dummy");
-  const clientId = url.searchParams.get("client_id") || "demo";
 
   console.log("🟢 Twilio conectado a /media-stream");
   console.log("🔥 Cliente WS:", clientId);
@@ -1113,7 +1169,7 @@ wss.on("connection", async (twilioWs, req) => {
         type: "session.update",
         session: {
           modalities: ["audio", "text"],
-          voice: "alloy",
+          voice: process.env.OPENAI_VOICE || "verse",
           input_audio_format: "g711_ulaw",
           output_audio_format: "g711_ulaw",
           instructions: (config.prompt || getFallbackPrompt()).trim(),
@@ -1122,7 +1178,7 @@ wss.on("connection", async (twilioWs, req) => {
           },
           turn_detection: {
             type: "semantic_vad",
-            eagerness: "auto",
+            eagerness: "low",
             create_response: true,
             interrupt_response: true,
           },
@@ -1231,7 +1287,7 @@ wss.on("connection", async (twilioWs, req) => {
               response: {
                 modalities: ["audio", "text"],
                 instructions:
-                  "Saluda de forma muy natural, breve y humana en español, como una persona real por teléfono, y pregunta en qué puedes ayudar.",
+                  `Saluda de forma muy natural, breve, cálida y realista, en español de España, como una persona real de ${config.name}. Haz una sola pregunta corta sobre en qué puedes ayudar. Nada de tono robótico ni comercial agresivo.`,
               },
             })
           );

@@ -355,6 +355,13 @@ function getPublicBaseUrl() {
   return String(process.env.BASE_URL || "").replace(/\/+$/, "");
 }
 
+function normalizePhone(value = "") {
+  return String(value || "")
+    .replace(/^whatsapp:/i, "")
+    .replace(/[^\d+]/g, "")
+    .trim();
+}
+
 function getTwilioValidationUrl(req) {
   const baseUrl = getPublicBaseUrl();
 
@@ -693,6 +700,58 @@ async function getClientConfig(clientId) {
   }
 }
 
+async function findClientByTwilioNumber(toNumber = "") {
+  const normalizedTo = normalizePhone(toNumber);
+  if (!normalizedTo || !supabase) return null;
+
+  try {
+    const { data, error } = await supabase.from("clients").select("*");
+    if (error || !Array.isArray(data)) {
+      if (error) {
+        reportVoiceError(error, "voice.client_number_lookup.failed", {
+          toNumber: normalizedTo,
+        });
+      }
+      return null;
+    }
+
+    return (
+      data.find(
+        (clientRow) =>
+          normalizePhone(clientRow.twilio_number || "") === normalizedTo
+      ) || null
+    );
+  } catch (error) {
+    reportVoiceError(error, "voice.client_number_lookup.exception", {
+      toNumber: normalizedTo,
+    });
+    return null;
+  }
+}
+
+async function resolveInboundClientId(req) {
+  const explicitClientId =
+    String(req.query?.client_id || req.body?.client_id || "").trim() || "";
+
+  if (explicitClientId) {
+    return explicitClientId;
+  }
+
+  const inboundNumber =
+    req.body?.To ||
+    req.query?.To ||
+    req.body?.Called ||
+    req.query?.Called ||
+    "";
+
+  const matchedClient = await findClientByTwilioNumber(inboundNumber);
+  if (matchedClient?.id) {
+    return matchedClient.id;
+  }
+
+  return "demo";
+}
+
 app.get("/call", async (req, res) => {
   if (!isAuthorizedInternalRequest(req)) {
     return res.status(401).send("No autorizado");
@@ -818,30 +877,30 @@ function buildVoiceTwiml(clientId) {
   `.trim();
 }
 
-app.get("/voice", (req, res) => {
+app.get("/voice", async (req, res) => {
   if (!isValidTwilioHttpRequest(req)) {
     console.warn("🚫 GET /voice rechazado por firma inválida");
     return res.status(403).send("forbidden");
   }
 
-  const clientId = req.query.client_id || "demo";
+  const clientId = await resolveInboundClientId(req);
   console.log("GET /voice");
-  console.log("🏢 Cliente detectado en /voice:", clientId);
+  console.log("🏢 Cliente detectado en /voice:", clientId, "To:", req.query?.To || "");
 
   const xml = buildVoiceTwiml(clientId);
   res.type("text/xml");
   res.send(xml);
 });
 
-app.post("/voice", (req, res) => {
+app.post("/voice", async (req, res) => {
   if (!isValidTwilioHttpRequest(req)) {
     console.warn("🚫 POST /voice rechazado por firma inválida");
     return res.status(403).send("forbidden");
   }
 
-  const clientId = req.query.client_id || "demo";
+  const clientId = await resolveInboundClientId(req);
   console.log("POST /voice");
-  console.log("🏢 Cliente detectado en /voice:", clientId);
+  console.log("🏢 Cliente detectado en /voice:", clientId, "To:", req.body?.To || "");
 
   const xml = buildVoiceTwiml(clientId);
   res.type("text/xml");

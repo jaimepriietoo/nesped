@@ -1,23 +1,6 @@
 import { NextResponse } from "next/server";
-import twilio from "twilio";
 import { requireInternalRequest } from "@/lib/server/internal-api";
-
-const client = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-);
-
-function normalizePhone(value = "") {
-  return String(value || "").replace(/[^\d+]/g, "").trim();
-}
-
-function normalizeWhatsAppAddress(value = "") {
-  const normalized = String(value || "").trim();
-  if (!normalized) return "";
-  return normalized.startsWith("whatsapp:")
-    ? normalized
-    : `whatsapp:${normalizePhone(normalized)}`;
-}
+import { normalizePhone, sendTelnyxWhatsApp } from "@/lib/server/telnyx";
 
 export async function POST(req) {
   const unauthorized = requireInternalRequest(req);
@@ -30,15 +13,16 @@ export async function POST(req) {
       return NextResponse.json({ success: false, message: "Faltan datos" }, { status: 400 });
     }
 
-    const msg = await client.messages.create({
-      from: normalizeWhatsAppAddress(process.env.TWILIO_WHATSAPP_NUMBER),
-      to: normalizeWhatsAppAddress(to),
-      body: message,
+    const msg = await sendTelnyxWhatsApp({
+      to: normalizePhone(to),
+      text: String(message || "").trim(),
+      webhookUrl: "/api/whatsapp/webhook",
     });
 
     return NextResponse.json({
       success: true,
-      sid: msg.sid,
+      sid: msg?.id || msg?.message_id || "",
+      messageId: msg?.id || msg?.message_id || "",
     });
   } catch (err) {
     console.error(err);

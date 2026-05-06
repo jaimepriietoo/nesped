@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
-import twilio from "twilio";
 import { getSupabase } from "@/lib/supabase";
 import {
   sendWhatsAppMessage as sendDirectWhatsAppMessage,
   updateLeadDirect,
 } from "@/lib/server/automation-service";
+import {
+  parseTelnyxMessagingWebhook,
+  verifyTelnyxWebhook,
+} from "@/lib/server/telnyx";
 
 let openai = null;
 const supabase = getSupabase();
@@ -73,40 +76,30 @@ const BOOKING_URL = process.env.BOOKING_URL || "https://cal.com/TU_LINK";
 const PAYMENT_URL = process.env.PAYMENT_URL || "";
 
 function normalizePhone(phone = "") {
-  return String(phone).replace(/^whatsapp:/, "").trim();
+  return String(phone)
+    .replace(/^whatsapp:/i, "")
+    .replace(/[^\d+]/g, "")
+    .trim();
 }
 
-function buildTwilioValidationUrl(req) {
-  return new URL(req.url).toString();
-}
+function isValidTelnyxWebhook(req, rawPayload = "") {
+  const sharedSecret = String(process.env.TELNYX_WEBHOOK_SECRET || "").trim();
+  const providedSecret =
+    String(new URL(req.url).searchParams.get("secret") || "").trim() ||
+    String(req.headers.get("x-nesped-provider-secret") || "").trim();
 
-function formDataToObject(formData) {
-  const params = {};
-
-  formData.forEach((value, key) => {
-    if (!(key in params)) {
-      params[key] = String(value);
-    }
-  });
-
-  return params;
-}
-
-function isValidTwilioWebhook(req, params) {
-  const authToken =
-    process.env.TWILIO_AUTH_TOKEN || process.env.AUTH_TOKEN || "";
-  const signature = req.headers.get("x-twilio-signature") || "";
-
-  if (!authToken || !signature) {
-    return false;
+  if (sharedSecret && providedSecret && sharedSecret === providedSecret) {
+    return true;
   }
 
-  return twilio.validateRequest(
-    authToken,
+  const signature = req.headers.get("telnyx-signature-ed25519") || "";
+  const timestamp = req.headers.get("telnyx-timestamp") || "";
+
+  return verifyTelnyxWebhook({
+    payload: rawPayload,
     signature,
-    buildTwilioValidationUrl(req),
-    params
-  );
+    timestamp,
+  });
 }
 
 function safeJsonParse(text, fallback) {
@@ -649,19 +642,30 @@ function selectProductTierFromAnalysis(lead, analysis) {
 
 export async function POST(req) {
   try {
-    const formData = await req.formData();
-    const twilioParams = formDataToObject(formData);
-
-    if (!isValidTwilioWebhook(req, twilioParams)) {
+    const rawPayload = await req.text();
+    if (!isValidTelnyxWebhook(req, rawPayload)) {
       return NextResponse.json(
         { success: false, message: "Firma de webhook inválida" },
         { status: 403 }
       );
     }
 
-    const inboundMessage = String(formData.get("Body") || "").trim();
-    const from = String(formData.get("From") || "");
-    const to = String(formData.get("To") || "");
+    const event = safeJsonParse(rawPayload, null);
+    if (!event?.data) {
+      return NextResponse.json(
+        { success: false, message: "Payload de webhook inválido" },
+        { status: 400 }
+      );
+    }
+
+    const parsed = parseTelnyxMessagingWebhook(event);
+    if (parsed.eventType !== "message.received") {
+      return NextResponse.json({ success: true, ignored: true });
+    }
+
+    const inboundMessage = String(parsed.text || "").trim();
+    const from = String(parsed.from || "");
+    const to = String(parsed.to || "");
     const phone = normalizePhone(from);
 
     if (!phone || !inboundMessage) {

@@ -88,8 +88,19 @@ async function handleGet() {
     const alerts = alertsRes.data || [];
     const envReport = buildEnvReadinessReport();
     const aiEnv = getFeatureReport(envReport, "ai");
-    const voiceEnv = getFeatureReport(envReport, "voice");
     const billingEnv = getFeatureReport(envReport, "billing");
+    const hasTelnyxVoice = Boolean(
+      process.env.TELNYX_API_KEY &&
+        process.env.TELNYX_PHONE_NUMBER &&
+        (process.env.TELNYX_TEXML_APPLICATION_ID ||
+          process.env.TELNYX_APPLICATION_SID)
+    );
+    const hasTelnyxWhatsApp = Boolean(
+      process.env.TELNYX_API_KEY &&
+        (process.env.TELNYX_WHATSAPP_NUMBER || process.env.TELNYX_PHONE_NUMBER)
+    );
+    const hasVoiceBackend = Boolean(process.env.BASE_URL);
+    const hasClientVoiceNumber = Boolean(client?.twilio_number);
 
     const services = {
       auth: {
@@ -106,28 +117,30 @@ async function handleGet() {
       },
       telephony: {
         ready: Boolean(
-          voiceEnv?.ready &&
-            client?.twilio_number
+          hasVoiceBackend &&
+            hasTelnyxVoice &&
+            hasClientVoiceNumber
         ),
         level:
-          voiceEnv?.ready &&
-          client?.twilio_number
+          hasVoiceBackend &&
+          hasTelnyxVoice &&
+          hasClientVoiceNumber
             ? "healthy"
             : "warning",
         detail:
-          process.env.TWILIO_ACCOUNT_SID &&
-          process.env.TWILIO_AUTH_TOKEN &&
-          client?.twilio_number
-            ? "Telefonía preparada."
-            : "Falta número Twilio del cliente o credenciales de voz.",
+          hasVoiceBackend &&
+          hasTelnyxVoice &&
+          hasClientVoiceNumber
+            ? "Telefonía preparada con Telnyx."
+            : "Falta número de voz del cliente, BASE_URL o configuración base de Telnyx.",
       },
       whatsapp: {
-        ready: Boolean(voiceEnv?.ready),
-        level: voiceEnv?.ready ? "healthy" : "warning",
+        ready: hasTelnyxWhatsApp,
+        level: hasTelnyxWhatsApp ? "healthy" : "warning",
         detail:
-          voiceEnv?.ready
-            ? "Canal WhatsApp listo a nivel de credenciales."
-            : "Faltan credenciales base para WhatsApp/Twilio.",
+          hasTelnyxWhatsApp
+            ? "Canal WhatsApp listo a nivel de credenciales Telnyx."
+            : "Faltan credenciales base para WhatsApp/Telnyx.",
       },
       billing: {
         ready: Boolean(client?.stripe_customer_id || billingRes),

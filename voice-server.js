@@ -3,7 +3,6 @@ require("dotenv").config({ path: ".env.local" });
 const express = require("express");
 const http = require("http");
 const WebSocket = require("ws");
-const twilio = require("twilio");
 const crypto = require("crypto");
 const Sentry = require("@sentry/node");
 const { createClient } = require("@supabase/supabase-js");
@@ -220,16 +219,18 @@ app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
 const server = http.createServer(app);
-
-const accountSid =
-  process.env.ACCOUNT_SID || process.env.TWILIO_ACCOUNT_SID;
-const authToken =
-  process.env.AUTH_TOKEN || process.env.TWILIO_AUTH_TOKEN;
-const fallbackTwilioNumber =
-  process.env.TWILIO_NUMERO || process.env.TWILIO_PHONE_NUMBER;
-
-const client =
-  accountSid && authToken ? twilio(accountSid, authToken) : null;
+const telnyxWebhookSecret = String(
+  process.env.TELNYX_WEBHOOK_SECRET || ""
+).trim();
+const telnyxApiKey = String(process.env.TELNYX_API_KEY || "").trim();
+const telnyxAccountSid = String(process.env.TELNYX_ACCOUNT_SID || "").trim();
+const telnyxApplicationId = String(
+  process.env.TELNYX_TEXML_APPLICATION_ID ||
+    process.env.TELNYX_APPLICATION_SID ||
+    ""
+).trim();
+const telnyxPhoneNumber = String(process.env.TELNYX_PHONE_NUMBER || "").trim();
+const defaultVoiceNumber = telnyxPhoneNumber;
 
 const hasSupabase =
   !!process.env.SUPABASE_URL && !!process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -275,11 +276,19 @@ if (!hasSupabase) {
   console.log("⚠️ Supabase desactivado");
 }
 
-if (!client) {
-  logEvent("warn", "voice.twilio_missing_env", {
-    hasAccountSid: Boolean(accountSid),
-    hasAuthToken: Boolean(authToken),
+if (!hasTelnyxOutboundConfig()) {
+  logEvent("warn", "voice.telnyx_missing_env", {
+    hasApiKey: Boolean(telnyxApiKey),
+    hasAccountSid: Boolean(telnyxAccountSid),
+    hasApplicationId: Boolean(telnyxApplicationId),
+    hasPhoneNumber: Boolean(telnyxPhoneNumber),
   });
+}
+
+function hasTelnyxOutboundConfig() {
+  return Boolean(
+    telnyxApiKey && telnyxAccountSid && telnyxApplicationId && telnyxPhoneNumber
+  );
 }
 
 process.on("unhandledRejection", (reason) => {
@@ -304,10 +313,12 @@ app.get("/healthz", (req, res) => {
     env: {
       hasOpenAI: Boolean(process.env.OPENAI_API_KEY),
       hasSupabase,
-      hasTwilioClient: Boolean(client),
+      hasTelnyxVoiceConfig: hasTelnyxOutboundConfig(),
+      hasTelnyxApiKey: Boolean(telnyxApiKey),
+      hasTelnyxWebhookSecret: Boolean(telnyxWebhookSecret),
       hasSentryDsn: isVoiceSentryEnabled(),
       hasBaseUrl: Boolean(process.env.BASE_URL),
-      hasTwilioNumber: Boolean(fallbackTwilioNumber),
+      hasVoiceNumber: Boolean(defaultVoiceNumber),
       recordingRetentionDays: RECORDING_RETENTION_DAYS,
       transcriptRetentionDays: TRANSCRIPT_RETENTION_DAYS,
     },
@@ -362,42 +373,17 @@ function normalizePhone(value = "") {
     .trim();
 }
 
-function getTwilioValidationUrl(req) {
-  const baseUrl = getPublicBaseUrl();
-
-  if (!baseUrl) {
-    return "";
+function isValidTelnyxHttpRequest(req) {
+  if (!telnyxWebhookSecret) {
+    return true;
   }
 
-  return `${baseUrl}${req.originalUrl || req.url || ""}`;
-}
+  const provided =
+    String(req.query?.secret || "").trim() ||
+    String(req.body?.secret || "").trim() ||
+    String(req.headers["x-nesped-provider-secret"] || "").trim();
 
-function isValidTwilioHttpRequest(req) {
-  const validationUrl = getTwilioValidationUrl(req);
-
-  if (!authToken || !validationUrl) {
-    return false;
-  }
-
-  return twilio.validateExpressRequest(req, authToken, {
-    url: validationUrl,
-  });
-}
-
-function isValidTwilioWsRequest(req) {
-  const baseUrl = getPublicBaseUrl();
-  const signature = req.headers["x-twilio-signature"] || "";
-
-  if (!authToken || !baseUrl || !signature) {
-    return false;
-  }
-
-  return twilio.validateRequest(
-    authToken,
-    signature,
-    `${baseUrl}${req.url || ""}`,
-    {}
-  );
+  return safeEqual(provided, telnyxWebhookSecret);
 }
 
 function base64UrlEncode(value) {
@@ -644,7 +630,7 @@ async function getClientConfig(clientId) {
         getFallbackPrompt()
       ),
       webhook: "",
-      twilioNumber: fallbackTwilioNumber,
+      voiceNumber: defaultVoiceNumber,
     };
   }
 
@@ -670,7 +656,7 @@ async function getClientConfig(clientId) {
           getFallbackPrompt()
         ),
         webhook: "",
-        twilioNumber: fallbackTwilioNumber,
+        voiceNumber: defaultVoiceNumber,
       };
     }
 
@@ -682,7 +668,7 @@ async function getClientConfig(clientId) {
         data.prompt || getFallbackPrompt()
       ),
       webhook: data.webhook || "",
-      twilioNumber: data.twilio_number || fallbackTwilioNumber,
+      voiceNumber: data.twilio_number || defaultVoiceNumber,
     };
   } catch (err) {
     reportVoiceError(err, "voice.client_config.exception", { clientId });
@@ -695,12 +681,12 @@ async function getClientConfig(clientId) {
         getFallbackPrompt()
       ),
       webhook: "",
-      twilioNumber: fallbackTwilioNumber,
+      voiceNumber: defaultVoiceNumber,
     };
   }
 }
 
-async function findClientByTwilioNumber(toNumber = "") {
+async function findClientByVoiceNumber(toNumber = "") {
   const normalizedTo = normalizePhone(toNumber);
   if (!normalizedTo || !supabase) return null;
 
@@ -744,7 +730,7 @@ async function resolveInboundClientId(req) {
     req.query?.Called ||
     "";
 
-  const matchedClient = await findClientByTwilioNumber(inboundNumber);
+  const matchedClient = await findClientByVoiceNumber(inboundNumber);
   if (matchedClient?.id) {
     return matchedClient.id;
   }
@@ -758,10 +744,6 @@ app.get("/call", async (req, res) => {
   }
 
   try {
-    if (!client) {
-      return res.status(500).send("Twilio no configurado");
-    }
-
     const clientId = req.query.client_id || "demo";
     const cleanBaseUrl = (process.env.BASE_URL || "").replace(/\/+$/, "");
 
@@ -770,19 +752,64 @@ app.get("/call", async (req, res) => {
       return res.status(404).send("Cliente no encontrado");
     }
 
-    const call = await client.calls.create({
-      to: process.env.TU_NUMERO,
-      from: config.twilioNumber || fallbackTwilioNumber,
-      url: `${cleanBaseUrl}/voice?client_id=${clientId}`,
-      method: "POST",
-      record: true,
-      recordingStatusCallback: `${cleanBaseUrl}/recording-status?client_id=${clientId}`,
-      recordingStatusCallbackMethod: "POST",
-      recordingStatusCallbackEvent: "completed",
-    });
+    if (hasTelnyxOutboundConfig()) {
+      const secretPart = telnyxWebhookSecret
+        ? `&secret=${encodeURIComponent(telnyxWebhookSecret)}`
+        : "";
+      const voiceUrl = `${cleanBaseUrl}/telnyx/voice?client_id=${encodeURIComponent(
+        clientId
+      )}${secretPart}`;
+      const recordingCallback = `${cleanBaseUrl}/recording-status?provider=telnyx&client_id=${encodeURIComponent(
+        clientId
+      )}${secretPart}`;
 
-    console.log("📞 Llamada iniciada:", call.sid, "cliente:", clientId);
-    res.send("Llamada iniciada: " + call.sid);
+      const telnyxResponse = await fetch(
+        `https://api.telnyx.com/v2/texml/Accounts/${encodeURIComponent(
+          telnyxAccountSid
+        )}/Calls`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${telnyxApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            ApplicationSid: telnyxApplicationId,
+            To: process.env.TU_NUMERO,
+            From: config.voiceNumber || defaultVoiceNumber,
+            Url: voiceUrl,
+            UrlMethod: "POST",
+            Record: true,
+            RecordingChannels: "mono",
+            RecordingStatusCallback: recordingCallback,
+            RecordingStatusCallbackMethod: "POST",
+            RecordingStatusCallbackEvent: "completed",
+            SendRecordingUrl: true,
+            TimeLimit: 600,
+            Timeout: 30,
+            StatusCallback: recordingCallback,
+            StatusCallbackMethod: "POST",
+            StatusCallbackEvent: "answered completed",
+          }),
+        }
+      );
+
+      const payload = await telnyxResponse.json().catch(() => ({}));
+      if (!telnyxResponse.ok) {
+        throw new Error(
+          payload?.errors?.[0]?.detail ||
+            payload?.message ||
+            "Error iniciando llamada Telnyx"
+        );
+      }
+
+      console.log("📞 Llamada Telnyx iniciada:", payload, "cliente:", clientId);
+      return res.send("Llamada Telnyx iniciada");
+    }
+
+    return res
+      .status(500)
+      .send("No hay configuración Telnyx suficiente para lanzar la llamada");
   } catch (error) {
     reportVoiceError(error, "voice.call.start_failed", {
       clientId: req.query.client_id || "demo",
@@ -792,8 +819,12 @@ app.get("/call", async (req, res) => {
 });
 
 app.post("/recording-status", async (req, res) => {
-  if (!isValidTwilioHttpRequest(req)) {
-    console.warn("🚫 recording-status rechazado por firma inválida");
+  const provider = String(req.query?.provider || req.body?.provider || "").trim();
+  const telnyxAccepted =
+    (!provider || provider === "telnyx") && isValidTelnyxHttpRequest(req);
+
+  if (!telnyxAccepted) {
+    console.warn("🚫 recording-status rechazado por validación inválida");
     return res.status(403).send("forbidden");
   }
 
@@ -845,64 +876,87 @@ app.post("/recording-status", async (req, res) => {
     reportVoiceError(error, "voice.recording_status.failed", {
       callSid: req.body?.CallSid || "",
       clientId: req.query.client_id || "demo",
+      provider: provider || "telnyx",
     });
     res.status(500).send("error");
   }
 });
 
-function buildVoiceTwiml(clientId) {
+function buildVoiceTeXml(clientId) {
   const cleanBaseUrl = (process.env.BASE_URL || "").replace(/\/+$/, "");
   const streamToken = createVoiceStreamToken(clientId);
+  const secretPart = telnyxWebhookSecret
+    ? `&secret=${encodeURIComponent(telnyxWebhookSecret)}`
+    : "";
   const streamUrl = `${cleanBaseUrl.replace(
     "https://",
     "wss://"
-  )}/media-stream?client_id=${clientId}&stream_token=${encodeURIComponent(
+  )}/media-stream?provider=telnyx&client_id=${clientId}&stream_token=${encodeURIComponent(
     streamToken
-  )}`;
+  )}${secretPart}`;
   const legalNotice = buildVoiceLegalNotice()
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 
-  console.log("🌐 STREAM URL:", streamUrl);
-
   return `
+<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say language="es-ES" voice="Polly.Conchita-Neural">${legalNotice}</Say>
+  <Say voice="Polly.Conchita-Neural">${legalNotice}</Say>
   <Connect>
-    <Stream url="${streamUrl}" />
+    <Stream
+      url="${streamUrl}"
+      track="inbound_track"
+      codec="PCMU"
+      bidirectionalMode="rtp"
+      bidirectionalCodec="PCMU"
+      bidirectionalSamplingRate="8000"
+      enableReconnect="false">
+      <Parameter name="client_id" value="${String(clientId || "demo").replace(/"/g, "&quot;")}" />
+    </Stream>
   </Connect>
+  <Hangup />
 </Response>
   `.trim();
 }
 
-app.get("/voice", async (req, res) => {
-  if (!isValidTwilioHttpRequest(req)) {
-    console.warn("🚫 GET /voice rechazado por firma inválida");
+app.get("/telnyx/voice", async (req, res) => {
+  if (!isValidTelnyxHttpRequest(req)) {
+    console.warn("🚫 GET /telnyx/voice rechazado por secreto inválido");
     return res.status(403).send("forbidden");
   }
 
   const clientId = await resolveInboundClientId(req);
-  console.log("GET /voice");
-  console.log("🏢 Cliente detectado en /voice:", clientId, "To:", req.query?.To || "");
+  console.log("GET /telnyx/voice");
+  console.log(
+    "🏢 Cliente detectado en /telnyx/voice:",
+    clientId,
+    "To:",
+    req.query?.To || ""
+  );
 
-  const xml = buildVoiceTwiml(clientId);
+  const xml = buildVoiceTeXml(clientId);
   res.type("text/xml");
   res.send(xml);
 });
 
-app.post("/voice", async (req, res) => {
-  if (!isValidTwilioHttpRequest(req)) {
-    console.warn("🚫 POST /voice rechazado por firma inválida");
+app.post("/telnyx/voice", async (req, res) => {
+  if (!isValidTelnyxHttpRequest(req)) {
+    console.warn("🚫 POST /telnyx/voice rechazado por secreto inválido");
     return res.status(403).send("forbidden");
   }
 
   const clientId = await resolveInboundClientId(req);
-  console.log("POST /voice");
-  console.log("🏢 Cliente detectado en /voice:", clientId, "To:", req.body?.To || "");
+  console.log("POST /telnyx/voice");
+  console.log(
+    "🏢 Cliente detectado en /telnyx/voice:",
+    clientId,
+    "To:",
+    req.body?.To || ""
+  );
 
-  const xml = buildVoiceTwiml(clientId);
+  const xml = buildVoiceTeXml(clientId);
   res.type("text/xml");
   res.send(xml);
 });
@@ -910,19 +964,20 @@ app.post("/voice", async (req, res) => {
 const wss = new WebSocket.Server({ server, path: "/media-stream" });
 console.log("✅ WebSocket /media-stream listo");
 
-wss.on("connection", async (twilioWs, req) => {
+wss.on("connection", async (providerWs, req) => {
   const url = new URL(req.url, "https://dummy");
   const clientId = url.searchParams.get("client_id") || "demo";
+  const provider = "telnyx";
   const streamToken = url.searchParams.get("stream_token") || "";
   const tokenPayload = readVoiceStreamToken(streamToken);
 
   if (!tokenPayload || tokenPayload.clientId !== clientId) {
     console.warn("🚫 WebSocket /media-stream rechazado por token inválido");
-    twilioWs.close();
+    providerWs.close();
     return;
   }
 
-  console.log("🟢 Twilio conectado a /media-stream");
+  console.log(`🟢 ${provider} conectado a /media-stream`);
   console.log("🔥 Cliente WS:", clientId);
 
   const config = await getClientConfig(clientId);
@@ -934,7 +989,7 @@ wss.on("connection", async (twilioWs, req) => {
       { clientId },
       "warning"
     );
-    twilioWs.close();
+    providerWs.close();
     return;
   }
 
@@ -1186,15 +1241,40 @@ wss.on("connection", async (twilioWs, req) => {
   }
 
   async function hangupCall() {
-    if (!callSid || !client) return;
+    if (!callSid || !telnyxApiKey) return;
 
     try {
-      await client.calls(callSid).update({
-        status: "completed",
-      });
-      console.log("📴 Twilio call completada:", callSid);
+      const response = await fetch(
+        `https://api.telnyx.com/v2/calls/${encodeURIComponent(
+          callSid
+        )}/actions/hangup`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${telnyxApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({}),
+        }
+      );
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(
+          payload?.errors?.[0]?.detail ||
+            payload?.message ||
+            "No se pudo colgar la llamada en Telnyx"
+        );
+      }
+
+      console.log("📴 Telnyx call completada:", callSid);
     } catch (err) {
-      reportVoiceError(err, "voice.call.hangup_failed", { callSid }, "warning");
+      reportVoiceError(
+        err,
+        "voice.call.hangup_failed",
+        { callSid, provider },
+        "warning"
+      );
     }
   }
 
@@ -1204,11 +1284,16 @@ wss.on("connection", async (twilioWs, req) => {
     hangupCall();
 
     try {
-      if (twilioWs.readyState === WebSocket.OPEN) {
-        twilioWs.close();
+      if (providerWs.readyState === WebSocket.OPEN) {
+        providerWs.close();
       }
     } catch (err) {
-      reportVoiceError(err, "voice.twilio_ws.close_failed", { callSid }, "warning");
+      reportVoiceError(
+        err,
+        "voice.provider_ws.close_failed",
+        { callSid, provider },
+        "warning"
+      );
     }
 
     try {
@@ -1268,29 +1353,48 @@ wss.on("connection", async (twilioWs, req) => {
     console.log("⚙️ session.update enviado");
   });
 
-  twilioWs.on("message", async (raw) => {
+  providerWs.on("message", async (raw) => {
     try {
       const data = JSON.parse(raw.toString());
 
       if (data.event !== "media") {
-        console.log("Twilio event:", data.event, JSON.stringify(data));
+        console.log(`${provider} event:`, data.event, JSON.stringify(data));
+      }
+
+      if (data.event === "connected") {
+        console.log(`🔗 ${provider} websocket connected`);
       }
 
       if (data.event === "start") {
-        streamSid = data.start?.streamSid || data.streamSid || null;
-        callSid = data.start?.callSid || null;
-        fromNumber = data.start?.customParameters?.from || "";
-        toNumber = data.start?.customParameters?.to || "";
+        streamSid =
+          data.start?.streamSid ||
+          data.streamSid ||
+          data.stream_id ||
+          null;
+        callSid =
+          data.start?.callSid ||
+          data.start?.call_control_id ||
+          data.start?.call_sid ||
+          data.start?.call_session_id ||
+          null;
+        fromNumber =
+          data.start?.customParameters?.from ||
+          data.start?.from ||
+          "";
+        toNumber =
+          data.start?.customParameters?.to ||
+          data.start?.to ||
+          "";
         addTranscriptLine("[SYSTEM] Inicio de llamada");
         console.log("📞 Stream iniciado:", streamSid);
-        console.log("📞 Call SID:", callSid);
+        console.log("📞 Call/Control ID:", callSid);
       }
 
       if (data.event === "media") {
         totalMediaChunks += 1;
 
-        if (!streamSid && data.streamSid) {
-          streamSid = data.streamSid;
+        if (!streamSid && (data.streamSid || data.stream_id)) {
+          streamSid = data.streamSid || data.stream_id;
           console.log("📌 streamSid recuperado desde media:", streamSid);
         }
 
@@ -1305,15 +1409,30 @@ wss.on("connection", async (twilioWs, req) => {
       }
 
       if (data.event === "stop") {
-        console.log("🔴 Twilio stop recibido");
+        console.log(`🔴 ${provider} stop recibido`);
         await saveCall(leadCaptured ? "lead_captured" : "completed");
 
         if (openaiWs.readyState === WebSocket.OPEN) {
           openaiWs.close();
         }
       }
+
+      if (data.event === "error") {
+        reportVoiceError(
+          new Error(data?.payload?.detail || "Provider stream error"),
+          "voice.provider_stream.error",
+          {
+            provider,
+            callSid,
+            streamSid,
+            payload: data?.payload || null,
+          },
+          "warning"
+        );
+      }
     } catch (err) {
-      reportVoiceError(err, "voice.twilio_message.failed", {
+      reportVoiceError(err, "voice.provider_message.failed", {
+        provider,
         callSid,
         streamSid,
       });
@@ -1403,16 +1522,17 @@ wss.on("connection", async (twilioWs, req) => {
         } else if (!streamSid) {
           console.log("⚠️ Audio delta recibido pero no hay streamSid todavía");
         } else {
-          twilioWs.send(
-            JSON.stringify({
-              event: "media",
-              streamSid,
-              media: {
-                payload: event.delta,
-              },
-            })
+          providerWs.send(
+            JSON.stringify(
+              {
+                event: "media",
+                media: {
+                  payload: event.delta,
+                },
+              }
+            )
           );
-          console.log("🔊 Audio enviado a Twilio");
+          console.log(`🔊 Audio enviado a ${provider}`);
         }
       }
 
@@ -1574,8 +1694,8 @@ wss.on("connection", async (twilioWs, req) => {
     }
   });
 
-  twilioWs.on("close", async () => {
-    console.log("🔌 Twilio desconectado");
+  providerWs.on("close", async () => {
+    console.log(`🔌 ${provider} desconectado`);
     await saveCall(leadCaptured ? "lead_captured" : "completed");
 
     if (openaiWs.readyState === WebSocket.OPEN) {
@@ -1583,8 +1703,12 @@ wss.on("connection", async (twilioWs, req) => {
     }
   });
 
-  twilioWs.on("error", async (err) => {
-    reportVoiceError(err, "voice.twilio_ws.error", { callSid, streamSid });
+  providerWs.on("error", async (err) => {
+    reportVoiceError(err, "voice.provider_ws.error", {
+      provider,
+      callSid,
+      streamSid,
+    });
     await saveCall("failed");
   });
 

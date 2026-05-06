@@ -2769,7 +2769,7 @@ function BrandLabView({
         <div className="card">
           <div className="card-title">Canales e integraciones</div>
           <div className="flex-col gap-3" style={{ display: "flex" }}>
-            {[["Tagline", "tagline", "text"], ["Número Twilio", "twilio_number", "text"], ["Webhook", "webhook", "text"], ["Email informe diario", "daily_report_email", "email"], ["Email informe semanal", "weekly_report_email", "email"]].map(([label, key, type]) => (
+            {[["Tagline", "tagline", "text"], ["Número de voz", "twilio_number", "text"], ["Webhook", "webhook", "text"], ["Email informe diario", "daily_report_email", "email"], ["Email informe semanal", "weekly_report_email", "email"]].map(([label, key, type]) => (
               <div key={key}>
                 <label className="text-xs text-muted mb-1" style={{ display: "block" }}>{label}</label>
                 <input type={type} disabled={!canAdmin} value={portalSettingsForm?.[key] ?? ""} onChange={e => setPortalSettingsForm(f => ({ ...(f || {}), [key]: e.target.value }))} className="input" />
@@ -4085,7 +4085,7 @@ function SettingsView({ data, canAdmin, brandingForm, setBrandingForm, saveBrand
         <div className="card">
           <div className="card-title">🌐 White-label y canales</div>
           <div className="flex-col gap-3" style={{ display: "flex" }}>
-            {[["Número Twilio", "twilio_number", "text"], ["Webhook", "webhook", "text"], ["Tagline", "tagline", "text"]].map(([label, key, type]) => (
+            {[["Número de voz", "twilio_number", "text"], ["Webhook", "webhook", "text"], ["Tagline", "tagline", "text"]].map(([label, key, type]) => (
               <div key={key}>
                 <label className="text-xs text-muted mb-1" style={{ display: "block" }}>{label}</label>
                 <input type={type} disabled={!canAdmin} value={portalSettingsForm?.[key] ?? ""} onChange={e => setPortalSettingsForm(f => ({ ...(f || {}), [key]: e.target.value }))} className="input" />

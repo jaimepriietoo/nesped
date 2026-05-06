@@ -151,7 +151,7 @@ export default function AdminClientsPage() {
               Clientes
             </h1>
             <p className="mt-3 max-w-2xl text-white/55">
-              Gestiona branding, prompt, webhook, número, estado y configuración base de cada cliente.
+              Gestiona branding, prompt, webhook, número de voz, estado y configuración base de cada cliente.
             </p>
           </div>
 
@@ -212,7 +212,7 @@ export default function AdminClientsPage() {
             <input
               value={form.twilio_number}
               onChange={(e) => setForm((f) => ({ ...f, twilio_number: e.target.value }))}
-              placeholder="twilio_number"
+              placeholder="+34XXXXXXXXX"
               className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
             />
             <input

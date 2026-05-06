@@ -1,48 +1,10 @@
-import twilio from "twilio";
 import { getResend } from "@/lib/resend";
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
 import { requireSameOrigin } from "@/lib/server/security";
+import { sendTelnyxSms, sendTelnyxWhatsApp } from "@/lib/server/telnyx";
 
 function normalizePhone(value = "") {
   return String(value || "").replace(/\s+/g, "").trim();
-}
-
-function normalizeWhatsAppAddress(value = "") {
-  const normalized = String(value || "").trim();
-  if (!normalized) return "";
-  return normalized.startsWith("whatsapp:")
-    ? normalized
-    : `whatsapp:${String(normalized).replace(/[^\d+]/g, "")}`;
-}
-
-function getTwilioSmsConfig() {
-  const accountSid = process.env.ACCOUNT_SID || process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.AUTH_TOKEN || process.env.TWILIO_AUTH_TOKEN;
-  const from = process.env.TWILIO_NUMERO || process.env.TWILIO_PHONE_NUMBER;
-
-  if (!accountSid || !authToken || !from) {
-    throw new Error("Faltan credenciales SMS de Twilio");
-  }
-
-  return {
-    client: twilio(accountSid, authToken),
-    from,
-  };
-}
-
-function getTwilioWhatsAppConfig() {
-  const accountSid = process.env.ACCOUNT_SID || process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.AUTH_TOKEN || process.env.TWILIO_AUTH_TOKEN;
-  const from = process.env.TWILIO_WHATSAPP_NUMBER;
-
-  if (!accountSid || !authToken || !from) {
-    throw new Error("Faltan credenciales WhatsApp de Twilio");
-  }
-
-  return {
-    client: twilio(accountSid, authToken),
-    from: normalizeWhatsAppAddress(from),
-  };
 }
 
 export async function POST(req) {
@@ -99,21 +61,30 @@ export async function POST(req) {
     let delivery = null;
 
     if (channel === "sms") {
-      const { client, from } = getTwilioSmsConfig();
-      const sms = await client.messages.create({
-        body: message,
-        from,
+      const sms = await sendTelnyxSms({
+        text: message,
         to: normalizePhone(lead.telefono),
       });
-      delivery = { sid: sms.sid, channel: "sms", to: normalizePhone(lead.telefono) };
+      delivery = {
+        sid: sms?.id || sms?.message_id || "",
+        messageId: sms?.id || sms?.message_id || "",
+        channel: "sms",
+        provider: "telnyx",
+        to: normalizePhone(lead.telefono),
+      };
     } else if (channel === "whatsapp") {
-      const { client, from } = getTwilioWhatsAppConfig();
-      const wa = await client.messages.create({
-        body: message,
-        from,
-        to: normalizeWhatsAppAddress(lead.telefono),
+      const wa = await sendTelnyxWhatsApp({
+        text: message,
+        to: normalizePhone(lead.telefono),
+        webhookUrl: "/api/whatsapp/webhook",
       });
-      delivery = { sid: wa.sid, channel: "whatsapp", to: normalizeWhatsAppAddress(lead.telefono) };
+      delivery = {
+        sid: wa?.id || wa?.message_id || "",
+        messageId: wa?.id || wa?.message_id || "",
+        channel: "whatsapp",
+        provider: "telnyx",
+        to: normalizePhone(lead.telefono),
+      };
     } else if (channel === "email") {
       if (!lead.email) {
         return Response.json(

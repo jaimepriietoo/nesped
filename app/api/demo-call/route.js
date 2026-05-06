@@ -1,8 +1,11 @@
-import twilio from "twilio";
 import { getSupabase } from "@/lib/supabase";
 import { ensureDemoWorkspace, isDemoClientId } from "@/lib/clients";
 import { logEvent, observeRoute } from "@/lib/server/observability.mjs";
 import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
+import {
+  getTelnyxVoiceConfig,
+  hasTelnyxVoiceConfig,
+} from "@/lib/server/telnyx";
 
 function normalizePhone(value = "") {
   return String(value || "").replace(/[^\d+]/g, "").trim();
@@ -11,6 +14,77 @@ function normalizePhone(value = "") {
 function isValidPhone(value = "") {
   const normalized = normalizePhone(value);
   return normalized.length >= 9 && normalized.length <= 16;
+}
+
+async function startTelnyxDemoCall({
+  telefono,
+  clientId,
+  leadId,
+  cleanBaseUrl,
+}) {
+  const cfg = getTelnyxVoiceConfig();
+  const secretPart = cfg.webhookSecret
+    ? `&secret=${encodeURIComponent(cfg.webhookSecret)}`
+    : "";
+  const recordingCallback = `${cleanBaseUrl}/recording-status?provider=telnyx&client_id=${encodeURIComponent(
+    clientId
+  )}${leadId ? `&lead_id=${encodeURIComponent(leadId)}` : ""}${secretPart}`;
+  const voiceUrl = `${cleanBaseUrl}/telnyx/voice?client_id=${encodeURIComponent(
+    clientId
+  )}${secretPart}`;
+
+  const response = await fetch(
+    `https://api.telnyx.com/v2/texml/Accounts/${encodeURIComponent(
+      cfg.accountSid
+    )}/Calls`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${cfg.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        ApplicationSid: cfg.applicationId,
+        To: telefono,
+        From: cfg.phoneNumber,
+        Url: voiceUrl,
+        UrlMethod: "POST",
+        Record: true,
+        RecordingChannels: "mono",
+        RecordingStatusCallback: recordingCallback,
+        RecordingStatusCallbackMethod: "POST",
+        RecordingStatusCallbackEvent: "completed",
+        SendRecordingUrl: true,
+        TimeLimit: 600,
+        Timeout: 30,
+        StatusCallback: recordingCallback,
+        StatusCallbackMethod: "POST",
+        StatusCallbackEvent: "answered completed",
+      }),
+    }
+  );
+
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const message =
+      payload?.errors?.[0]?.detail ||
+      payload?.message ||
+      "Error iniciando llamada Telnyx";
+    throw new Error(message);
+  }
+
+  return {
+    provider: "telnyx",
+    callSid:
+      payload?.call_sid ||
+      payload?.CallSid ||
+      payload?.sid ||
+      payload?.data?.call_control_id ||
+      payload?.data?.call_session_id ||
+      "",
+    raw: payload,
+  };
 }
 
 async function handlePost(req) {
@@ -58,16 +132,9 @@ async function handlePost(req) {
     });
     if (phoneRateLimitError) return phoneRateLimitError;
 
-    const accountSid =
-      process.env.TWILIO_ACCOUNT_SID || process.env.ACCOUNT_SID;
-    const authToken =
-      process.env.TWILIO_AUTH_TOKEN || process.env.AUTH_TOKEN;
-    const fromNumber =
-      process.env.TWILIO_PHONE_NUMBER || process.env.TWILIO_NUMERO;
-
     const cleanBaseUrl = (process.env.BASE_URL || "").replace(/\/+$/, "");
 
-    if (!accountSid || !authToken || !fromNumber || !cleanBaseUrl) {
+    if (!cleanBaseUrl) {
       return Response.json(
         {
           success: false,
@@ -96,25 +163,28 @@ async function handlePost(req) {
       }
     }
 
-    const client = twilio(accountSid, authToken);
+    if (!hasTelnyxVoiceConfig()) {
+      return Response.json(
+        {
+          success: false,
+          message:
+            "Telnyx no está configurado correctamente para lanzar la llamada",
+        },
+        { status: 500 }
+      );
+    }
 
-    const call = await client.calls.create({
-      url: `${cleanBaseUrl}/voice?client_id=${clientId}`,
-      to: telefono,
-      from: fromNumber,
-      method: "POST",
-      record: true,
-      recordingStatusCallback: `${cleanBaseUrl}/recording-status?client_id=${encodeURIComponent(
-        clientId
-      )}${leadId ? `&lead_id=${encodeURIComponent(leadId)}` : ""}`,
-      recordingStatusCallbackMethod: "POST",
-      recordingStatusCallbackEvent: "completed",
-      timeLimit: 600,
+    const result = await startTelnyxDemoCall({
+      telefono,
+      clientId,
+      leadId,
+      cleanBaseUrl,
     });
 
     return Response.json({
       success: true,
-      callSid: call.sid,
+      callSid: result.callSid || "",
+      provider: result.provider,
       message: "Llamada iniciada correctamente",
       recordingEnabled: true,
     });

@@ -1,5 +1,5 @@
-import twilio from "twilio";
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { sendTelnyxSms } from "@/lib/server/telnyx";
 
 function normalizePhone(value) {
   if (!value) return "";
@@ -46,20 +46,6 @@ export async function POST(req) {
       );
     }
 
-    const accountSid =
-      process.env.ACCOUNT_SID || process.env.TWILIO_ACCOUNT_SID;
-    const authToken =
-      process.env.AUTH_TOKEN || process.env.TWILIO_AUTH_TOKEN;
-    const from =
-      process.env.TWILIO_NUMERO || process.env.TWILIO_PHONE_NUMBER;
-
-    if (!accountSid || !authToken || !from) {
-      return Response.json(
-        { success: false, message: "Faltan credenciales de Twilio" },
-        { status: 500 }
-      );
-    }
-
     const { data: lead, error: leadError } = await ctx.supabase
       .from("leads")
       .select("*")
@@ -74,13 +60,11 @@ export async function POST(req) {
       );
     }
 
-    const client = twilio(accountSid, authToken);
-
-    const sms = await client.messages.create({
-      body: String(message).trim(),
-      from,
+    const sms = await sendTelnyxSms({
       to: cleanTo,
+      text: String(message).trim(),
     });
+    const messageId = sms?.id || sms?.message_id || "";
 
     const nowIso = new Date().toISOString();
 
@@ -114,10 +98,12 @@ export async function POST(req) {
       title: "SMS de seguimiento enviado",
       description: message,
       meta: {
-        sid: sms.sid,
+        sid: messageId,
+        message_id: messageId,
         to: cleanTo,
         template_id: templateId,
         sent_by: ctx.currentUser?.full_name || ctx.userEmail || "portal_user",
+        provider: "telnyx",
       },
     });
 
@@ -129,15 +115,18 @@ export async function POST(req) {
       actor: ctx.currentUser?.full_name || ctx.userEmail || "portal_user",
       changes: {
         to: cleanTo,
-        sid: sms.sid,
+        sid: messageId,
+        message_id: messageId,
         template_id: templateId,
         preview: String(message).slice(0, 160),
+        provider: "telnyx",
       },
     });
 
     return Response.json({
       success: true,
-      sid: sms.sid,
+      sid: messageId,
+      messageId,
       data: updatedLead,
       message: "SMS enviado correctamente",
     });

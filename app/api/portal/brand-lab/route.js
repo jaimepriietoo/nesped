@@ -3,26 +3,31 @@ import { buildBrandLabWorkspace } from "@/lib/portal-product";
 import { prisma } from "@/lib/prisma";
 
 function buildServices(client, settings) {
+  const hasTelnyxVoice = Boolean(
+    process.env.TELNYX_API_KEY &&
+      process.env.TELNYX_PHONE_NUMBER &&
+      (process.env.TELNYX_TEXML_APPLICATION_ID ||
+        process.env.TELNYX_APPLICATION_SID)
+  );
+  const hasTelnyxWhatsApp = Boolean(
+    process.env.TELNYX_API_KEY &&
+      (process.env.TELNYX_WHATSAPP_NUMBER || process.env.TELNYX_PHONE_NUMBER)
+  );
+
   return {
     telephony: {
-      ready: Boolean(
-        process.env.TWILIO_ACCOUNT_SID &&
-          process.env.TWILIO_AUTH_TOKEN &&
-          client?.twilio_number
-      ),
+      ready: Boolean(hasTelnyxVoice && client?.twilio_number),
       detail:
-        process.env.TWILIO_ACCOUNT_SID &&
-        process.env.TWILIO_AUTH_TOKEN &&
-        client?.twilio_number
-          ? "Telefonía preparada para producción."
-          : "Falta número o configuración base de voz.",
+        hasTelnyxVoice && client?.twilio_number
+          ? "Telefonía preparada para producción con Telnyx."
+          : "Falta número o configuración base de Telnyx.",
     },
     whatsapp: {
-      ready: Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
+      ready: hasTelnyxWhatsApp,
       detail:
-        process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
-          ? "Canal WhatsApp con credenciales listas."
-          : "Faltan credenciales base de Twilio.",
+        hasTelnyxWhatsApp
+          ? "Canal WhatsApp con credenciales listas en Telnyx."
+          : "Faltan credenciales base de Telnyx para WhatsApp.",
     },
     billing: {
       ready: Boolean(client?.stripe_customer_id),
@@ -99,4 +104,3 @@ export async function GET() {
     );
   }
 }
-

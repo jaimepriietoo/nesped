@@ -101,6 +101,19 @@ async function handleGet() {
     );
     const hasVoiceBackend = Boolean(process.env.BASE_URL);
     const hasClientVoiceNumber = Boolean(client?.twilio_number);
+    const hasElevenLabsHybrid = Boolean(
+      process.env.ELEVENLABS_AGENT_ID &&
+        process.env.INTERNAL_API_TOKEN &&
+        process.env.TELNYX_PHONE_NUMBER &&
+        hasVoiceBackend &&
+        hasClientVoiceNumber
+    );
+    const hasLegacyRealtimeVoice = Boolean(
+      hasVoiceBackend &&
+        hasTelnyxVoice &&
+        hasClientVoiceNumber &&
+        process.env.OPENAI_API_KEY
+    );
 
     const services = {
       auth: {
@@ -116,23 +129,15 @@ async function handleGet() {
           : "Falta OPENAI_API_KEY.",
       },
       telephony: {
-        ready: Boolean(
-          hasVoiceBackend &&
-            hasTelnyxVoice &&
-            hasClientVoiceNumber
-        ),
+        ready: Boolean(hasLegacyRealtimeVoice || hasElevenLabsHybrid),
         level:
-          hasVoiceBackend &&
-          hasTelnyxVoice &&
-          hasClientVoiceNumber
-            ? "healthy"
-            : "warning",
+          hasLegacyRealtimeVoice || hasElevenLabsHybrid ? "healthy" : "warning",
         detail:
-          hasVoiceBackend &&
-          hasTelnyxVoice &&
-          hasClientVoiceNumber
-            ? "Telefonía preparada con Telnyx."
-            : "Falta número de voz del cliente, BASE_URL o configuración base de Telnyx.",
+          hasElevenLabsHybrid
+            ? "Telefonia preparada en modo hibrido: Telnyx + ElevenLabs + Nesped."
+            : hasLegacyRealtimeVoice
+              ? "Telefonia preparada con Telnyx + OpenAI realtime."
+              : "Falta numero de voz del cliente, BASE_URL o configuracion base de Telnyx / ElevenLabs.",
       },
       whatsapp: {
         ready: hasTelnyxWhatsApp,

@@ -9,6 +9,7 @@ import {
   parseTelnyxMessagingWebhook,
   verifyTelnyxWebhook,
 } from "@/lib/server/telnyx";
+import { toE164 } from "@/lib/server/phone";
 
 let openai = null;
 const supabase = getSupabase();
@@ -75,12 +76,10 @@ const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 const BOOKING_URL = process.env.BOOKING_URL || "https://cal.com/TU_LINK";
 const PAYMENT_URL = process.env.PAYMENT_URL || "";
 
-function normalizePhone(phone = "") {
-  return String(phone)
-    .replace(/^whatsapp:/i, "")
-    .replace(/[^\d+]/g, "")
-    .trim();
-}
+// Reexportado desde lib/server/phone.js: empareja el mensaje entrante con
+// el cliente por su número, y necesita la misma forma canónica que el
+// enrutado de voz.
+const normalizePhone = toE164;
 
 function isValidTelnyxWebhook(req, rawPayload = "") {
   const sharedSecret = String(process.env.TELNYX_WEBHOOK_SECRET || "").trim();

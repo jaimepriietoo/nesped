@@ -366,11 +366,25 @@ function getPublicBaseUrl() {
   return String(process.env.BASE_URL || "").replace(/\/+$/, "");
 }
 
+// Misma lógica que lib/server/phone.js. Se duplica a propósito: este
+// servidor corre en Railway como proceso Express suelto y no resuelve los
+// alias "@/..." de Next. Si cambias una, cambia la otra.
 function normalizePhone(value = "") {
-  return String(value || "")
+  const bruto = String(value ?? "")
     .replace(/^whatsapp:/i, "")
-    .replace(/[^\d+]/g, "")
+    .replace(/^tel:/i, "")
     .trim();
+
+  if (!bruto) return "";
+
+  const tienePlus = bruto.startsWith("+");
+  let digitos = bruto.replace(/\D/g, "");
+  if (!digitos) return "";
+
+  if (tienePlus) return `+${digitos}`;
+  if (digitos.startsWith("00")) return `+${digitos.slice(2)}`;
+  if (digitos.length === 9) return `+34${digitos}`;
+  return `+${digitos}`;
 }
 
 function isValidTelnyxHttpRequest(req) {
@@ -618,20 +632,43 @@ function detectFarewellIntent(value = "") {
   return phrases.some((phrase) => text.includes(phrase));
 }
 
+/**
+ * Configuración con la que el agente atiende una llamada.
+ *
+ * Devuelve `null` cuando NO se puede determinar de quién es la llamada. Antes
+ * improvisaba una identidad genérica ("NESPED Demo"), y con varios clientes
+ * eso significa que quien marcó el número de una clínica podía oír la marca
+ * y el guion de otra empresa. Los dos consumidores ya tratan el nulo: uno
+ * responde 404 y el otro cierra el WebSocket, así que la llamada se rechaza
+ * en vez de suplantar.
+ *
+ * Los clientes de DEMO_CLIENT_CONFIGS sí son identidades configuradas a
+ * propósito y se sirven aunque no haya base de datos.
+ */
 async function getClientConfig(clientId) {
-  const fallbackClient = getDemoClientConfig(clientId);
+  const configurado = getDemoClientConfig(clientId);
 
-  if (!supabase) {
+  function desdeConfigurado() {
+    if (!configurado) return null;
     return {
-      id: fallbackClient?.id || clientId || "demo",
-      name: fallbackClient?.name || "NESPED Demo",
-      prompt: injectClientNameIntoPrompt(
-        fallbackClient?.name || "NESPED Demo",
-        getFallbackPrompt()
-      ),
+      id: configurado.id,
+      name: configurado.name,
+      prompt: injectClientNameIntoPrompt(configurado.name, getFallbackPrompt()),
       webhook: "",
       voiceNumber: defaultVoiceNumber,
     };
+  }
+
+  if (!supabase) {
+    if (!configurado) {
+      reportVoiceError(
+        new Error("Sin base de datos y cliente no preconfigurado"),
+        "voice.client_config.unresolved",
+        { clientId },
+        "warning"
+      );
+    }
+    return desdeConfigurado();
   }
 
   try {
@@ -647,24 +684,14 @@ async function getClientConfig(clientId) {
         "voice.client_config.load_failed",
         { clientId }
       );
-
-      return {
-        id: fallbackClient?.id || clientId || "demo",
-        name: fallbackClient?.name || "NESPED Demo",
-        prompt: injectClientNameIntoPrompt(
-          fallbackClient?.name || "NESPED Demo",
-          getFallbackPrompt()
-        ),
-        webhook: "",
-        voiceNumber: defaultVoiceNumber,
-      };
+      return desdeConfigurado();
     }
 
     return {
       id: data.id,
-      name: data.brand_name || data.name || fallbackClient?.name || "Cliente",
+      name: data.brand_name || data.name || configurado?.name || "Cliente",
       prompt: injectClientNameIntoPrompt(
-        data.brand_name || data.name || fallbackClient?.name || "Cliente",
+        data.brand_name || data.name || configurado?.name || "Cliente",
         data.prompt || getFallbackPrompt()
       ),
       webhook: data.webhook || "",
@@ -672,17 +699,7 @@ async function getClientConfig(clientId) {
     };
   } catch (err) {
     reportVoiceError(err, "voice.client_config.exception", { clientId });
-
-    return {
-      id: fallbackClient?.id || clientId || "demo",
-      name: fallbackClient?.name || "NESPED Demo",
-      prompt: injectClientNameIntoPrompt(
-        fallbackClient?.name || "NESPED Demo",
-        getFallbackPrompt()
-      ),
-      webhook: "",
-      voiceNumber: defaultVoiceNumber,
-    };
+    return desdeConfigurado();
   }
 }
 

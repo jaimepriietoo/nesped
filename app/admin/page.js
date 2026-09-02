@@ -136,6 +136,7 @@ export default function AdminPage() {
     loadClients();
     loadUsers();
     loadCalls();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -496,7 +497,7 @@ export default function AdminPage() {
 
                   <div>
                     <label className="mb-2 block text-sm text-white/60">
-                      Número Twilio
+                      Número de voz
                     </label>
                     <input
                       value={form.twilioNumber}

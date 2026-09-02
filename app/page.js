@@ -382,7 +382,7 @@ export default function NespedLanding() {
                   </p>
                   <div className="flex flex-wrap gap-3">
                     <span className="data-chip">Instancia: {selectedClient?.id || "demo"}</span>
-                    <span className="data-chip">Twilio listo</span>
+                    <span className="data-chip">Voz cloud lista</span>
                     <span className="data-chip">Realtime IA</span>
                   </div>
                 </SurfaceCard>

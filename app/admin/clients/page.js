@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { esTelefonoValido, toE164 } from "@/lib/server/phone";
 
 function Badge({ children, color = "default" }) {
   const styles = {
@@ -18,6 +19,109 @@ function Badge({ children, color = "default" }) {
   );
 }
 
+
+/**
+ * Telefonía del cliente: su número real (informativo, no se usa para
+ * enrutar) y el número de Telnyx que le asignas (ese sí decide a qué
+ * cliente pertenece cada llamada entrante).
+ *
+ * `numerosEnUso` son los twilio_number de los DEMÁS clientes: si el que se
+ * está escribiendo coincide con uno de ellos, se avisa antes de guardar. El
+ * índice único de la base de datos es la red de seguridad real —esto es
+ * solo para que el aviso llegue antes de darle a "Guardar", no después.
+ */
+function PanelTelefonia({ original, twilio, onOriginal, onTwilio, numerosEnUso = [] }) {
+  const original164 = original ? toE164(original) : "";
+  const twilio164 = twilio ? toE164(twilio) : "";
+
+  const twilioValido = !twilio || esTelefonoValido(twilio);
+  const chocaConOtro =
+    twilio164 && numerosEnUso.some((n) => toE164(n) === twilio164);
+
+  const instrucciones =
+    original164 && twilio164
+      ? `Desvía las llamadas de ${original164} hacia ${twilio164}. Se activa desde tu operadora (Movistar, Vodafone, Orange…) en el apartado de "desvío de llamadas". Puede ser un desvío total o solo para cuando no contestes.`
+      : "";
+
+  async function copiar() {
+    try {
+      await navigator.clipboard.writeText(instrucciones);
+      alert("Instrucciones copiadas.");
+    } catch {
+      alert("No se pudo copiar. Selecciona el texto a mano.");
+    }
+  }
+
+  return (
+    <div className="md:col-span-2 rounded-2xl border border-white/10 bg-black/40 p-4">
+      <div className="mb-3 text-xs uppercase tracking-[0.16em] text-white/40">
+        Telefonía
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div>
+          <input
+            value={original}
+            onChange={(e) => onOriginal(e.target.value)}
+            placeholder="Número real de la empresa (+346XXXXXXXX)"
+            className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
+          />
+          <p className="mt-1.5 px-1 text-xs text-white/35">
+            El que ya usan de cara a sus clientes. Solo informativo.
+          </p>
+        </div>
+
+        <div>
+          <input
+            value={twilio}
+            onChange={(e) => onTwilio(e.target.value)}
+            placeholder="Número de Telnyx asignado (+34983XXXXXX)"
+            className={`w-full rounded-2xl border bg-black px-4 py-3 text-white ${
+              twilio && !twilioValido
+                ? "border-red-500/60"
+                : chocaConOtro
+                  ? "border-amber-500/60"
+                  : "border-white/10"
+            }`}
+          />
+          {twilio && !twilioValido ? (
+            <p className="mt-1.5 px-1 text-xs text-red-300">
+              No parece un teléfono válido.
+            </p>
+          ) : chocaConOtro ? (
+            <p className="mt-1.5 px-1 text-xs text-amber-300">
+              Ese número ya está asignado a otro cliente. Al guardar dará
+              error: la base de datos no permite dos clientes con el mismo
+              número.
+            </p>
+          ) : (
+            <p className="mt-1.5 px-1 text-xs text-white/35">
+              Uno de tus números de Telnyx. Aquí es donde llegan las llamadas
+              desviadas y por donde el sistema sabe de qué cliente se trata.
+            </p>
+          )}
+        </div>
+      </div>
+
+      {instrucciones ? (
+        <div className="mt-3 rounded-2xl border border-blue-400/20 bg-blue-500/5 p-4">
+          <div className="mb-2 text-xs uppercase tracking-[0.16em] text-blue-300">
+            Instrucciones para el cliente
+          </div>
+          <p className="text-sm text-white/70">{instrucciones}</p>
+          <button
+            type="button"
+            onClick={copiar}
+            className="mt-3 rounded-xl border border-white/15 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/5"
+          >
+            Copiar instrucciones
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function AdminClientsPage() {
   const [clients, setClients] = useState([]);
   const [search, setSearch] = useState("");
@@ -30,6 +134,7 @@ export default function AdminClientsPage() {
     prompt: "",
     webhook: "",
     twilio_number: "",
+    original_number: "",
     owner_email: "",
     brand_name: "",
     primary_color: "#ffffff",
@@ -80,6 +185,7 @@ export default function AdminClientsPage() {
         prompt: "",
         webhook: "",
         twilio_number: "",
+        original_number: "",
         owner_email: "",
         brand_name: "",
         primary_color: "#ffffff",
@@ -121,6 +227,11 @@ export default function AdminClientsPage() {
       alert("Error actualizando cliente.");
     }
   }
+
+  const numerosEnUso = useMemo(
+    () => clients.map((c) => c.twilio_number).filter(Boolean),
+    [clients]
+  );
 
   const filteredClients = useMemo(() => {
     const q = search.toLowerCase().trim();
@@ -210,12 +321,6 @@ export default function AdminClientsPage() {
               className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
             />
             <input
-              value={form.twilio_number}
-              onChange={(e) => setForm((f) => ({ ...f, twilio_number: e.target.value }))}
-              placeholder="+34XXXXXXXXX"
-              className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
-            />
-            <input
               value={form.webhook}
               onChange={(e) => setForm((f) => ({ ...f, webhook: e.target.value }))}
               placeholder="webhook"
@@ -230,6 +335,16 @@ export default function AdminClientsPage() {
               />
               <span>Cliente activo</span>
             </label>
+          </div>
+
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <PanelTelefonia
+              original={form.original_number}
+              twilio={form.twilio_number}
+              onOriginal={(v) => setForm((f) => ({ ...f, original_number: v }))}
+              onTwilio={(v) => setForm((f) => ({ ...f, twilio_number: v }))}
+              numerosEnUso={numerosEnUso}
+            />
           </div>
 
           <textarea
@@ -264,6 +379,7 @@ export default function AdminClientsPage() {
               key={client.id || index}
               initial={client}
               onSave={updateClient}
+              numerosEnUso={numerosEnUso.filter((n) => n !== client.twilio_number)}
             />
           ))}
 
@@ -278,7 +394,7 @@ export default function AdminClientsPage() {
   );
 }
 
-function ClientEditor({ initial, onSave }) {
+function ClientEditor({ initial, onSave, numerosEnUso = [] }) {
   const [client, setClient] = useState(initial);
   const [saving, setSaving] = useState(false);
 
@@ -334,7 +450,6 @@ function ClientEditor({ initial, onSave }) {
           "secondary_color",
           "industry",
           "webhook",
-          "twilio_number",
         ].map((key) => (
           <input
             key={key}
@@ -349,6 +464,14 @@ function ClientEditor({ initial, onSave }) {
             className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-white"
           />
         ))}
+
+        <PanelTelefonia
+          original={client.original_number}
+          twilio={client.twilio_number}
+          onOriginal={(v) => setClient((c) => ({ ...c, original_number: v }))}
+          onTwilio={(v) => setClient((c) => ({ ...c, twilio_number: v }))}
+          numerosEnUso={numerosEnUso}
+        />
 
         <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black px-4 py-3 text-white md:col-span-2">
           <input

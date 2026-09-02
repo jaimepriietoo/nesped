@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Inter } from "next/font/google";
 import "./v3.css";
+import { Footer, Header } from "./chrome";
+import { Rev } from "./rev";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -133,44 +135,6 @@ const PLANES = [
   },
 ];
 
-/** Revela al entrar en pantalla. IntersectionObserver, no scroll listener. */
-function Rev({ children, d = 0, as: Tag = "div", className = "", ...resto }) {
-  const ref = useRef(null);
-  // Con movimiento reducido se parte de "ya revelado": así no hace falta
-  // llamar a setState dentro del efecto, que encadena renders.
-  const [dentro, setDentro] = useState(
-    () =>
-      typeof window !== "undefined" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || dentro) return undefined;
-    const io = new IntersectionObserver(
-      ([e]) => {
-        if (!e.isIntersecting) return;
-        setDentro(true);
-        io.disconnect();
-      },
-      { rootMargin: "0px 0px -12% 0px", threshold: 0.05 }
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [dentro]);
-
-  return (
-    <Tag
-      ref={ref}
-      className={`v3-rev ${dentro ? "is-in" : ""} ${className}`}
-      style={{ "--d": `${d}s` }}
-      {...resto}
-    >
-      {children}
-    </Tag>
-  );
-}
-
 /** Cuenta de 0 al objetivo con easeOutCubic, una sola vez. */
 function Contador({ target, suffix, decimals, i }) {
   const ref = useRef(null);
@@ -271,65 +235,14 @@ export default function V3() {
 
   return (
     <div className={`v3 ${inter.className}`}>
-      {/* ── Cabecera ─────────────────────────────────────────────────── */}
-      <header className="v3-header">
-        <div className="v3-header-inner">
-          <a className="v3-logo" href="#top" aria-label="Inicio">
-            <svg viewBox="0 0 52 52" aria-hidden="true">
-              <g fill="#0a0a0a">
-                <rect x="10" y="30" width="5" height="12" rx="2.5" />
-                <rect x="19" y="22" width="5" height="20" rx="2.5" />
-                <rect x="28" y="10" width="5" height="32" rx="2.5" />
-                <rect x="37" y="26" width="5" height="16" rx="2.5" />
-              </g>
-            </svg>
-          </a>
-
-          <nav className="v3-nav" aria-label="Principal">
-            {NAV.map((l, i) => (
-              <a key={l.href} href={l.href} className={`v3-navlink ${i === 0 ? "is-active" : ""}`}>
-                {l.label}
-              </a>
-            ))}
-          </nav>
-
-          <a className="v3-signin" href="/portal">Portal clientes</a>
-
-          <button
-            type="button"
-            className="v3-burger"
-            aria-label={menu ? "Cerrar menú" : "Abrir menú"}
-            aria-expanded={menu}
-            onClick={() => setMenu((v) => !v)}
-          >
-            <span /><span /><span />
-          </button>
-        </div>
-      </header>
-
-      {menu ? (
-        <>
-          <div className="v3-overlay" onClick={() => setMenu(false)} />
-          <div className="v3-menu">
-            {NAV.map((l, i) => (
-              <a
-                key={l.href}
-                href={l.href}
-                className={`v3-mlink ${i === 0 ? "is-active" : ""}`}
-                onClick={() => setMenu(false)}
-              >
-                {l.label}
-              </a>
-            ))}
-            <a className="v3-msignin" href="/portal">Portal clientes</a>
-          </div>
-        </>
-      ) : null}
+      <Header activo="producto" />
 
       {/* ── Hero ─────────────────────────────────────────────────────── */}
       <section id="top" className="v3-hero">
         <div className="v3-bg" aria-hidden="true">
-          <video autoPlay muted loop playsInline>
+          {/* poster: se ve al instante; preload none evita descargar 13,8 MB
+                antes de que el navegador decida reproducir. */}
+          <video autoPlay muted loop playsInline preload="none" poster="/fonts/poster.svg">
             <source src={VIDEO_SRC} type="video/mp4" />
           </video>
         </div>
@@ -540,55 +453,7 @@ export default function V3() {
         </div>
       </section>
 
-      {/* ── Pie ──────────────────────────────────────────────────────── */}
-      <footer className="v3-footer">
-        <div className="v3-wrap">
-          <div className="v3-foot-top">
-            <div style={{ maxWidth: 300 }}>
-              <span className="v3-eyebrow">Nesped</span>
-              <p className="v3-p">
-                La capa de voz con IA que convierte cada conversación en ingreso
-                real.
-              </p>
-            </div>
-
-            <div className="v3-foot-cols">
-              <div>
-                <span className="v3-foot-title">Producto</span>
-                <a className="v3-foot-link" href="#producto">Cómo funciona</a>
-                <a className="v3-foot-link" href="#senal">Señal</a>
-                <a className="v3-foot-link" href="#demo">Demo real</a>
-              </div>
-              <div>
-                <span className="v3-foot-title">Planes</span>
-                <a className="v3-foot-link" href="/pricing">Pricing</a>
-                <a className="v3-foot-link" href="/portal">Portal clientes</a>
-                <a className="v3-foot-link" href="mailto:ventas@nesped.com">Hablar con ventas</a>
-              </div>
-              <div>
-                <span className="v3-foot-title">Legal</span>
-                <a className="v3-foot-link" href="/legal/voice-compliance">Política de grabaciones</a>
-              </div>
-            </div>
-          </div>
-
-          <div className="v3-foot-bottom">
-            <span>© {new Date().getFullYear()} Nesped</span>
-            <span>
-              Tipografía display:{" "}
-              <a
-                href="http://www.onlinewebfonts.com/fonts"
-                target="_blank"
-                rel="noreferrer"
-                style={{ color: "#fff", textDecoration: "underline", textUnderlineOffset: 3 }}
-              >
-                Web Fonts
-              </a>{" "}
-              · CC BY 4.0
-            </span>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

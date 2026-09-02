@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 9" preserveAspectRatio="none">
+  <!-- Póster del vídeo: se pinta al instante mientras el mp4 (13,8 MB)
+       descarga, para que el hero no aparezca en negro. -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0" stop-color="#20202a"/>
+      <stop offset="0.55" stop-color="#3a2530"/>
+      <stop offset="1" stop-color="#050203"/>
+    </linearGradient>
+  </defs>
+  <rect width="16" height="9" fill="url(#g)"/>
+</svg>

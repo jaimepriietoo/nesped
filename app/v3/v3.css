@@ -673,3 +673,119 @@
   .v3 *, .v3 *::before, .v3 *::after { animation: none !important; transition: none !important; }
   .v3-rev { opacity: 1; transform: none; filter: none; }
 }
+
+/* =========================================================================
+   Tabla comparativa (pricing)
+   ========================================================================= */
+
+.v3-tablewrap {
+  margin-top: clamp(32px, 5vh, 48px);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.012));
+  overflow-x: auto;
+}
+
+.v3-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.v3-table th {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-align: left;
+  color: #fff;
+}
+
+.v3-table td {
+  padding: 15px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: #b8b8b8;
+  white-space: nowrap;
+}
+
+.v3-table tbody tr:last-child td { border-bottom: none; }
+.v3-table tbody tr:hover td { background: rgba(255, 255, 255, 0.025); color: #fff; }
+
+.v3-td-feat { color: #fff !important; font-weight: 500; }
+
+/* =========================================================================
+   Acceso (login)
+   ========================================================================= */
+
+.v3-auth {
+  position: relative;
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: clamp(20px, 4vh, 48px) clamp(14px, 3vw, 32px);
+  overflow: hidden;
+}
+
+.v3-auth > *:not(.v3-bg) { position: relative; z-index: 1; }
+
+/* Aquí el velo cubre entero: el formulario tiene que leerse sobre el vídeo. */
+.v3-auth .v3-bg::after {
+  inset: 0;
+  height: auto;
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(2px);
+}
+
+.v3-auth-card {
+  width: min(420px, 100%);
+  display: flex;
+  flex-direction: column;
+  padding: clamp(26px, 4vw, 34px);
+  border: 1px solid var(--line);
+  border-radius: 26px;
+  background: rgba(10, 10, 12, 0.72);
+  backdrop-filter: blur(22px);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+}
+
+.v3-auth-title {
+  margin: 22px 0 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(22px, 3vw, 30px);
+  letter-spacing: -0.04em;
+  text-align: center;
+  color: #fff;
+}
+
+.v3-auth-sub {
+  margin: 10px 0 0;
+  font-size: 14px;
+  line-height: 1.55;
+  text-align: center;
+  color: #b0b0b0;
+}
+
+.v3-auth-form { display: grid; gap: 14px; margin-top: 26px; }
+.v3-auth-form .v3-btn { width: 100%; }
+
+.v3-input--code {
+  font-family: var(--font-display);
+  font-size: 24px;
+  letter-spacing: 0.3em;
+  text-align: center;
+}
+
+.v3-legal a { color: #fff; text-decoration: underline; text-underline-offset: 3px; }
+
+/* Cita destacada (legal) */
+.v3-quote {
+  margin: 14px 0 0;
+  font-family: var(--font-display);
+  font-size: clamp(16px, 2.2vw, 24px);
+  line-height: 1.4;
+  letter-spacing: -0.03em;
+  color: #fff;
+}

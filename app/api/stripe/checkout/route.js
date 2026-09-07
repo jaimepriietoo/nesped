@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
+import { urlDeSitio } from "@/lib/server/sitio";
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
 import { requireSameOrigin } from "@/lib/server/security";
 import {
-  BASE_URL,
   getClientBillingState,
   normalizePhone,
   resolveClientStripeCustomer,
@@ -12,6 +12,10 @@ import {
 
 export async function POST(req) {
   try {
+    // La devolución tiene que ser al sitio, no a BASE_URL, que apunta al
+    // servidor de voz: quien pagaba acababa en un 404 de Railway.
+    const BASE_URL = urlDeSitio(req);
+
     const sameOriginError = requireSameOrigin(
       req,
       "Origen no permitido para abrir el checkout"

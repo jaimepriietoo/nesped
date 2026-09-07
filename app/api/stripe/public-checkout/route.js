@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
-import {
-  BASE_URL,
-  resolveCheckoutConfig,
-  stripe,
-} from "@/lib/server/stripe-checkout";
+import { resolveCheckoutConfig, stripe } from "@/lib/server/stripe-checkout";
+import { urlDeSitio } from "@/lib/server/sitio";
 
 const PUBLIC_PLANS = new Set(["starter", "pro"]);
 
 export async function GET(req) {
   try {
+    // Se vuelve al sitio desde el que se compró, no a lo que diga una
+    // variable: BASE_URL apuntaba al servidor de voz y quien pagaba
+    // aterrizaba en un 404 sin poder crear su cuenta.
+    const BASE_URL = urlDeSitio(req);
+
     const { searchParams } = new URL(req.url);
     const plan = String(searchParams.get("plan") || "starter").toLowerCase();
 

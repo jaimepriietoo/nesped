@@ -306,10 +306,107 @@ app.get("/", (req, res) => {
   res.send("NESPED Voice Server activo");
 });
 
-app.get("/healthz", (req, res) => {
+/* =========================================================================
+   Comprobación real del enlace de voz.
+
+   Antes /healthz sólo miraba que existiera la variable OPENAI_API_KEY. Con
+   eso decía "todo bien" mientras la voz llevaba semanas caída, porque la API
+   Beta que se usaba había dejado de existir: la clave estaba, pero ninguna
+   llamada conectaba. Comprobar que una variable no está vacía no es
+   comprobar nada.
+
+   Esto abre de verdad una sesión contra OpenAI con la misma configuración
+   que usan las llamadas. Se guarda el resultado unos minutos para no
+   castigar la API en cada sondeo de Railway.
+   ========================================================================= */
+
+const CACHE_SONDA_MS = 5 * 60 * 1000;
+let sondaVoz = { ok: null, detalle: "sin comprobar", enMs: null, cuando: 0 };
+let sondaEnCurso = null;
+
+function comprobarEnlaceVoz() {
+  if (Date.now() - sondaVoz.cuando < CACHE_SONDA_MS) return Promise.resolve(sondaVoz);
+  if (sondaEnCurso) return sondaEnCurso;
+
+  sondaEnCurso = new Promise((listo) => {
+    if (!process.env.OPENAI_API_KEY) {
+      return listo({ ok: false, detalle: "falta OPENAI_API_KEY", enMs: null, cuando: Date.now() });
+    }
+
+    const t0 = Date.now();
+    let resuelto = false;
+    const terminar = (r) => {
+      if (resuelto) return;
+      resuelto = true;
+      sondaVoz = { ...r, cuando: Date.now() };
+      try { ws.close(); } catch { /* ya cerrado */ }
+      listo(sondaVoz);
+    };
+
+    const ws = new WebSocket(
+      `wss://api.openai.com/v1/realtime?model=${encodeURIComponent(MODELO_VOZ)}`,
+      { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` } }
+    );
+
+    const corte = setTimeout(
+      () => terminar({ ok: false, detalle: "sin respuesta en 8 s", enMs: null }),
+      8000
+    );
+
+    ws.on("open", () => {
+      ws.send(JSON.stringify({
+        type: "session.update",
+        session: {
+          type: "realtime",
+          model: MODELO_VOZ,
+          output_modalities: ["audio"],
+          audio: { output: { voice: VOZ, format: { type: "audio/pcmu" } } },
+        },
+      }));
+    });
+
+    ws.on("message", (raw) => {
+      let e;
+      try { e = JSON.parse(raw.toString()); } catch { return; }
+      if (e.type === "session.updated") {
+        clearTimeout(corte);
+        terminar({ ok: true, detalle: `${MODELO_VOZ} · voz ${VOZ}`, enMs: Date.now() - t0 });
+      }
+      if (e.type === "error") {
+        clearTimeout(corte);
+        terminar({ ok: false, detalle: String(e.error?.message || "error").slice(0, 160), enMs: null });
+      }
+    });
+
+    ws.on("error", (err) => {
+      clearTimeout(corte);
+      terminar({ ok: false, detalle: String(err?.message || err).slice(0, 160), enMs: null });
+    });
+  }).finally(() => { sondaEnCurso = null; });
+
+  return sondaEnCurso;
+}
+
+app.get("/healthz", async (req, res) => {
+  // `?rapido=1` para el sondeo de Railway, que no debe abrir sesiones.
+  const sonda = req.query?.rapido
+    ? sondaVoz
+    : await comprobarEnlaceVoz().catch(() => sondaVoz);
+
   res.json({
     ok: true,
     service: "voice-server",
+
+    /* Lo que de verdad importa: si una llamada podría atenderse ahora. */
+    voz: {
+      conecta: sonda.ok,
+      detalle: sonda.detalle,
+      handshakeMs: sonda.enMs,
+      comprobadoHace: sonda.cuando ? `${Math.round((Date.now() - sonda.cuando) / 1000)} s` : null,
+      modelo: MODELO_VOZ,
+      voz: VOZ,
+    },
+
     env: {
       hasOpenAI: Boolean(process.env.OPENAI_API_KEY),
       hasSupabase,
@@ -607,11 +704,32 @@ function getVoicePolicyUrl() {
   return appUrl ? `${appUrl}/legal/voice-compliance` : "";
 }
 
+/**
+ * Aviso previo a la grabación.
+ *
+ * Se ha acortado a la mitad a propósito. Lo lee un sintetizador antes de que
+ * entre la voz buena, y cuanto más dura, más se nota el contraste y más
+ * parece una centralita automática justo en el peor momento: el primero.
+ * Sigue cubriendo lo que tiene que cubrir —que hay IA, que se graba y que se
+ * puede pedir otra vía— pero en una frase en vez de en tres.
+ */
 function buildVoiceLegalNotice() {
   return (
     process.env.VOICE_LEGAL_NOTICE ||
-    "Aviso: esta llamada puede ser atendida por IA y puede grabarse o transcribirse para calidad, seguridad y seguimiento comercial. Si prefieres continuar por otra vía, dímelo en cualquier momento."
+    "Te atiende un asistente con inteligencia artificial y la llamada se graba para calidad y seguimiento. Si prefieres otra vía, dímelo."
   );
+}
+
+/**
+ * Voz del aviso.
+ *
+ * Estaba en "Polly.Conchita-Neural", que no existe: en Amazon Polly, Conchita
+ * es voz estándar y no tiene versión neural. La neural de español de España
+ * es Lucía. Con un identificador inválido, la operadora no lee el aviso como
+ * se espera, y era lo primero que oía todo el que llamaba.
+ */
+function getVoiceAvisoTts() {
+  return process.env.VOICE_NOTICE_TTS || "Polly.Lucia-Neural";
 }
 
 function normalizeTranscriptText(value = "") {
@@ -942,7 +1060,7 @@ function buildVoiceTeXml(clientId) {
   return `
 <?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="Polly.Conchita-Neural">${legalNotice}</Say>
+  <Say voice="${getVoiceAvisoTts()}">${legalNotice}</Say>
   <Connect>
     <Stream
       url="${streamUrl}"

@@ -119,11 +119,21 @@ async function handlePost(req) {
         code,
       });
 
+      // El móvil sólo se usa si el correo falla, para no dejar a nadie fuera
+      // por una caída del proveedor de email.
+      const { data: perfil } = await supabase
+        .from("portal_users")
+        .select("phone")
+        .eq("client_id", authenticatedUser.client_id)
+        .eq("email", email)
+        .maybeSingle();
+
       const delivery = await sendTwoFactorCode({
         email,
         code,
         clientName,
         role: normalizedRole,
+        telefono: perfil?.phone || "",
       });
 
       return Response.json({

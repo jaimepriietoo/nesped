@@ -12,7 +12,10 @@
     "verify:prod": "node scripts/validate-env.mjs && next build --webpack",
     "smoke": "node scripts/smoke-test.mjs",
     "test:e2e": "playwright test",
-    "test:e2e:headed": "playwright test --headed"
+    "test:e2e:headed": "playwright test --headed",
+    "revisar": "node scripts/revisar-sitio.mjs",
+    "revisar:portal": "node scripts/revisar-portal.mjs",
+    "revisar:admin": "node scripts/revisar-admin.mjs"
   },
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "^7.7.0",

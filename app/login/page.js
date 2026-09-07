@@ -64,7 +64,13 @@ function Acceso() {
 
       if (json.requiresTwoFactor) {
         setStep("verify");
-        setMessage(`Te hemos enviado un código de verificación a ${email}.`);
+        // El código puede haber salido por SMS si el correo falló: decirlo
+        // evita que alguien se quede mirando una bandeja de entrada vacía.
+        setMessage(
+          json.verificationChannel === "sms"
+            ? "No hemos podido enviarte el correo, así que te hemos mandado el código por SMS al móvil de la cuenta."
+            : `Te hemos enviado un código de verificación a ${email}.`
+        );
         setDebugCode(json.debugCode || "");
         return;
       }
@@ -119,7 +125,11 @@ function Acceso() {
         return;
       }
 
-      setMessage(`Te hemos enviado un nuevo código a ${email}.`);
+      setMessage(
+        json.verificationChannel === "sms"
+          ? "Te hemos mandado un código nuevo por SMS al móvil de la cuenta."
+          : `Te hemos enviado un nuevo código a ${email}.`
+      );
       setDebugCode(json.debugCode || "");
     } catch {
       setError("Error reenviando el código");

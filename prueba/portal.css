@@ -390,3 +390,14 @@ html, body { margin: 0; padding: 0; background: #000; }
 
 .pv3-card { min-width: 0; }
 .pv3-grid > * { min-width: 0; }
+
+/* Marca de completado en la lista de arranque. */
+.pv3-marca {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  margin-right: 8px;
+  color: var(--muted);
+}
+
+.pv3-marca[data-ok="true"] { color: var(--ok); }

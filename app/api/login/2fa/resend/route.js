@@ -6,6 +6,7 @@ import {
 import { observeRoute } from "@/lib/server/observability.mjs";
 import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 import { sendTwoFactorCode } from "@/lib/server/two-factor.mjs";
+import { getSupabase } from "@/lib/supabase";
 
 async function handlePost(req) {
   const sameOriginError = requireSameOrigin(
@@ -45,11 +46,20 @@ async function handlePost(req) {
     attempts: 0,
   });
 
+  // Mismo respaldo que en el primer envío: si el correo no sale, SMS.
+  const { data: perfil } = await getSupabase()
+    .from("portal_users")
+    .select("phone")
+    .eq("client_id", challenge.clientId)
+    .eq("email", challenge.email)
+    .maybeSingle();
+
   const delivery = await sendTwoFactorCode({
     email: challenge.email,
     code,
     clientName: challenge.clientName,
     role: challenge.role,
+    telefono: perfil?.phone || "",
   });
 
   return Response.json({

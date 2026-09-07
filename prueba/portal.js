@@ -13,6 +13,12 @@
 
 const { useCallback, useEffect, useMemo, useRef, useState } = React;
 
+// En la demo no hay módulos: los helpers derivados se sustituyen por stubs
+// que devuelven lo que el fichero de muestra ya trae hecho.
+const { buildControlTowerSnapshot, buildDerivedNotifications,
+        buildMessageExperimentSummary, buildOnboardingWorkspace,
+        buildRoiSnapshot } = window.DEMO_HELPERS;
+
 /* ── utilidades ──────────────────────────────────────────────────────── */
 
 /**
@@ -23,10 +29,12 @@ const { useCallback, useEffect, useMemo, useRef, useState } = React;
 const VISTAS = [
   { grupo: "Operación" },
   { id: "resumen", label: "Resumen", ico: "◆" },
+  { id: "alertas", label: "Alertas", ico: "!", deps: ["facturacion", "estado", "qa"] },
   { id: "leads", label: "Leads", ico: "◇" },
   { id: "llamadas", label: "Llamadas", ico: "◉" },
   { id: "pipeline", label: "Pipeline", ico: "▤" },
   { id: "conversaciones", label: "Conversaciones", ico: "◈", api: "/api/portal/inbox" },
+  { id: "operaciones", label: "Operaciones", ico: "⌁", deps: ["estado", "qa"] },
 
   { grupo: "Inteligencia" },
   { id: "copiloto", label: "Copiloto", ico: "✦", api: "/api/portal/copilot" },
@@ -34,11 +42,16 @@ const VISTAS = [
   { id: "qa", label: "Revisión de llamadas", ico: "◍", api: "/api/portal/voice-qa" },
   { id: "señales", label: "Señales", ico: "△" },
   { id: "estrategia", label: "Estrategia", ico: "✧", api: "/api/portal/strategy" },
+  { id: "control", label: "Torre de control", ico: "◎", deps: ["facturacion", "estado", "qa", "experimentos"] },
+  { id: "playbooks", label: "Guion comercial", ico: "✎", api: "/api/playbooks" },
 
   { grupo: "Crecimiento" },
   { id: "growth", label: "Growth", ico: "↗", api: "/api/portal/growth" },
   { id: "revenue", label: "Revenue OS", ico: "€", api: "/api/portal/revenue-os" },
   { id: "facturacion", label: "Facturación", ico: "◫", api: "/api/analytics/billing" },
+  { id: "analitica", label: "Analítica", ico: "▥" },
+  { id: "retorno", label: "Retorno", ico: "⊙", deps: ["analitica", "facturacion"] },
+  { id: "experimentos", label: "Experimentos", ico: "⚗", api: "/api/analytics/message-experiments" },
   { id: "marca", label: "Marca", ico: "◐", api: "/api/portal/brand-lab" },
 
   { grupo: "Plataforma" },
@@ -49,10 +62,23 @@ const VISTAS = [
   { id: "enterprise", label: "Enterprise", ico: "▦", api: "/api/portal/enterprise" },
 
   { grupo: "Cuenta" },
+  { id: "puesta", label: "Puesta en marcha", ico: "▷", deps: ["facturacion", "estado", "playbooks"] },
   { id: "equipo", label: "Equipo", ico: "○" },
   { id: "permisos", label: "Permisos", ico: "⚿", api: "/api/portal/access-center" },
   { id: "estado", label: "Estado", ico: "▣", api: "/api/portal/health" },
   { id: "ajustes", label: "Ajustes", ico: "▢" },
+];
+
+/** Los ocho endpoints que alimentan la vista de Analítica. */
+const ENDPOINTS_ANALITICA = [
+  ["revenue", "/api/analytics/revenue"],
+  ["leadRevenue", "/api/analytics/lead-revenue"],
+  ["ownerRevenue", "/api/analytics/owner-revenue"],
+  ["voiceStats", "/api/analytics/voice-stats"],
+  ["priorityStats", "/api/analytics/priority-stats"],
+  ["reactivationStats", "/api/analytics/reactivation-stats"],
+  ["appointmentStats", "/api/analytics/appointment-stats"],
+  ["upsellStats", "/api/analytics/upsells"],
 ];
 
 const ETIQUETA_ESTADO = {
@@ -2000,11 +2026,510 @@ function Procesos({ onRecargar }) {
   );
 }
 
+/* ── puesta en marcha ────────────────────────────────────────────────── */
+
+/**
+ * Lista de arranque: qué falta por dejar listo en la cuenta.
+ *
+ * Se calcula en el navegador a partir del panel, la facturación, la salud
+ * del sistema y los playbooks, con el mismo helper que usaba el portal
+ * anterior, para que la lectura no cambie.
+ */
+function PuestaEnMarcha({ datos, extra, cargando }) {
+  const w = useMemo(
+    () =>
+      buildOnboardingWorkspace({
+        data: datos,
+        billingData: extra.facturacion || null,
+        healthData: extra.estado || null,
+        playbookData: extra.playbooks || null,
+      }),
+    [datos, extra.facturacion, extra.estado, extra.playbooks]
+  );
+
+  if (cargando) {
+    return <div className="pv3-grid" data-c="3">{[0, 1, 2].map((i) => <div key={i} className="pv3-skel" />)}</div>;
+  }
+
+  // checklist llega como { items, completed, total, progress, nextStep }.
+  const lista = Array.isArray(w.checklist) ? w.checklist : w.checklist?.items || [];
+  const listos = lista.filter((c) => c.done).length;
+  const total = lista.length;
+  const progreso = w.checklist?.progress ?? w.readinessScore ?? 0;
+
+  return (
+    <div className="pv3-view">
+      <div className="pv3-card" style={{ marginTop: 22 }}>
+        <div className="pv3-row">
+          <span className="pv3-lab">PREPARACIÓN</span>
+          <span className="pv3-strong">{num(progreso)}%</span>
+        </div>
+        <div className="pv3-track" style={{ marginTop: 12 }}>
+          <div className="pv3-fill" style={{ width: `${Math.min(100, Number(progreso || 0))}%` }} />
+        </div>
+        <div className="pv3-det">{num(listos)} de {num(total)} puntos completados</div>
+      </div>
+
+      <h2 className="pv3-h2">Lista de arranque</h2>
+      {total === 0 ? (
+        <Vacio>No hay nada pendiente de configurar.</Vacio>
+      ) : (
+        <div style={{ display: "grid", gap: 9 }}>
+          {lista.map((c, i) => {
+            const hecho = Boolean(c.done);
+            return (
+              <div key={c.id || i} className="pv3-card" style={{ animationDelay: `${i * 40}ms` }}>
+                <div className="pv3-row">
+                  <span className="pv3-strong">
+                    <span className="pv3-marca" data-ok={hecho}>{hecho ? "✓" : "○"}</span>
+                    {c.title || c.label || "Punto"}
+                  </span>
+                  <span className="pv3-tag" data-t={hecho ? "ok" : "warn"}>
+                    {hecho ? "Listo" : "Pendiente"}
+                  </span>
+                </div>
+                {c.detail ? (
+                  <p className="pv3-p" style={{ marginTop: 9, paddingLeft: 26 }}>{c.detail}</p>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {typeof w.summary === "string" ? (
+        <div className="pv3-card" style={{ marginTop: 12 }}>
+          <p className="pv3-p" style={{ fontSize: 15 }}>{w.summary}</p>
+        </div>
+      ) : null}
+
+      <Lista titulo="Siguientes pasos" items={w.nextActions} />
+      <Lista titulo="Integraciones" items={w.integrations} columnas="3" />
+    </div>
+  );
+}
+
+/* ── alertas ─────────────────────────────────────────────────────────── */
+
+function Alertas({ datos, extra, cargando }) {
+  const n = useMemo(
+    () =>
+      buildDerivedNotifications({
+        data: datos,
+        billingData: extra.facturacion || null,
+        healthData: extra.estado || null,
+        voiceQaData: extra.qa || null,
+      }),
+    [datos, extra.facturacion, extra.estado, extra.qa]
+  );
+
+  if (cargando) {
+    return <div className="pv3-grid" data-c="4">{[0, 1, 2, 3].map((i) => <div key={i} className="pv3-skel" />)}</div>;
+  }
+
+  const hilos = n.threads || [];
+
+  return (
+    <div className="pv3-view">
+      <Resumenes resumen={n.summary} />
+
+      {hilos.length === 0 ? (
+        <div style={{ marginTop: 22 }}><Vacio>Ninguna alerta abierta. Todo va según lo previsto.</Vacio></div>
+      ) : (
+        <div style={{ display: "grid", gap: 10, marginTop: 22 }}>
+          {hilos.map((h, i) => (
+            <div key={h.id || i} className="pv3-card" style={{ animationDelay: `${i * 40}ms` }}>
+              <div className="pv3-row">
+                <span className="pv3-lab">{String(h.category || h.type || "AVISO").toUpperCase()}</span>
+                <span className="pv3-tag" data-t={tono(h.severity || h.level)}>
+                  {h.severity || h.level || "info"}
+                </span>
+              </div>
+              <p className="pv3-p" style={{ marginTop: 10, fontSize: 14.5 }}>
+                {h.title || h.message || "Aviso"}
+              </p>
+              {h.body && h.body !== h.title ? (
+                <p className="pv3-p" style={{ marginTop: 7, color: "var(--muted)" }}>{h.body}</p>
+              ) : null}
+              {h.created_at ? <div className="pv3-det">{fecha(h.created_at)}</div> : null}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── analítica ───────────────────────────────────────────────────────── */
+
+/** Cada bloque es un endpoint distinto; se dibujan con el genérico. */
+const BLOQUES_ANALITICA = [
+  ["revenue", "Ingresos"],
+  ["leadRevenue", "Ingresos por lead"],
+  ["ownerRevenue", "Ingresos por responsable"],
+  ["voiceStats", "Voz"],
+  ["priorityStats", "Prioridad"],
+  ["reactivationStats", "Reactivación"],
+  ["appointmentStats", "Citas"],
+  ["upsellStats", "Ampliaciones"],
+];
+
+function Analitica({ analitica, cargando }) {
+  if (cargando) {
+    return <div className="pv3-grid" data-c="4">{[0, 1, 2, 3].map((i) => <div key={i} className="pv3-skel" />)}</div>;
+  }
+  if (!analitica) {
+    return <div style={{ marginTop: 22 }}><Vacio>No se pudo cargar la analítica.</Vacio></div>;
+  }
+
+  const conDatos = BLOQUES_ANALITICA.filter(([clave]) => analitica[clave]);
+
+  if (conDatos.length === 0) {
+    return <div style={{ marginTop: 22 }}><Vacio>Todavía no hay suficiente histórico para estas métricas.</Vacio></div>;
+  }
+
+  return (
+    <div className="pv3-view">
+      {conDatos.map(([clave, titulo]) => {
+        const d = analitica[clave];
+        // Cada endpoint devuelve algo distinto: si trae `summary` se pintan
+        // las cifras; si es un objeto plano de números, ese objeto sirve igual.
+        const resumen = d.summary && typeof d.summary === "object" ? d.summary : d;
+        const listas = Object.entries(d).filter(([, v]) => Array.isArray(v) && v.length > 0);
+
+        return (
+          <section key={clave}>
+            <h2 className="pv3-h2">{titulo}</h2>
+            <Resumenes resumen={resumen} />
+            {listas.map(([k, v]) => (
+              <Lista key={k} titulo={humanizar(k)} items={v} columnas="3" />
+            ))}
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── torre de control ────────────────────────────────────────────────── */
+
+function Control({ datos, extra, cargando }) {
+  const snap = useMemo(
+    () =>
+      buildControlTowerSnapshot({
+        data: datos,
+        billingData: extra.facturacion || null,
+        healthData: extra.estado || null,
+        voiceQaData: extra.qa || null,
+        experimentSnapshot: extra.experimentos || null,
+      }),
+    [datos, extra.facturacion, extra.estado, extra.qa, extra.experimentos]
+  );
+
+  return <Workspace datos={cargando ? null : snap} cargando={cargando} />;
+}
+
+/* ── experimentos ────────────────────────────────────────────────────── */
+
+function Experimentos({ experimentos, cargando }) {
+  const resumen = useMemo(() => {
+    if (!experimentos) return null;
+    // El endpoint puede traer ya el resumen o sólo las variantes.
+    return experimentos.summary
+      ? experimentos
+      : buildMessageExperimentSummary({ variants: experimentos.variants || experimentos });
+  }, [experimentos]);
+
+  return (
+    <Workspace
+      datos={cargando ? null : resumen}
+      cargando={cargando}
+      vacio="Todavía no hay experimentos de mensaje en marcha."
+    />
+  );
+}
+
+/* ── retorno ─────────────────────────────────────────────────────────── */
+
+function Retorno({ datos, extra, cargando }) {
+  const snap = useMemo(
+    () =>
+      buildRoiSnapshot({
+        data: datos,
+        revenue: extra.analitica?.revenue || null,
+        billingData: extra.facturacion || null,
+        leadRevenue: extra.analitica?.leadRevenue || null,
+        ownerRevenue: extra.analitica?.ownerRevenue || null,
+      }),
+    [datos, extra.analitica, extra.facturacion]
+  );
+
+  return <Workspace datos={cargando ? null : snap} cargando={cargando} />;
+}
+
+/* ── playbooks ───────────────────────────────────────────────────────── */
+
+/**
+ * Guion comercial de la cuenta: cómo debe hablar la voz y qué debe conseguir.
+ * Es lo único de esta tanda que se edita, así que lleva formulario propio.
+ */
+function Playbooks({ playbooks, cargando, onRecargar }) {
+  const guardado = playbooks?.workspace || null;
+
+  // null = "todavía no lo ha tocado nadie", y entonces se muestra lo guardado.
+  // Así no hace falta sembrar el formulario desde un efecto, que provocaría
+  // un render en cascada y, si se sincronizara, desharía lo que se escribe.
+  const [editado, setEditado] = useState(null);
+
+  if (cargando) {
+    return <div className="pv3-grid" data-c="2">{[0, 1].map((i) => <div key={i} className="pv3-skel" />)}</div>;
+  }
+  if (!playbooks) {
+    return <div style={{ marginTop: 22 }}><Vacio>No se pudieron cargar los playbooks.</Vacio></div>;
+  }
+
+  const f = editado || guardado || {};
+  const campo = (k, v) => setEditado({ ...f, [k]: v });
+
+  return (
+    <div className="pv3-view">
+      {playbooks.summary ? <Resumenes resumen={playbooks.summary} /> : null}
+
+      <h2 className="pv3-h2">Guion de la cuenta</h2>
+      <div className="pv3-card">
+        <div className="pv3-form">
+          <Campo label="Objetivo de la llamada">
+            <input className="pv3-input" value={f.goal || ""}
+              placeholder="Conseguir una cita presencial"
+              onChange={(e) => campo("goal", e.target.value)} />
+          </Campo>
+          <Campo label="Tono">
+            <input className="pv3-input" value={f.tone || ""}
+              placeholder="Cercano, directo, sin tecnicismos"
+              onChange={(e) => campo("tone", e.target.value)} />
+          </Campo>
+          <Campo label="Público">
+            <input className="pv3-input" value={f.audience || ""}
+              placeholder="Particulares que piden presupuesto"
+              onChange={(e) => campo("audience", e.target.value)} />
+          </Campo>
+        </div>
+
+        <Campo label="Apertura">
+          <textarea className="pv3-input" rows={2} value={f.opening || ""}
+            placeholder="Cómo debe presentarse la voz al descolgar"
+            onChange={(e) => campo("opening", e.target.value)} />
+        </Campo>
+
+        <Campo label="Qué debe preguntar siempre">
+          <textarea className="pv3-input" rows={3} value={f.questions || ""}
+            placeholder="Un punto por línea"
+            onChange={(e) => campo("questions", e.target.value)} />
+        </Campo>
+
+        <Campo label="Objeciones y cómo responderlas">
+          <textarea className="pv3-input" rows={3} value={f.objections || ""}
+            placeholder="«Me lo tengo que pensar» → preguntar contra qué compara"
+            onChange={(e) => campo("objections", e.target.value)} />
+        </Campo>
+
+        <Campo label="Cierre">
+          <textarea className="pv3-input" rows={2} value={f.closing || ""}
+            placeholder="Cómo debe cerrar la conversación"
+            onChange={(e) => campo("closing", e.target.value)} />
+        </Campo>
+
+        <Accion
+          variante="light"
+          onRun={async () => {
+            await enviar("/api/playbooks", "PATCH", { workspace: f });
+            await onRecargar();
+          }}
+        >
+          Guardar guion
+        </Accion>
+      </div>
+
+      <Lista titulo="Recomendaciones" items={playbooks.recommendations || playbooks.suggestions} />
+    </div>
+  );
+}
+
+/* ── operaciones ─────────────────────────────────────────────────────── */
+
+function Operaciones({ datos, extra, cargando, onRecargar }) {
+  // Leer el reloj en cada render hace que el resultado cambie solo. Se fija
+  // al montar: para "lleva más de 7 días parado" da exactamente igual.
+  const [ahora] = useState(() => Date.now());
+
+  const sinDueno = useMemo(
+    () => (datos.leads || []).filter((l) => !l.owner),
+    [datos.leads]
+  );
+
+  const parados = useMemo(
+    () =>
+      (datos.leads || []).filter((l) => {
+        if (["won", "lost"].includes(l.status)) return false;
+        const t = new Date(l.updated_at || l.created_at || 0).getTime();
+        return t > 0 && ahora - t > 7 * 24 * 60 * 60 * 1000;
+      }),
+    [datos.leads, ahora]
+  );
+
+  if (cargando) {
+    return <div className="pv3-grid" data-c="4">{[0, 1, 2, 3].map((i) => <div key={i} className="pv3-skel" />)}</div>;
+  }
+
+  const salud = extra.estado || null;
+  const qa = extra.qa || null;
+  const m = datos.metrics || {};
+
+  return (
+    <div className="pv3-view">
+      <div className="pv3-grid" data-c="4">
+        <Tarjeta label="SIN RESPONSABLE" valor={num(sinDueno.length)} detalle="Nadie los está trabajando" />
+        <Tarjeta label="PARADOS +7 DÍAS" valor={num(parados.length)} detalle="Abiertos y sin movimiento" retraso={60} />
+        <Tarjeta label="LLAMADAS SIN LEAD" valor={num(Math.max(0, Number(m.totalCalls || 0) - Number(m.totalLeads || 0)))} detalle="No dejaron contacto" retraso={120} />
+        <Tarjeta label="NOTA DE VOZ" valor={qa ? num(qa.summary?.avgScore) : "—"} detalle="Media sobre 100" retraso={180} />
+      </div>
+
+      <h2 className="pv3-h2">Salud del sistema</h2>
+      {!salud ? (
+        <Vacio>Abre la pestaña Estado para cargar el diagnóstico.</Vacio>
+      ) : (
+        <div className="pv3-card">
+          <div className="pv3-row">
+            <span className="pv3-lab">DIAGNÓSTICO</span>
+            <span className="pv3-tag" data-t={tono(salud.summary?.level)}>{salud.summary?.level}</span>
+          </div>
+          <p className="pv3-p" style={{ marginTop: 10 }}>{salud.summary?.message}</p>
+        </div>
+      )}
+
+      <h2 className="pv3-h2">Lo que hay que desatascar</h2>
+      {sinDueno.length === 0 && parados.length === 0 ? (
+        <Vacio>Nada atascado. El pipeline se está moviendo.</Vacio>
+      ) : (
+        <div className="pv3-tablewrap">
+          <table className="pv3-table">
+            <thead><tr><th>LEAD</th><th>TELÉFONO</th><th>MOTIVO</th><th>ÚLTIMO MOVIMIENTO</th></tr></thead>
+            <tbody>
+              {[...new Set([...sinDueno, ...parados])].slice(0, 50).map((l, i) => (
+                <tr key={l.id || i}>
+                  <td className="pv3-strong">{l.nombre || "Sin nombre"}</td>
+                  <td>{l.telefono || "—"}</td>
+                  <td>
+                    {!l.owner ? <span className="pv3-tag" data-t="warn">Sin responsable</span> : null}
+                    {parados.includes(l) ? <span className="pv3-tag" data-t="bad" style={{ marginLeft: 6 }}>Parado</span> : null}
+                  </td>
+                  <td>{fecha(l.updated_at || l.created_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <h2 className="pv3-h2">Mantenimiento</h2>
+      <div className="pv3-card">
+        <p className="pv3-p">
+          El proceso nocturno recalcula prioridades, reactiva fríos y limpia lo
+          caducado. Corre solo de madrugada; esto lo lanza ahora.
+        </p>
+        <Accion
+          confirmar="Ejecuta el proceso nocturno completo sobre datos reales. ¿Seguir?"
+          onRun={async () => {
+            await enviar("/api/nightly", "POST", {});
+            await onRecargar();
+          }}
+        >
+          Ejecutar ahora
+        </Accion>
+      </div>
+    </div>
+  );
+}
+
+
+/* ── contención de fallos ────────────────────────────────────────────── */
+
+/**
+ * Aísla cada vista.
+ *
+ * Sin esto, un error de render en cualquiera de las treinta y una vistas
+ * —un campo que la API deja de devolver, una forma que cambia— tumba el
+ * árbol entero y el portal se queda en blanco: dejas de poder ver los leads
+ * porque falla una pantalla de métricas. Con esto sólo cae ese panel, el
+ * menú sigue vivo y se puede seguir trabajando.
+ *
+ * Es una clase porque componentDidCatch no tiene equivalente con hooks.
+ */
+class Aislante extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  componentDidCatch(error, info) {
+    // Sentry ya está montado en la app; si no estuviera, esto no debe fallar.
+    try {
+      window.Sentry?.captureException?.(error, {
+        tags: { boundary: "portal.vista", vista: this.props.vista },
+        extra: { componentStack: info?.componentStack },
+      });
+    } catch {
+      /* la traza no puede impedir que se pinte el aviso */
+    }
+    console.error(`Portal: la vista "${this.props.vista}" ha fallado`, error);
+  }
+
+  componentDidUpdate(prev) {
+    // Al cambiar de vista se limpia: si no, el error se quedaría pegado.
+    if (prev.vista !== this.props.vista && this.state.error) {
+      this.setState({ error: null });
+    }
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+
+    return (
+      <div className="pv3-view">
+        <div className="pv3-card" style={{ marginTop: 22 }}>
+          <div className="pv3-row">
+            <span className="pv3-lab">ESTA SECCIÓN NO SE HA PODIDO PINTAR</span>
+            <span className="pv3-tag" data-t="bad">Error</span>
+          </div>
+          <p className="pv3-p" style={{ marginTop: 12 }}>
+            El resto del portal sigue funcionando: usa el menú de la izquierda
+            para seguir trabajando. El fallo ya ha quedado registrado.
+          </p>
+          <p className="pv3-det">{String(this.state.error?.message || this.state.error)}</p>
+          <Accion onRun={async () => this.setState({ error: null })}>Reintentar</Accion>
+        </div>
+      </div>
+    );
+  }
+}
+
 /* ── raíz ────────────────────────────────────────────────────────────── */
 
 /** Encabezado de cada vista: antetítulo, título y una línea que la explica. */
 const META = {
   resumen: ["PANEL", "Resumen", "Lo que ha pasado y lo que hay abierto ahora mismo."],
+  alertas: ["AVISOS", "Alertas", "Todo lo que pide atención, en un sitio."],
+  operaciones: ["DÍA A DÍA", "Operaciones", "Lo atascado y lo que hay que desatascar."],
+  control: ["MANDO", "Torre de control", "Una lectura de toda la cuenta a la vez."],
+  playbooks: ["GUION", "Guion comercial", "Cómo habla la voz y qué tiene que conseguir."],
+  analitica: ["MÉTRICAS", "Analítica", "Ingresos, voz, prioridad, citas y reactivación."],
+  retorno: ["RETORNO", "Retorno", "Qué te está devolviendo la inversión."],
+  experimentos: ["PRUEBAS", "Experimentos", "Qué mensajes funcionan mejor y por qué."],
+  puesta: ["ARRANQUE", "Puesta en marcha", "Lo que falta para dejar la cuenta redonda."],
   leads: ["CAPTACIÓN", "Leads", "Todo lo que la voz ha capturado, con su estado y su valor."],
   llamadas: ["REGISTRO", "Llamadas", "Cada conversación, con grabación y transcripción."],
   pipeline: ["EMBUDO", "Pipeline", "Dónde está cada lead ahora mismo."],
@@ -2071,24 +2596,62 @@ function PortalV3() {
    * El cambio de vista se hace en el clic y no en un efecto: es un evento del
    * usuario, así que no encadena renders.
    */
+  /**
+   * Carga una sección si no está ya pedida. Devuelve una promesa para poder
+   * esperar a varias a la vez.
+   */
+  const cargar = useCallback((id, yaPedidas) => {
+    if (yaPedidas.has(id)) return Promise.resolve();
+    yaPedidas.add(id);
+
+    // "analitica" no es un endpoint: son ocho, y se piden en paralelo.
+    if (id === "analitica") {
+      setCargando((c) => ({ ...c, analitica: true }));
+      return Promise.all(
+        ENDPOINTS_ANALITICA.map(([clave, url]) =>
+          pedir(url).then((j) => [clave, j?.data ?? null]).catch(() => [clave, null])
+        )
+      )
+        .then((pares) => setExtra((p2) => ({ ...p2, analitica: Object.fromEntries(pares) })))
+        .finally(() => setCargando((c) => ({ ...c, analitica: false })));
+    }
+
+    const destino = VISTAS.find((v) => v.id === id);
+    if (!destino?.api) return Promise.resolve();
+
+    setCargando((c) => ({ ...c, [id]: true }));
+    return pedir(destino.api)
+      .then((json) => { if (json) setExtra((p2) => ({ ...p2, [id]: json.data ?? json })); })
+      .catch(() => setExtra((p2) => ({ ...p2, [id]: null })))
+      .finally(() => setCargando((c) => ({ ...c, [id]: false })));
+  }, []);
+
+  /**
+   * Abre una vista y trae lo que necesite.
+   *
+   * Algunas vistas no tienen endpoint propio: se calculan a partir de otras
+   * —la torre de control cruza facturación, salud, calidad y experimentos—,
+   * así que se declaran sus dependencias y se piden todas de golpe.
+   */
   const abrir = useCallback((id) => {
     setVista(id);
 
     const destino = VISTAS.find((v) => v.id === id);
-    if (!destino?.api) return;
+    if (!destino) return;
+
+    const pendientes = [id, ...(destino.deps || [])].filter((x) => {
+      const v2 = VISTAS.find((n2) => n2.id === x);
+      return x === "analitica" || v2?.api;
+    });
 
     setExtra((previo) => {
-      if (previo[id] !== undefined) return previo;
-
-      setCargando((c) => ({ ...c, [id]: true }));
-      pedir(destino.api)
-        .then((json) => { if (json) setExtra((p2) => ({ ...p2, [id]: json.data ?? json })); })
-        .catch(() => setExtra((p2) => ({ ...p2, [id]: null })))
-        .finally(() => setCargando((c) => ({ ...c, [id]: false })));
-
+      // El set marca lo ya presente para no repetir peticiones. Se lee dentro
+      // del updater porque es donde se ve el estado más reciente.
+      const yaPedidas = new Set(Object.keys(previo));
+      pendientes.forEach((x) => cargar(x, yaPedidas));
       return previo;
     });
-  }, []);
+  }, [cargar]);
 
   const salir = useCallback(async () => {
     try { await fetch("/api/logout", { method: "POST" }); } catch {}
@@ -2099,6 +2662,13 @@ function PortalV3() {
   const marca = datos?.client?.brand_name || datos?.client?.name || "Nesped";
   const alertasAbiertas = (datos?.alerts || []).length;
   const cargandoVista = Boolean(cargando[vista]);
+
+  // Una vista derivada sigue cargando mientras le falte cualquiera de sus
+  // fuentes: pintarla a medias enseñaría cifras que aún van a cambiar.
+  const cargandoDeps = useMemo(() => {
+    const d = VISTAS.find((v) => v.id === vista)?.deps || [];
+    return cargandoVista || d.some((x) => cargando[x] || extra[x] === undefined);
+  }, [vista, cargandoVista, cargando, extra]);
   const datosVista = extra[vista];
 
   function contenido() {
@@ -2125,6 +2695,22 @@ function PortalV3() {
       case "estado": return <Estado salud={datosVista} cargando={cargandoVista} />;
       case "permisos": return <Permisos acceso={datosVista} cargando={cargandoVista} />;
       case "facturacion": return <Facturacion datos={datosVista} cargando={cargandoVista} />;
+
+      case "alertas": return <Alertas datos={datos} extra={extra} cargando={cargandoDeps} />;
+      case "operaciones": return <Operaciones datos={datos} extra={extra} cargando={cargandoDeps} onRecargar={recargar} />;
+      case "control": return <Control datos={datos} extra={extra} cargando={cargandoDeps} />;
+      case "puesta": return <PuestaEnMarcha datos={datos} extra={extra} cargando={cargandoDeps} />;
+      case "retorno": return <Retorno datos={datos} extra={extra} cargando={cargandoDeps} />;
+      case "analitica": return <Analitica analitica={extra.analitica} cargando={cargandoVista} />;
+      case "experimentos": return <Experimentos experimentos={datosVista} cargando={cargandoVista} />;
+      case "playbooks":
+        return (
+          <Playbooks
+            playbooks={datosVista}
+            cargando={cargandoVista}
+            onRecargar={() => recargarSeccion("playbooks")}
+          />
+        );
 
       // El resto son workspaces de forma homogénea: los pinta el genérico.
       default: return <Workspace datos={datosVista} cargando={cargandoVista} />;
@@ -2187,7 +2773,7 @@ function PortalV3() {
           ) : !datos ? (
             <div className="pv3-grid" data-c="4">{[0, 1, 2, 3].map((i) => <div key={i} className="pv3-skel" />)}</div>
           ) : (
-            contenido()
+            <Aislante vista={vista}>{contenido()}</Aislante>
           )}
         </main>
       </div>

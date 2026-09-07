@@ -453,10 +453,13 @@
    animaciones simultáneas cuestan más de lo que aportan.
    ========================================================================= */
 
-.pv3 {
-  perspective: 1600px;
-  perspective-origin: 50% 30%;
-}
+/*
+ * La perspectiva va dentro de cada transform, no heredada.
+ *
+ * `perspective` en un contenedor sólo alcanza a sus hijos directos, así que
+ * la que había aquí no llegaba a las tarjetas ni a las vistas, que cuelgan
+ * varios niveles más abajo: sus rotateX se veían como aplastamientos.
+ */
 
 /* ── Cambio de vista: la nueva entra girando sobre su eje inferior ───── */
 
@@ -466,7 +469,7 @@
 }
 
 @keyframes pv3EntraVista {
-  from { opacity: 0; transform: translateY(16px) translateZ(-60px) rotateX(4deg); }
+  from { opacity: 0; transform: perspective(1400px) translateY(16px) translateZ(-50px) rotateX(4deg); }
   to   { opacity: 1; transform: none; }
 }
 
@@ -480,8 +483,10 @@
     box-shadow 0.45s ease;
 }
 
+/* Al pasar el cursor sólo sube: acercar con perspectiva agranda el
+   elemento, el borde se escapa de debajo del ratón y el hover parpadea. */
 .pv3-card:hover {
-  transform: translateZ(20px) translateY(-3px);
+  transform: translateY(-4px);
   box-shadow: 0 20px 44px rgba(0, 0, 0, 0.5);
 }
 
@@ -497,7 +502,7 @@
 }
 
 .pv3-nav:hover { transform: translateX(3px); }
-.pv3-nav[data-on="true"] { transform: translateX(4px) translateZ(14px); }
+.pv3-nav[data-on="true"] { transform: translateX(4px); }
 
 /* ── Ficha de lead: entra girando desde el borde ─────────────────────── */
 
@@ -519,11 +524,10 @@
 /* ── Botones ─────────────────────────────────────────────────────────── */
 
 .pv3-btn { transition: background 0.25s ease, transform 0.25s cubic-bezier(0.22, 1, 0.36, 1); }
-.pv3-btn:hover:not(:disabled) { transform: translateY(-1px) translateZ(8px); }
+.pv3-btn:hover:not(:disabled) { transform: translateY(-1px); }
 .pv3-btn:active:not(:disabled) { transform: translateY(1px) scale(0.985); }
 
 @media (prefers-reduced-motion: reduce) {
-  .pv3 { perspective: none; }
   .pv3-card:hover,
   .pv3-nav:hover,
   .pv3-nav[data-on="true"],

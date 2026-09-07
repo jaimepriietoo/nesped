@@ -659,20 +659,33 @@
  * estaba en el HTML pero invisible. Ahora sólo se esconde si rev.js llegó a
  * correr, que es quien pone data-rev en <html> antes del primer pintado.
  */
+/*
+ * Sin blur, a propósito.
+ *
+ * Aquí había `filter: blur(6px)` animándose hasta cero en los diecisiete
+ * bloques que entran. Un blur sobre texto obliga al navegador a rasterizar
+ * el elemento y difuminarlo en cada fotograma: los bordes de las letras
+ * vibran mientras dura la transición. Es lo que se ve como que la página
+ * "tiembla" al hacer scroll, y con diecisiete capas a la vez se nota.
+ *
+ * La perspectiva va en el propio transform y no heredada de un ancestro:
+ * `perspective` en un padre sólo afecta a sus hijos directos, así que la que
+ * había en `.v3` no llegaba a estos bloques y el rotateX se veía como un
+ * aplastamiento vertical, no como profundidad.
+ */
 .v3-rev {
-  transition: opacity 0.85s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 0.85s cubic-bezier(0.22, 1, 0.36, 1),
-    filter 0.85s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
   transition-delay: var(--d, 0s);
 }
 
 html[data-rev="1"] .v3-rev {
   opacity: 0;
-  transform: translateY(22px) scale(0.98);
-  filter: blur(6px);
+  transform: perspective(1100px) translateY(24px) translateZ(-40px) rotateX(5deg);
+  transform-origin: 50% 100%;
 }
 
-html[data-rev="1"] .v3-rev.is-in { opacity: 1; transform: none; filter: blur(0); }
+html[data-rev="1"] .v3-rev.is-in { opacity: 1; transform: none; }
 
 @keyframes v3SlideDown {
   from { opacity: 0; transform: translateY(-18px); }
@@ -869,23 +882,17 @@ html[data-rev="1"] .v3-rev.is-in { opacity: 1; transform: none; filter: blur(0);
    todas de golpe sin que la página se descoloque.
    ========================================================================= */
 
-.v3 {
-  /* Distancia del ojo al plano. Cuanto menor, más pronunciada la
-     perspectiva; 1400px da profundidad sin que parezca un ojo de pez. */
-  perspective: 1400px;
-  perspective-origin: 50% 40%;
-}
+/*
+ * Sin `perspective` heredada.
+ *
+ * Sólo afecta a los hijos directos, así que nunca llegó a las tarjetas ni a
+ * los bloques que entran, que están varios niveles más abajo: el rotateX se
+ * veía como un aplastamiento, no como profundidad. Cada elemento que quiere
+ * relieve lleva ahora `perspective()` dentro de su propio transform, que sí
+ * funciona esté donde esté.
+ */
 
 /* ── Entrada de los bloques al hacer scroll ─────────────────────────── */
-
-html[data-rev="1"] .v3-rev {
-  transform: translateY(26px) translateZ(-70px) rotateX(7deg);
-  transform-origin: 50% 100%;
-}
-
-html[data-rev="1"] .v3-rev.is-in {
-  transform: none;
-}
 
 /* ── Tarjetas: se levantan y giran hacia el cursor ───────────────────── */
 
@@ -897,16 +904,28 @@ html[data-rev="1"] .v3-rev.is-in {
     box-shadow 0.5s ease;
 }
 
+/*
+ * Al pasar el cursor no se usa translateZ.
+ *
+ * Con perspectiva, acercar un elemento lo agranda; si el ratón está cerca
+ * del borde, el borde se mueve por debajo del cursor, el hover se apaga, el
+ * elemento vuelve a su sitio y se enciende otra vez. Ese bucle es un
+ * parpadeo constante. Subirlo en el plano de la pantalla da la misma
+ * sensación de relieve y no mueve el área que responde al ratón.
+ */
 .v3 .v3-card:hover {
-  transform: translateZ(26px) translateY(-4px) rotateX(2.5deg);
+  transform: translateY(-5px);
   box-shadow: 0 26px 60px rgba(0, 0, 0, 0.55);
 }
 
 /* ── Planes: el recomendado se adelanta un plano ─────────────────────── */
 
 .v3 .v3-plan { transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
-.v3 .v3-plan--hi { transform: translateZ(34px) scale(1.015); }
-.v3 .v3-plan--hi:hover { transform: translateZ(48px) scale(1.03); }
+/* El plan recomendado va un plano por delante en reposo, con la perspectiva
+   en el propio transform. Al pasar el cursor sólo sube: crecer bajo el ratón
+   es lo que hace parpadear el hover. */
+.v3 .v3-plan--hi { transform: perspective(1200px) translateZ(26px); }
+.v3 .v3-plan--hi:hover { transform: perspective(1200px) translateZ(26px) translateY(-5px); }
 
 /* ── Botones: hunden al pulsar, como una tecla ───────────────────────── */
 
@@ -917,8 +936,8 @@ html[data-rev="1"] .v3-rev.is-in {
     box-shadow 0.28s ease;
 }
 
-.v3 .v3-btn:hover { transform: translateZ(12px) translateY(-2px); }
-.v3 .v3-btn:active { transform: translateZ(0) translateY(1px) scale(0.985); }
+.v3 .v3-btn:hover { transform: translateY(-2px); }
+.v3 .v3-btn:active { transform: translateY(1px) scale(0.985); }
 
 /* ── Cabecera: entra girando desde arriba ────────────────────────────── */
 
@@ -966,14 +985,25 @@ html[data-rev="1"] .v3-rev.is-in {
 
 /* ── El vídeo del fondo se aleja al hacer scroll ─────────────────────── */
 
-.v3-bg video {
-  transition: transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: transform;
+/*
+ * El vídeo del fondo ya no se reescala al hacer scroll.
+ *
+ * Reescalar un vídeo a pantalla completa obliga a recomponer toda esa capa,
+ * y hacerlo justo mientras se está desplazando la página compite con el
+ * scroll. Se sustituye por un oscurecido, que el compositor resuelve sin
+ * volver a decodificar nada.
+ */
+.v3-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.9s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.v3[data-desplazado="true"] .v3-bg video {
-  transform: scale(1.08) translateZ(-60px);
-}
+.v3[data-desplazado="true"] .v3-bg::after { opacity: 0.4; }
 
 @media (prefers-reduced-motion: reduce) {
   .v3,
@@ -1037,7 +1067,7 @@ html[data-rev="1"] .v3-rev.is-in {
   transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease;
 }
 
-.v3 .v3-escucha-play:hover { transform: translateZ(16px) scale(1.06); box-shadow: 0 12px 32px rgba(255, 255, 255, 0.22); }
+.v3 .v3-escucha-play:hover { transform: scale(1.06); box-shadow: 0 12px 32px rgba(255, 255, 255, 0.22); }
 .v3 .v3-escucha-play:active { transform: scale(0.96); }
 .v3 .v3-escucha-play svg { width: 21px; height: 21px; fill: currentColor; }
 
@@ -1140,7 +1170,7 @@ html[data-rev="1"] .v3-rev.is-in {
   transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.5s ease;
 }
 
-.v3 .v3-paso:hover { transform: translateZ(20px) translateX(5px); border-color: rgba(255, 255, 255, 0.24); }
+.v3 .v3-paso:hover { transform: translateX(5px); border-color: rgba(255, 255, 255, 0.24); }
 
 .v3 .v3-paso-n {
   font-family: var(--font-display);

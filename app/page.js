@@ -5,6 +5,7 @@ import { Inter } from "next/font/google";
 import "@/components/v3/v3.css";
 import { Footer, Header } from "@/components/v3/chrome";
 import { Rev } from "@/components/v3/rev";
+import { EscuchaLlamada } from "@/components/v3/escucha";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -24,37 +25,84 @@ const NAV = [
 
 /* Iconos de marca en SVG en línea: evitan cargar Font Awesome desde cdnjs,
    que tu CSP bloquea (style-src y font-src solo admiten Google Fonts). */
-const LOGOS = [
+/**
+ * Sello del hero.
+ *
+ * Aquí había tres logos —Microsoft, Amazon y Google— junto a "Voz con IA
+ * para empresas". Ninguno es cliente ni socio. Eso da a entender un respaldo
+ * que no existe, usa marcas registradas ajenas para insinuarlo, y en cuanto
+ * alguien lo comprueba deja de creerse el resto de la página. En un producto
+ * que se vende por miles de euros al mes, eso cuesta la venta.
+ *
+ * Se sustituye por lo que sí es verdad y además se puede comprobar: sobre
+ * qué infraestructura corre. Es lo que un comprador técnico quiere saber, y
+ * decirlo de frente transmite más seriedad que un logo prestado.
+ */
+const INFRAESTRUCTURA = ["OpenAI Realtime", "Telnyx", "Stripe"];
+
+/**
+ * El mecanismo, paso a paso.
+ *
+ * Falta en la página y es lo que separa "otra web de IA" de algo que se
+ * compra por miles de euros al mes: quien evalúa quiere entender qué pasa
+ * entre que suena el teléfono y aparece el lead. Sin esto, la promesa suena
+ * a magia, y la magia no se compra, se desconfía de ella.
+ */
+const COMO_FUNCIONA = [
   {
-    n: "Microsoft",
-    svg: (
-      <svg viewBox="0 0 23 23" aria-hidden="true">
-        <path fill="#f25022" d="M1 1h10v10H1z" />
-        <path fill="#7fba00" d="M12 1h10v10H12z" />
-        <path fill="#00a4ef" d="M1 12h10v10H1z" />
-        <path fill="#ffb900" d="M12 12h10v10H12z" />
-      </svg>
-    ),
+    n: "01",
+    t: "Tu número sigue siendo tuyo",
+    d: "No cambias de número ni te portas nada. Desvías las llamadas que no coges —o todas— a la línea que te damos. Si mañana lo quitas, vuelve a sonar donde sonaba.",
   },
   {
-    n: "Amazon",
-    svg: (
-      <svg viewBox="0 0 24 24" aria-hidden="true" fill="#111">
-        <path d="M14.7 14.6c-1.2.9-3 1.4-4.5 1.4-2.1 0-4-.8-5.4-2.1-.1-.1 0-.3.1-.2 1.6.9 3.5 1.5 5.5 1.5 1.4 0 2.9-.3 4.3-.9.2-.1.4.1.2.3zm.5-.6c-.2-.2-1.1-.1-1.5-.1-.1 0-.2-.1-.1-.2.7-.5 1.9-.4 2-.2.1.2 0 1.3-.7 1.9-.1.1-.2 0-.2-.1.2-.4.5-1.2.4-1.4z" />
-        <path d="M13.3 12.6v-.6c0-.1.1-.2.2-.2.9 0 1.9 0 2.6-.4.5-.3.8-.8.8-1.4 0-.5-.2-1-.6-1.2-.4-.3-1-.3-1.5-.3-.9 0-1.8.3-2 1.4 0 .1-.1.2-.2.2l-1.3-.1c-.1 0-.2-.1-.2-.3.3-1.9 1.9-2.5 3.4-2.5.8 0 1.8.2 2.4.8.8.7.7 1.6.7 2.6v2.4c0 .7.3 1 .5 1.3.1.1.1.2 0 .3l-1 .9c-.1.1-.2.1-.3 0-.4-.3-.5-.5-.7-.8-.7.7-1.2 1-2.1 1-1.1 0-2-.7-2-2.1 0-1.1.6-1.8 1.4-2.2.7-.3 1.7-.4 2.5-.4v-.2c0-.4 0-.8-.2-1.1-.2-.3-.6-.4-.9-.4-.6 0-1.2.3-1.3 1z" />
-      </svg>
-    ),
+    n: "02",
+    t: "Descuelga al primer tono",
+    d: "Sin menús ni «pulse uno». La voz saluda con el nombre de tu empresa y escucha. Si le interrumpen, calla; si hay ruido, espera. Como una persona.",
   },
   {
-    n: "Google",
-    svg: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path fill="#4285f4" d="M22.5 12.2c0-.8-.1-1.4-.2-2.1H12v3.9h6c-.1 1-.8 2.5-2.2 3.5l3.4 2.6c2-1.8 3.3-4.6 3.3-7.9z" />
-        <path fill="#34a853" d="M12 23c2.9 0 5.4-1 7.2-2.6l-3.4-2.6c-.9.6-2.1 1.1-3.8 1.1-2.9 0-5.3-1.9-6.2-4.5l-3.5 2.7C4.1 20.5 7.8 23 12 23z" />
-        <path fill="#fbbc05" d="M5.8 14.4c-.2-.7-.4-1.4-.4-2.2s.1-1.5.4-2.2L2.3 7.3C1.5 8.7 1 10.3 1 12.2s.5 3.5 1.3 4.9l3.5-2.7z" />
-        <path fill="#ea4335" d="M12 5.5c2 0 3.4.9 4.2 1.6l3-2.9C17.4 2.5 14.9 1.4 12 1.4 7.8 1.4 4.1 3.9 2.3 7.3l3.5 2.7C6.7 7.4 9.1 5.5 12 5.5z" />
-      </svg>
-    ),
+    n: "03",
+    t: "Averigua y apunta",
+    d: "Pregunta lo que hace falta, de uno en uno, y confirma el teléfono repitiéndolo. Al colgar el lead ya está en tu panel con lo que necesita y su valor estimado.",
+  },
+  {
+    n: "04",
+    t: "Te dice a quién llamar",
+    d: "Puntúa cada contacto, propone el siguiente paso y manda el seguimiento. Tú entras por la mañana y ya está hecho.",
+  },
+];
+
+/**
+ * Objeciones.
+ *
+ * Se responden las que salen de verdad en una llamada de venta, incluidas
+ * las incómodas: qué pasa si la voz falla, quién ve mis datos y qué ocurre
+ * si me quiero ir. Esquivarlas no las elimina, sólo las deja sin respuesta
+ * en la cabeza de quien decide.
+ */
+const PREGUNTAS = [
+  {
+    q: "¿Se nota que no es una persona?",
+    a: "Escucha la muestra de arriba y júzgalo tú. Habla castellano de España, acusa recibo antes de contestar, duda cuando piensa y calla si le interrumpes. Lo que no hace es fingir ser humano: si alguien pregunta, lo dice.",
+  },
+  {
+    q: "¿Y si no entiende lo que le piden?",
+    a: "Lo dice y ofrece que le llames tú. No inventa precios, plazos ni disponibilidad; esa regla está en el guion y es la primera que comprobamos. Prefiere quedarse corto a prometer algo que no puedes cumplir.",
+  },
+  {
+    q: "¿Cuánto tarda en estar funcionando?",
+    a: "Un día. Damos de alta tu cuenta, escribimos el guion contigo y configuras el desvío desde tu operadora. Lo que más tarda es que decidas qué quieres que pregunte.",
+  },
+  {
+    q: "¿Quién puede oír las llamadas?",
+    a: "Sólo las personas a las que tú das acceso, y queda registrado quién ha entrado y cuándo. Las grabaciones se guardan 30 días y las transcripciones 90; después se borran solas.",
+  },
+  {
+    q: "¿Se avisa de que la llamada se graba?",
+    a: "Sí, antes de que empiece a hablar el agente. Es obligatorio y no es opcional en la configuración. Si quien llama no quiere, se le ofrece otra vía y no se insiste.",
+  },
+  {
+    q: "¿Y si quiero dejarlo?",
+    a: "No hay permanencia. Cancelas desde el portal, quitas el desvío y tu número vuelve a sonar donde sonaba. Los leads que ya tienes te los llevas en CSV.",
   },
 ];
 
@@ -272,7 +320,7 @@ export default function Home() {
    * mirando: se queda la última que cruza la franja central del viewport.
    */
   useEffect(() => {
-    const ids = ["producto", "senal", "demo"];
+    const ids = ["producto", "como", "senal", "demo", "planes", "preguntas"];
     const nodos = ids
       .map((id) => document.getElementById(id))
       .filter(Boolean);
@@ -334,12 +382,10 @@ export default function Home() {
         </div>
 
         <div className="v3-trust">
-          {LOGOS.map((l) => (
-            <span key={l.n} className="v3-av" title={l.n}>
-              {l.svg}
-            </span>
-          ))}
-          <span className="v3-trust-pill">Voz con IA para empresas</span>
+          <span className="v3-trust-pill">
+            <span className="v3-punto" aria-hidden="true" />
+            Voz con IA sobre {INFRAESTRUCTURA.join(" · ")}
+          </span>
         </div>
 
         <h1 className="v3-h1">
@@ -394,6 +440,32 @@ export default function Home() {
       </section>
 
       {/* ── Señal ────────────────────────────────────────────────────── */}
+      {/* ── Cómo funciona ────────────────────────────────────────────── */}
+      <section id="como" className="v3-section v3-section--line">
+        <div className="v3-wrap">
+          <Rev>
+            <span className="v3-eyebrow">Cómo funciona</span>
+            <h2 className="v3-h2">De que suene el teléfono<br />a tener el lead apuntado.</h2>
+            <p className="v3-lede">
+              Cuatro pasos. Ninguno te obliga a cambiar de número ni a tocar
+              nada de lo que ya tienes montado.
+            </p>
+          </Rev>
+
+          <ol className="v3-pasos">
+            {COMO_FUNCIONA.map((p, i) => (
+              <Rev as="li" key={p.n} d={i * 0.08} className="v3-paso">
+                <span className="v3-paso-n">{p.n}</span>
+                <div>
+                  <h3 className="v3-h3">{p.t}</h3>
+                  <p className="v3-p">{p.d}</p>
+                </div>
+              </Rev>
+            ))}
+          </ol>
+        </div>
+      </section>
+
       <section id="senal" className="v3-section v3-section--line">
         <div className="v3-wrap">
           <Rev>
@@ -426,6 +498,87 @@ export default function Home() {
       </section>
 
       {/* ── Planes ───────────────────────────────────────────────────── */}
+      {/* ── Demo ─────────────────────────────────────────────────────── */}
+      <section id="demo" className="v3-section v3-section--line">
+        <div className="v3-wrap">
+          <Rev>
+            <span className="v3-eyebrow">Demo real</span>
+            <h2 className="v3-h2">Escúchalo antes de creerte nada.</h2>
+            <p className="v3-lede">
+              Cuarenta segundos de una llamada del agente. Ninguna de las dos
+              voces es una persona. Si prefieres oírlo en tu propio móvil,
+              déjanos tu número y te llama.
+            </p>
+          </Rev>
+
+          {/* Oírlo pesa más que cualquier párrafo, así que va antes que el
+              formulario: pedir el teléfono es fricción y no todo el mundo la
+              acepta sin haber oído nada primero. */}
+          <Rev d={0.06}>
+            <EscuchaLlamada />
+          </Rev>
+
+          <div className="v3-grid" data-c="2" style={{ marginTop: 22 }}>
+            <Rev className="v3-card">
+              <span className="v3-card-meta">Qué acabas de oír</span>
+              <h3 className="v3-h3">Detecta la necesidad y se queda con el contacto</h3>
+              <p className="v3-p">
+                El agente entiende qué se le pide, pregunta sólo lo que falta,
+                repite el teléfono para confirmarlo y deja el lead registrado
+                antes de colgar.
+              </p>
+              <div className="v3-chips">
+                <span className="v3-chip">Instancia: demo</span>
+                <span className="v3-chip">Voz cloud lista</span>
+                <span className="v3-chip">Realtime IA</span>
+              </div>
+            </Rev>
+
+            <Rev className="v3-card" d={0.09}>
+              <div className="v3-field">
+                <label className="v3-label" htmlFor="v3-tel">Teléfono para la demo</label>
+                <input
+                  id="v3-tel"
+                  className="v3-input"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder="+346XXXXXXXX"
+                  value={telefono}
+                  onChange={(e) => setTelefono(e.target.value)}
+                />
+              </div>
+
+              <button
+                type="button"
+                className="v3-btn v3-btn--white"
+                style={{ marginTop: 16, width: "100%" }}
+                onClick={lanzarLlamada}
+                disabled={cargando}
+              >
+                {cargando ? "Lanzando llamada…" : "Probar llamada en vivo"}
+              </button>
+
+              <p
+                className="v3-status"
+                data-ok={estado ? String(estado.ok) : undefined}
+                role="status"
+                aria-live="polite"
+              >
+                {estado?.text || ""}
+              </p>
+
+              <p className="v3-legal">
+                Al lanzar la demo aceptas que la llamada pueda ser grabada y
+                transcrita con fines de calidad, seguridad y seguimiento
+                comercial.{" "}
+                <a href="/legal/voice-compliance">Ver política de grabaciones</a>
+              </p>
+            </Rev>
+          </div>
+        </div>
+      </section>
+
       <section id="planes" className="v3-section v3-section--line">
         <div className="v3-wrap">
           <Rev>
@@ -481,74 +634,27 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Demo ─────────────────────────────────────────────────────── */}
-      <section id="demo" className="v3-section v3-section--line">
+      {/* ── Preguntas ────────────────────────────────────────────────── */}
+      <section id="preguntas" className="v3-section v3-section--line">
         <div className="v3-wrap">
           <Rev>
-            <span className="v3-eyebrow">Demo real</span>
-            <h2 className="v3-h2">Lanza una llamada y escucha la experiencia completa.</h2>
-            <p className="v3-lede">
-              Introduce tu teléfono y prueba la voz, el tono y el flujo de captura
-              de lead tal y como los percibirá un usuario real.
-            </p>
+            <span className="v3-eyebrow">Lo que siempre preguntan</span>
+            <h2 className="v3-h2">Las dudas de verdad,<br />respondidas de frente.</h2>
           </Rev>
 
-          <div className="v3-grid" data-c="2">
-            <Rev className="v3-card">
-              <span className="v3-card-meta">Qué vas a oír</span>
-              <h3 className="v3-h3">Voz, detección de necesidad y captura de lead</h3>
-              <p className="v3-p">
-                La demo reproduce una llamada real: tono comercial, memoria del
-                contacto y el lead registrado al colgar.
-              </p>
-              <div className="v3-chips">
-                <span className="v3-chip">Instancia: demo</span>
-                <span className="v3-chip">Voz cloud lista</span>
-                <span className="v3-chip">Realtime IA</span>
-              </div>
-            </Rev>
-
-            <Rev className="v3-card" d={0.09}>
-              <div className="v3-field">
-                <label className="v3-label" htmlFor="v3-tel">Teléfono para la demo</label>
-                <input
-                  id="v3-tel"
-                  className="v3-input"
-                  type="tel"
-                  inputMode="tel"
-                  autoComplete="tel"
-                  placeholder="+346XXXXXXXX"
-                  value={telefono}
-                  onChange={(e) => setTelefono(e.target.value)}
-                />
-              </div>
-
-              <button
-                type="button"
-                className="v3-btn v3-btn--white"
-                style={{ marginTop: 16, width: "100%" }}
-                onClick={lanzarLlamada}
-                disabled={cargando}
-              >
-                {cargando ? "Lanzando llamada…" : "Probar llamada en vivo"}
-              </button>
-
-              <p
-                className="v3-status"
-                data-ok={estado ? String(estado.ok) : undefined}
-                role="status"
-                aria-live="polite"
-              >
-                {estado?.text || ""}
-              </p>
-
-              <p className="v3-legal">
-                Al lanzar la demo aceptas que la llamada pueda ser grabada y
-                transcrita con fines de calidad, seguridad y seguimiento
-                comercial.{" "}
-                <a href="/legal/voice-compliance">Ver política de grabaciones</a>
-              </p>
-            </Rev>
+          <div className="v3-preguntas">
+            {PREGUNTAS.map((p, i) => (
+              /* <details> nativo: se abre sin JavaScript, es accesible por
+                 teclado de fábrica y el buscador lee el contenido aunque esté
+                 plegado. Un acordeón hecho a mano no da nada de eso gratis. */
+              <Rev as="details" key={p.q} d={i * 0.05} className="v3-pregunta">
+                <summary>
+                  <span>{p.q}</span>
+                  <span className="v3-pregunta-mas" aria-hidden="true" />
+                </summary>
+                <p className="v3-p">{p.a}</p>
+              </Rev>
+            ))}
           </div>
         </div>
       </section>

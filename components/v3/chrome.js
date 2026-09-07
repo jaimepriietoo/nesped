@@ -14,10 +14,10 @@ import { Logo } from "./logo";
 export { Logo };
 
 export const NAV = [
-  { href: "/#producto", label: "Producto", id: "producto" },
-  { href: "/#senal", label: "Señal", id: "senal" },
-  { href: "/pricing", label: "Pricing", id: "pricing" },
-  { href: "/#demo", label: "Demo", id: "demo" },
+  { href: "/#como", label: "Cómo funciona", id: "como" },
+  { href: "/#demo", label: "Escúchalo", id: "demo" },
+  { href: "/pricing", label: "Precios", id: "pricing" },
+  { href: "/#preguntas", label: "Preguntas", id: "preguntas" },
 ];
 
 

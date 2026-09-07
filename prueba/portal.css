@@ -442,3 +442,94 @@ html, body { margin: 0; padding: 0; background: #000; }
   letter-spacing: 0.07em;
   color: var(--dim);
 }
+
+/* =========================================================================
+   Movimiento del portal.
+
+   Mismo criterio que en la web: sólo transform y opacity, que el navegador
+   compone en la tarjeta gráfica. Aquí importa todavía más, porque una tabla
+   de doscientos leads con animaciones mal hechas va a tirones en cualquier
+   portátil.
+
+   Y por eso las filas de tabla no se animan de una en una: doscientas
+   animaciones simultáneas cuestan más de lo que aportan.
+   ========================================================================= */
+
+.pv3 {
+  perspective: 1600px;
+  perspective-origin: 50% 30%;
+}
+
+/* ── Cambio de vista: la nueva entra girando sobre su eje inferior ───── */
+
+.pv3-view {
+  transform-origin: 50% 100%;
+  animation: pv3EntraVista 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes pv3EntraVista {
+  from { opacity: 0; transform: translateY(16px) translateZ(-60px) rotateX(4deg); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── Tarjetas: se levantan hacia el cursor ───────────────────────────── */
+
+.pv3-card {
+  transform-style: preserve-3d;
+  transition:
+    transform 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.45s ease,
+    box-shadow 0.45s ease;
+}
+
+.pv3-card:hover {
+  transform: translateZ(20px) translateY(-3px);
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Menú: la entrada activa se adelanta ─────────────────────────────── */
+
+.pv3-nav {
+  transform-style: preserve-3d;
+  transition:
+    background 0.25s ease,
+    color 0.25s ease,
+    border-color 0.25s ease,
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pv3-nav:hover { transform: translateX(3px); }
+.pv3-nav[data-on="true"] { transform: translateX(4px) translateZ(14px); }
+
+/* ── Ficha de lead: entra girando desde el borde ─────────────────────── */
+
+.pv3-ficha {
+  transform-origin: 100% 50%;
+  animation: pv3EntraFicha 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes pv3EntraFicha {
+  from { opacity: 0; transform: translateX(34px) rotateY(-9deg); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── Filas: sólo se marca la de debajo del cursor ────────────────────── */
+
+.pv3-table tbody tr { transition: background 0.2s ease, transform 0.2s ease; }
+.pv3-fila:hover { transform: translateX(3px); }
+
+/* ── Botones ─────────────────────────────────────────────────────────── */
+
+.pv3-btn { transition: background 0.25s ease, transform 0.25s cubic-bezier(0.22, 1, 0.36, 1); }
+.pv3-btn:hover:not(:disabled) { transform: translateY(-1px) translateZ(8px); }
+.pv3-btn:active:not(:disabled) { transform: translateY(1px) scale(0.985); }
+
+@media (prefers-reduced-motion: reduce) {
+  .pv3 { perspective: none; }
+  .pv3-card:hover,
+  .pv3-nav:hover,
+  .pv3-nav[data-on="true"],
+  .pv3-fila:hover,
+  .pv3-btn:hover:not(:disabled),
+  .pv3-btn:active:not(:disabled) { transform: none; }
+}

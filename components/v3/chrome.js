@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { Logo } from "./logo";
 
 /* =========================================================================
    Cabecera y pie compartidos por todas las páginas de /v3.
@@ -10,6 +11,8 @@ import { useEffect, useState } from "react";
    de enlaces del pie no haya que repetirlo en cuatro sitios.
    ========================================================================= */
 
+export { Logo };
+
 export const NAV = [
   { href: "/#producto", label: "Producto", id: "producto" },
   { href: "/#senal", label: "Señal", id: "senal" },
@@ -17,18 +20,6 @@ export const NAV = [
   { href: "/#demo", label: "Demo", id: "demo" },
 ];
 
-export function Logo() {
-  return (
-    <svg viewBox="0 0 52 52" aria-hidden="true">
-      <g fill="#0a0a0a">
-        <rect x="10" y="30" width="5" height="12" rx="2.5" />
-        <rect x="19" y="22" width="5" height="20" rx="2.5" />
-        <rect x="28" y="10" width="5" height="32" rx="2.5" />
-        <rect x="37" y="26" width="5" height="16" rx="2.5" />
-      </g>
-    </svg>
-  );
-}
 
 /**
  * @param {string} activo  id del enlace a marcar (o "" si ninguno)

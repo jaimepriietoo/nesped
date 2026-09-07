@@ -59,10 +59,24 @@ comprobar("/portal no permite scripts en línea",
 
 /* ── Acceso ────────────────────────────────────────────────────────── */
 
-for (const ruta of ["/portal", "/admin", "/admin/clients", "/portal/setup-account"]) {
+for (const ruta of ["/portal", "/admin", "/admin/clients"]) {
   const r = await fetch(BASE + ruta, { redirect: "manual" });
   comprobar(`${ruta} exige sesión`, r.status >= 300 && r.status < 400, `devolvió ${r.status}`);
 }
+
+/*
+ * La excepción, y es a propósito: /portal/setup-account es la única página
+ * bajo /portal a la que se llega sin cuenta, porque es donde Stripe devuelve
+ * a quien acaba de pagar para que elija sus credenciales. Si algún día vuelve
+ * a exigir sesión, quien pague no podrá darse de alta, así que se comprueba
+ * que siga abierta.
+ */
+const alta = await fetch(BASE + "/portal/setup-account", { redirect: "manual" });
+comprobar(
+  "/portal/setup-account accesible tras pagar",
+  alta.status === 200,
+  `devolvió ${alta.status}: quien pague no podría crear su cuenta`
+);
 
 for (const [ruta, esperado] of [
   ["/api/clients", [401, 403]],

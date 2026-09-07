@@ -164,7 +164,25 @@ export function proxy(req) {
     construirCsp(nonce, process.env.NODE_ENV !== "production", conNonce)
   );
 
-  if ((pathname.startsWith("/portal") || pathname.startsWith("/admin")) && !session) {
+  /*
+   * Excepción: la pantalla de alta tras pagar.
+   *
+   * Es la única página bajo /portal a la que se llega SIN cuenta: Stripe
+   * devuelve ahí a quien acaba de pagar para que elija email y contraseña.
+   * Al exigir sesión, el middleware la mandaba al login, donde no podía
+   * entrar porque su usuario todavía no existía. Es decir: quien pagaba 990 €
+   * se quedaba sin poder crear su acceso.
+   *
+   * Abrirla no expone nada: la API de detrás sólo responde con un session_id
+   * válido de Stripe, así que sin haber pagado la página no sirve de nada.
+   */
+  const esAltaTrasPago = pathname === "/portal/setup-account";
+
+  if (
+    !esAltaTrasPago &&
+    (pathname.startsWith("/portal") || pathname.startsWith("/admin")) &&
+    !session
+  ) {
     const loginUrl = new URL("/login", req.url);
     loginUrl.searchParams.set("next", `${pathname}${req.nextUrl.search || ""}`);
     return aplicarCabeceras(NextResponse.redirect(loginUrl), req, nonce, conNonce);

@@ -855,3 +855,138 @@ html[data-rev="1"] .v3-rev.is-in { opacity: 1; transform: none; filter: blur(0);
 @media (prefers-reduced-motion: reduce) {
   .v3 .v3-hueso { animation: none; }
 }
+
+/* =========================================================================
+   Movimiento en tres dimensiones.
+
+   Todo lo de aquí usa sólo transform y opacity: son las dos propiedades que
+   el navegador compone en la tarjeta gráfica sin recalcular la página. Con
+   cualquier otra —top, height, margin— cada fotograma obliga a rehacer el
+   diseño y en un móvil se nota como tirones.
+
+   Ninguna de estas animaciones desplaza contenido ni cambia su tamaño real,
+   así que si alguien pide menos movimiento en su sistema se pueden apagar
+   todas de golpe sin que la página se descoloque.
+   ========================================================================= */
+
+.v3 {
+  /* Distancia del ojo al plano. Cuanto menor, más pronunciada la
+     perspectiva; 1400px da profundidad sin que parezca un ojo de pez. */
+  perspective: 1400px;
+  perspective-origin: 50% 40%;
+}
+
+/* ── Entrada de los bloques al hacer scroll ─────────────────────────── */
+
+html[data-rev="1"] .v3-rev {
+  transform: translateY(26px) translateZ(-70px) rotateX(7deg);
+  transform-origin: 50% 100%;
+}
+
+html[data-rev="1"] .v3-rev.is-in {
+  transform: none;
+}
+
+/* ── Tarjetas: se levantan y giran hacia el cursor ───────────────────── */
+
+.v3 .v3-card {
+  transform-style: preserve-3d;
+  transition:
+    transform 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.5s ease,
+    box-shadow 0.5s ease;
+}
+
+.v3 .v3-card:hover {
+  transform: translateZ(26px) translateY(-4px) rotateX(2.5deg);
+  box-shadow: 0 26px 60px rgba(0, 0, 0, 0.55);
+}
+
+/* ── Planes: el recomendado se adelanta un plano ─────────────────────── */
+
+.v3 .v3-plan { transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+.v3 .v3-plan--hi { transform: translateZ(34px) scale(1.015); }
+.v3 .v3-plan--hi:hover { transform: translateZ(48px) scale(1.03); }
+
+/* ── Botones: hunden al pulsar, como una tecla ───────────────────────── */
+
+.v3 .v3-btn {
+  transition:
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    background 0.28s ease,
+    box-shadow 0.28s ease;
+}
+
+.v3 .v3-btn:hover { transform: translateZ(12px) translateY(-2px); }
+.v3 .v3-btn:active { transform: translateZ(0) translateY(1px) scale(0.985); }
+
+/* ── Cabecera: entra girando desde arriba ────────────────────────────── */
+
+@keyframes v3EntraCabecera {
+  from { opacity: 0; transform: translateY(-22px) rotateX(-16deg); }
+  to   { opacity: 1; transform: none; }
+}
+
+.v3-header-inner {
+  transform-origin: 50% 0%;
+  animation: v3EntraCabecera 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ── Titular: cada línea entra a su propio ritmo ─────────────────────── */
+
+@keyframes v3EntraLinea {
+  from { opacity: 0; transform: translateY(34px) rotateX(24deg); }
+  to   { opacity: 1; transform: none; }
+}
+
+.v3-h1 .v3-line {
+  display: block;
+  transform-origin: 50% 100%;
+  animation: v3EntraLinea 1.05s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.v3-h1 .v3-line:nth-child(2) { animation-delay: 0.14s; }
+
+/* ── Cifras del hero: giran al aparecer ──────────────────────────────── */
+
+@keyframes v3EntraCifra {
+  from { opacity: 0; transform: translateY(18px) rotateX(-30deg); }
+  to   { opacity: 1; transform: none; }
+}
+
+.v3-stat {
+  transform-origin: 50% 100%;
+  animation: v3EntraCifra 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.v3-stat:nth-child(1) { animation-delay: 0.42s; }
+.v3-stat:nth-child(2) { animation-delay: 0.52s; }
+.v3-stat:nth-child(3) { animation-delay: 0.62s; }
+.v3-stat:nth-child(4) { animation-delay: 0.72s; }
+
+/* ── El vídeo del fondo se aleja al hacer scroll ─────────────────────── */
+
+.v3-bg video {
+  transition: transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.v3[data-desplazado="true"] .v3-bg video {
+  transform: scale(1.08) translateZ(-60px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v3,
+  .v3 * {
+    perspective: none !important;
+  }
+  .v3 .v3-card:hover,
+  .v3 .v3-btn:hover,
+  .v3 .v3-btn:active,
+  .v3 .v3-plan--hi,
+  .v3 .v3-plan--hi:hover,
+  .v3[data-desplazado="true"] .v3-bg video {
+    transform: none !important;
+  }
+  html[data-rev="1"] .v3-rev { transform: none; }
+}

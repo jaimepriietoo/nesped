@@ -17,7 +17,10 @@ const PANEL = {
   success: true,
   currentUser: { id: "u1", email: "owner@demo.com", role: "owner" },
   currentRole: "owner",
-  client: { id: "demo", name: "Marca Demo", brand_name: "Marca Demo", is_active: true },
+  // El plan importa: sin él, el portal cae en Starter y bloquea las
+  // secciones de Pro, así que las pruebas que las abren no verían la sección
+  // sino la pantalla de "esto es del plan Pro".
+  client: { id: "demo", name: "Marca Demo", brand_name: "Marca Demo", is_active: true, plan: "pro" },
   settings: { monthly_target_leads: 25, monthly_target_conversion: 20, default_deal_value: 250, realtime_refresh_seconds: 15 },
   users: [{ id: "u1", full_name: "Dueño Demo", email: "owner@demo.com", role: "owner", is_active: true, created_at: new Date().toISOString() }],
   leads: [{ id: "l1", nombre: "Ana Ruiz", telefono: "+34600111222", status: "new", score: 90, valor_estimado: 1200, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }],

@@ -19,6 +19,13 @@ const nextConfig = {
       { source: "/v3/login", destination: "/login", permanent: true },
       { source: "/v3/legal", destination: "/legal/voice-compliance", permanent: true },
       { source: "/portal-v3", destination: "/portal", permanent: true },
+
+      /*
+       * El icono se genera en /icon desde el mismo trazado que el logo, pero
+       * los navegadores siguen pidiendo /favicon.ico a pelo y eso dejaba un
+       * 404 en la consola de todas las páginas.
+       */
+      { source: "/favicon.ico", destination: "/icon", permanent: false },
     ];
   },
 

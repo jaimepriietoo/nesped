@@ -230,6 +230,31 @@ export default function Home() {
     };
   }, []);
 
+  /*
+   * Aleja el vídeo del fondo en cuanto se hace scroll.
+   *
+   * Se guarda en un atributo y el movimiento lo hace el CSS: si se animara
+   * desde JavaScript habría que tocar el estilo en cada fotograma. Aquí sólo
+   * cambia un booleano, y como se compara antes de escribir, el atributo se
+   * toca dos veces en toda la sesión en vez de en cada píxel de scroll.
+   */
+  useEffect(() => {
+    const raiz = document.querySelector(".v3");
+    if (!raiz) return undefined;
+
+    let desplazado = false;
+    const alHacerScroll = () => {
+      const ahora = window.scrollY > 80;
+      if (ahora === desplazado) return;
+      desplazado = ahora;
+      raiz.dataset.desplazado = String(ahora);
+    };
+
+    alHacerScroll();
+    window.addEventListener("scroll", alHacerScroll, { passive: true });
+    return () => window.removeEventListener("scroll", alHacerScroll);
+  }, []);
+
   useEffect(() => {
     let vivo = true;
     fetch("/api/precios")
@@ -318,8 +343,8 @@ export default function Home() {
         </div>
 
         <h1 className="v3-h1">
-          <span>Convierte cada llamada</span>
-          <span>en ingreso real</span>
+          <span className="v3-line">Convierte cada llamada</span>
+          <span className="v3-line">en ingreso real</span>
         </h1>
 
         <p className="v3-sub">

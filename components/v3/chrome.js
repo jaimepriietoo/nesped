@@ -116,19 +116,29 @@ export function Footer() {
           <div className="v3-foot-cols">
             <div>
               <span className="v3-foot-title">Producto</span>
-              <Link className="v3-foot-link" href="/#producto">Cómo funciona</Link>
-              <Link className="v3-foot-link" href="/#senal">Señal</Link>
-              <Link className="v3-foot-link" href="/#demo">Demo real</Link>
+              <Link className="v3-foot-link" href="/#como">Cómo funciona</Link>
+              <Link className="v3-foot-link" href="/#demo">Escúchalo</Link>
+              <Link className="v3-foot-link" href="/#preguntas">Preguntas</Link>
             </div>
             <div>
-              <span className="v3-foot-title">Planes</span>
-              <a className="v3-foot-link" href="/pricing">Pricing</a>
-              <a className="v3-foot-link" href="/login">Acceder</a>
+              <span className="v3-foot-title">Empezar</span>
+              <a className="v3-foot-link" href="/pricing">Precios</a>
+              <a className="v3-foot-link" href="/login">Acceder al portal</a>
               <a className="v3-foot-link" href="mailto:ventas@nesped.com">Hablar con ventas</a>
             </div>
             <div>
               <span className="v3-foot-title">Legal</span>
-              <a className="v3-foot-link" href="/legal/voice-compliance">Política de grabaciones</a>
+              <a className="v3-foot-link" href="/legal/aviso-legal">Aviso legal</a>
+              <a className="v3-foot-link" href="/legal/privacidad">Privacidad</a>
+              <a className="v3-foot-link" href="/legal/terminos">Términos</a>
+              <a className="v3-foot-link" href="/legal/cookies">Cookies</a>
+              <a className="v3-foot-link" href="/legal/voice-compliance">Grabaciones</a>
+            </div>
+            <div>
+              <span className="v3-foot-title">Contacto</span>
+              <a className="v3-foot-link" href="mailto:soporte@nesped.com">Soporte</a>
+              <a className="v3-foot-link" href="mailto:privacidad@nesped.com">Privacidad</a>
+              <a className="v3-foot-link" href="mailto:seguridad@nesped.com">Seguridad</a>
             </div>
           </div>
         </div>

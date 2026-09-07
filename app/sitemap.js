@@ -14,6 +14,10 @@ export default function sitemap() {
   return [
     { url: `${BASE}/`, lastModified: ahora, changeFrequency: "weekly", priority: 1 },
     { url: `${BASE}/pricing`, lastModified: ahora, changeFrequency: "weekly", priority: 0.9 },
+    { url: `${BASE}/legal/aviso-legal`, lastModified: ahora, changeFrequency: "yearly", priority: 0.2 },
+    { url: `${BASE}/legal/privacidad`, lastModified: ahora, changeFrequency: "yearly", priority: 0.3 },
+    { url: `${BASE}/legal/terminos`, lastModified: ahora, changeFrequency: "yearly", priority: 0.3 },
+    { url: `${BASE}/legal/cookies`, lastModified: ahora, changeFrequency: "yearly", priority: 0.2 },
     { url: `${BASE}/legal/voice-compliance`, lastModified: ahora, changeFrequency: "yearly", priority: 0.3 },
   ];
 }

@@ -18,18 +18,15 @@ import { useEffect, useRef, useState } from "react";
    quien no oye.
    ========================================================================= */
 
-/** Momento de inicio de cada intervención, en segundos. */
-const GUION = [
-  { t: 0.0, quien: "agente", texto: "Instalaciones Vega, buenos días." },
-  { t: 2.6, quien: "cliente", texto: "Hola buenas, llamaba para pedir presupuesto de aerotermia para un chalet." },
-  { t: 8.4, quien: "agente", texto: "Perfecto, ¿cuántos metros cuadrados tiene la vivienda?" },
-  { t: 12.2, quien: "cliente", texto: "Pues son unos ciento ochenta metros, y ya tenemos suelo radiante puesto." },
-  { t: 18.4, quien: "agente", texto: "Genial, con suelo radiante encaja muy bien; ¿me dices tu nombre?" },
-  { t: 23.0, quien: "cliente", texto: "Marta Rubio." },
-  { t: 25.4, quien: "agente", texto: "Marta, ¿me das tu teléfono de contacto, por favor?" },
-  { t: 29.0, quien: "cliente", texto: "Seis cero dos, dos nueve siete, siete siete cero." },
-  { t: 33.8, quien: "agente", texto: "Confirmo, seis cero dos, dos nueve siete, siete siete cero. Le llaman hoy." },
-];
+/*
+ * El guion y sus tiempos los escribe el generador del audio.
+ *
+ * Estaban a mano y eso obliga a recalcularlos cada vez que se regenera la
+ * llamada; en cuanto se olvida una vez, la línea resaltada va por detrás de
+ * lo que suena y queda peor que no resaltar nada. Ahora salen del mismo
+ * script que produce el WAV, así que no pueden desincronizarse.
+ */
+import GUION from "./muestra-guion.json";
 
 function reloj(segundos) {
   const s = Math.max(0, Math.floor(segundos || 0));

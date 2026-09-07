@@ -1,0 +1,47 @@
+[
+  {
+    "t": 0,
+    "quien": "agente",
+    "texto": "Instalaciones Vega, buenos días."
+  },
+  {
+    "t": 3.7,
+    "quien": "cliente",
+    "texto": "Sí, mira, es que llamaba para pedir un presupuesto de aerotermia para mi chalet."
+  },
+  {
+    "t": 9.3,
+    "quien": "agente",
+    "texto": "Entendido, ¿me dices tu nombre, por favor?"
+  },
+  {
+    "t": 12.4,
+    "quien": "cliente",
+    "texto": "Marta."
+  },
+  {
+    "t": 13.5,
+    "quien": "agente",
+    "texto": "Marta, ¿me facilitas un número de teléfono de contacto?"
+  },
+  {
+    "t": 17.4,
+    "quien": "cliente",
+    "texto": "Sí, es el seis cero dos, dos nueve siete, siete siete cero."
+  },
+  {
+    "t": 23.2,
+    "quien": "agente",
+    "texto": "Confirmo el teléfono: seis cero dos, dos nueve siete, siete siete cero. Te llaman hoy."
+  },
+  {
+    "t": 31.1,
+    "quien": "cliente",
+    "texto": "Perfecto, quedo atenta. Hasta luego."
+  },
+  {
+    "t": 35.1,
+    "quien": "agente",
+    "texto": "Hasta luego, Marta."
+  }
+]

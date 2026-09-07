@@ -1077,7 +1077,7 @@ function Equipo({ datos, onRecargar }) {
                         className="pv3-input"
                         type="password"
                         autoComplete="new-password"
-                        placeholder="Nueva contraseña"
+                        placeholder="Nueva contraseña (10+)"
                         style={{ width: 160, padding: "6px 11px", fontSize: 12.5 }}
                         aria-label={`Nueva contraseña de ${u.email}`}
                         value={reinicio[u.id] || ""}
@@ -1086,7 +1086,7 @@ function Equipo({ datos, onRecargar }) {
                       <Accion
                         onRun={async () => {
                           const clave = reinicio[u.id] || "";
-                          if (clave.length < 8) throw new Error("Mínimo 8 caracteres.");
+                          if (clave.length < 10) throw new Error("Mínimo 10 caracteres.");
                           await enviar("/api/portal/users/reset-password", "POST", {
                             userId: u.id,
                             password: clave,

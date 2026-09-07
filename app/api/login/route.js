@@ -2,6 +2,7 @@ import { getSupabase } from "@/lib/supabase";
 import {
   generateTwoFactorCode,
   requiresTwoFactor,
+  sanitizeNextPath,
   setAuthCookies,
   setTwoFactorChallenge,
   verifyPassword,
@@ -103,10 +104,10 @@ async function handlePost(req) {
     const normalizedRole = authenticatedUser.role || "client";
     const clientName =
       client?.name || authenticatedUser.clientName || authenticatedUser.client_id;
-    const redirectTo =
-      nextPath && nextPath.startsWith("/") && !nextPath.startsWith("//")
-        ? nextPath
-        : "/portal";
+    // Mismo saneador que usa el reto de doble factor: una copia aparte se
+    // queda atrás en cuanto se endurece una de las dos, que es lo que había
+    // pasado aquí.
+    const redirectTo = sanitizeNextPath(nextPath);
 
     if (requiresTwoFactor(normalizedRole)) {
       const code = generateTwoFactorCode();

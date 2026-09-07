@@ -1,6 +1,7 @@
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { validarPassword } from "@/lib/server/passwords";
 import { hashPassword } from "@/lib/server/auth";
-import { requireSameOrigin } from "@/lib/server/security";
+import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 
 export async function POST(req) {
   try {
@@ -9,6 +10,16 @@ export async function POST(req) {
       "Origen no permitido para resetear contraseña"
     );
     if (sameOriginError) return sameOriginError;
+
+    // Aunque haga falta rol elevado, un límite corta el ruido y evita que
+    // una sesión robada haga daño en masa antes de que nadie se entere.
+    const limiteError = await requireRateLimitAsync(req, {
+      namespace: "portal:reset-password",
+      limit: 10,
+      windowMs: 15 * 60 * 1000,
+      message: "Demasiados cambios de contraseña seguidos. Espera unos minutos.",
+    });
+    if (limiteError) return limiteError;
 
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -29,14 +40,17 @@ export async function POST(req) {
     const userId = String(body?.userId || "").trim();
     const password = String(body?.password || "").trim();
 
-    if (!userId || password.length < 8) {
+    if (!userId) {
       return Response.json(
-        {
-          success: false,
-          message: "Indica usuario y una contraseña de al menos 8 caracteres",
-        },
+        { success: false, message: "Indica de qué usuario se trata" },
         { status: 400 }
       );
+    }
+
+    // Misma exigencia en todo el producto: la regla vive en un solo sitio.
+    const política = validarPassword(password);
+    if (!política.ok) {
+      return Response.json({ success: false, message: política.message }, { status: 400 });
     }
 
     const { data: portalUser, error } = await ctx.supabase

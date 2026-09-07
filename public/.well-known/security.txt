@@ -1,0 +1,14 @@
+# Cómo avisarnos de un fallo de seguridad.
+#
+# Sin este fichero, quien encuentra un problema no sabe a quién escribir y
+# acaba publicándolo o vendiéndolo. Con él, llega a nosotros primero.
+
+Contact: mailto:seguridad@nesped.com
+Expires: 2027-12-31T23:59:59.000Z
+Preferred-Languages: es, en
+Canonical: https://nesped.com/.well-known/security.txt
+
+# Agradecemos los avisos responsables. Pedimos que no se acceda a datos de
+# terceros, no se degrade el servicio y se nos dé margen para corregir antes
+# de hacerlo público.
+Policy: https://nesped.com/legal/voice-compliance

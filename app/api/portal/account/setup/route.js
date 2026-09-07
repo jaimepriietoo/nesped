@@ -1,4 +1,5 @@
 import { getPortalContext } from "@/lib/portal-auth";
+import { validarPassword } from "@/lib/server/passwords";
 import { safeUpsertClientSettings } from "@/lib/client-settings";
 import { getSupabase } from "@/lib/supabase";
 import {
@@ -337,14 +338,11 @@ export async function POST(req) {
       );
     }
 
-    if (password.length < 6) {
-      return Response.json(
-        {
-          success: false,
-          message: "La contrasena debe tener al menos 6 caracteres",
-        },
-        { status: 400 }
-      );
+    // Esta es la primera contraseña de un cliente que acaba de pagar, así
+    // que es exactamente donde no conviene aceptar cualquier cosa.
+    const politica = validarPassword(password, { email });
+    if (!politica.ok) {
+      return Response.json({ success: false, message: politica.message }, { status: 400 });
     }
 
     if (ctx.ok) {

@@ -65,8 +65,8 @@ export default function SetupAccountClient() {
       setError("Completa el email y la contraseña.");
       return;
     }
-    if (form.password.length < 8) {
-      setError("La contraseña necesita al menos 8 caracteres.");
+    if (form.password.length < 10) {
+      setError("La contraseña necesita al menos 10 caracteres.");
       return;
     }
     if (form.password !== form.confirmPassword) {
@@ -140,7 +140,7 @@ export default function SetupAccountClient() {
               className="v3-input"
               type="password"
               autoComplete="new-password"
-              placeholder="Mínimo 8 caracteres"
+              placeholder="Mínimo 10 caracteres"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               required

@@ -2,6 +2,11 @@ import { withSentryConfig } from "@sentry/nextjs";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Anuncia con qué está hecho el sitio y su versión: es información gratis
+  // para quien busca exploits conocidos del framework. El middleware no
+  // puede quitarla porque el servidor la añade después.
+  poweredByHeader: false,
+
   /**
    * El sitio vivió un tiempo en /v3 mientras se rehacía. Ahora es la raíz,
    * pero puede haber enlaces guardados apuntando allí: 308 permanente para

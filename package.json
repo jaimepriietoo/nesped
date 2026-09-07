@@ -15,7 +15,8 @@
     "test:e2e:headed": "playwright test --headed",
     "revisar": "node scripts/revisar-sitio.mjs",
     "revisar:portal": "node scripts/revisar-portal.mjs",
-    "revisar:admin": "node scripts/revisar-admin.mjs"
+    "revisar:admin": "node scripts/revisar-admin.mjs",
+    "revisar:seguridad": "node scripts/revisar-seguridad.mjs"
   },
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "^7.7.0",

@@ -1,4 +1,5 @@
-"use client";
+/* GENERADO — no editar a mano.
+   Sale de app/portal-v3/page.js vía prueba/build-portal.mjs. */
 
 /**
  * Portal de cliente en el lenguaje visual v3.
@@ -10,8 +11,7 @@
  * No sustituye a /portal: convive con él. Lee los mismos endpoints reales.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import "./portal-v3.css";
+const { useCallback, useEffect, useMemo, useState } = React;
 
 /* ── utilidades ──────────────────────────────────────────────────────── */
 
@@ -82,16 +82,16 @@ function fecha(valor) {
   return d.toLocaleDateString("es-ES", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
-/** Cualquier 401 significa sesión caducada: volvemos al login conservando el destino. */
+/**
+ * En la demo no hay red ni sesión. Se mantiene la firma asíncrona y un
+ * retardo corto a propósito, para que se vean los estados de carga reales.
+ */
 async function pedir(url) {
-  const res = await fetch(url, { cache: "no-store" });
-  if (res.status === 401) {
-    window.location.replace("/login?next=/portal-v3");
-    return null;
-  }
-  const json = await res.json().catch(() => null);
-  if (!json?.success) throw new Error(json?.message || "No se pudo cargar la información.");
-  return json;
+  await new Promise((listo) => setTimeout(listo, 260));
+  if (url === "/api/portal/overview") return window.DEMO.overview;
+  const data = window.DEMO[url];
+  if (data === undefined) throw new Error("Esta sección no tiene datos en la demo.");
+  return { success: true, data };
 }
 
 /* ── piezas ──────────────────────────────────────────────────────────── */
@@ -1175,7 +1175,7 @@ const META = {
   ajustes: ["CONFIGURACIÓN", "Ajustes", "Tu cuenta, tus objetivos y tu facturación."],
 };
 
-export default function PortalV3() {
+function PortalV3() {
   const [vista, setVista] = useState("resumen");
   const [datos, setDatos] = useState(null);
   const [error, setError] = useState("");
@@ -1314,3 +1314,5 @@ export default function PortalV3() {
     </div>
   );
 }
+
+ReactDOM.createRoot(document.getElementById("raiz")).render(<PortalV3 />);

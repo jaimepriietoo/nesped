@@ -33,7 +33,19 @@ export function Rev({ children, d = 0, as: Tag = "div", className = "", ...resto
     );
 
     io.observe(el);
-    return () => io.disconnect();
+
+    // Red de seguridad: si el callback no llega nunca (pestaña en segundo
+    // plano, pintado diferido, navegadores empotrados) el bloque se quedaría
+    // a opacidad 0 de forma permanente. Antes que sin animación, visible.
+    const rescate = window.setTimeout(() => {
+      setDentro(true);
+      io.disconnect();
+    }, 3000);
+
+    return () => {
+      window.clearTimeout(rescate);
+      io.disconnect();
+    };
   }, [dentro]);
 
   return (

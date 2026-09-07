@@ -51,11 +51,19 @@
   const stats = document.querySelector(".stats");
 
   if (stats && valores.length) {
+    let disparado = false;
+
+    function lanzar() {
+      if (disparado) return;
+      disparado = true;
+      valores.forEach(cuenta);
+    }
+
     const io = new IntersectionObserver(
       function (entradas) {
         entradas.forEach(function (entrada) {
           if (!entrada.isIntersecting) return;
-          valores.forEach(cuenta);
+          lanzar();
           io.disconnect(); // una sola vez
         });
       },
@@ -63,6 +71,14 @@
     );
 
     io.observe(stats);
+
+    // Red de seguridad: hay situaciones en las que el callback no llega nunca
+    // (pestaña en segundo plano, pintado diferido, navegadores empotrados).
+    // Sin esto las cifras se quedarían clavadas en cero de forma permanente.
+    window.setTimeout(function () {
+      lanzar();
+      io.disconnect();
+    }, 2500);
   }
 
   /* ── Menú móvil ─────────────────────────────────────────────────── */
@@ -113,4 +129,42 @@
       if (window.innerWidth > 720 && abierto()) cerrar();
     });
   }
+})();
+
+/* ── Entrada por scroll ───────────────────────────────────────────────
+   IntersectionObserver en vez de un listener de scroll: el navegador
+   decide cuándo comprobar, así que no hay trabajo en cada frame.
+   -------------------------------------------------------------------- */
+
+(function revelar() {
+  const elementos = document.querySelectorAll(".rev");
+  if (elementos.length === 0) return;
+
+  if (!("IntersectionObserver" in window)) {
+    elementos.forEach((el) => el.classList.add("is-in"));
+    return;
+  }
+
+  const observador = new IntersectionObserver(
+    (entradas) => {
+      entradas.forEach((entrada, i) => {
+        if (!entrada.isIntersecting) return;
+        // Escalonado por posición dentro del lote visible, no por índice global.
+        entrada.target.style.transitionDelay = `${Math.min(i, 6) * 70}ms`;
+        entrada.target.classList.add("is-in");
+        observador.unobserve(entrada.target);
+      });
+    },
+    { rootMargin: "0px 0px -12% 0px", threshold: 0.1 }
+  );
+
+  elementos.forEach((el) => observador.observe(el));
+
+  // Igual que con los contadores, pero aquí es más grave: estos bloques
+  // empiezan a opacidad 0. Si el observador no llega, media página queda en
+  // blanco. Pasado un margen razonable se muestran sí o sí.
+  window.setTimeout(() => {
+    elementos.forEach((el) => el.classList.add("is-in"));
+    observador.disconnect();
+  }, 3000);
 })();

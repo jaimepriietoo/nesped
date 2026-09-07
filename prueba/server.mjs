@@ -27,7 +27,12 @@ createServer(async (req, res) => {
   }
   try {
     const buf = await readFile(ruta);
-    res.writeHead(200, { "Content-Type": tipos[extname(ruta)] || "application/octet-stream" });
+    res.writeHead(200, {
+      "Content-Type": tipos[extname(ruta)] || "application/octet-stream",
+      // Sin caché: esto es una demo que se toca constantemente, y ver una
+      // versión vieja sin saberlo cuesta más tiempo que volver a leer el fichero.
+      "Cache-Control": "no-store, must-revalidate",
+    });
     res.end(buf);
   } catch {
     res.writeHead(404).end("Not found");

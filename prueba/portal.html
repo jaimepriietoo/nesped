@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Portal · Nesped (demo)</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="portal.css" />
+    <style>
+      .pv3 { font-family: "Inter", "Segoe UI", system-ui, sans-serif; }
+
+      /* Aviso de que esto son datos inventados: si no se dice, se confunde
+         con la cuenta real en cuanto alguien enseña la pantalla. */
+      .demo-aviso {
+        position: fixed;
+        right: 18px;
+        bottom: 18px;
+        z-index: 999;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 9px 17px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 999px;
+        background: rgba(10, 10, 10, 0.9);
+        backdrop-filter: blur(12px);
+        font-family: "BubbledotICG-FinePos", monospace;
+        font-size: 11px;
+        letter-spacing: 0.07em;
+        color: #b8b8b8;
+        white-space: nowrap;
+      }
+
+      .demo-aviso a { color: #fff; text-decoration: underline; }
+
+      .demo-cargando {
+        display: grid;
+        place-items: center;
+        min-height: 100dvh;
+        font-family: "BubbledotICG-FinePos", monospace;
+        font-size: 12px;
+        letter-spacing: 0.09em;
+        color: #6a6a6a;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="raiz"><div class="demo-cargando">CARGANDO PORTAL…</div></div>
+
+    <div class="demo-aviso">
+      DATOS DE MUESTRA · <a href="index.html">Volver al sitio</a>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js" crossorigin></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js" crossorigin></script>
+
+    <script src="portal-datos.js"></script>
+    <script type="text/babel" src="portal.js" data-presets="react"></script>
+  </body>
+</html>

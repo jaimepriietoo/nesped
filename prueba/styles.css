@@ -17,11 +17,11 @@
   --font-display: "BubbledotICG-FinePos", "Geist Pixel Circle", monospace;
 }
 
-/* Solo fallback: la display buena entra por CDN. Si el .woff2 no está,
-   @font-face falla en silencio y se cae a monospace. */
+/* La display va autoalojada: antes venía de OnlineWebFonts, y eso era un
+   tercero en la ruta crítica del render y una dependencia que puede caerse. */
 @font-face {
-  font-family: "Geist Pixel Circle";
-  src: url("fonts/GeistPixel-Circle.woff2") format("woff2");
+  font-family: "BubbledotICG-FinePos";
+  src: url("fonts/bubbledot-finepos.woff2") format("woff2");
   font-weight: 400;
   font-display: swap;
 }
@@ -42,9 +42,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
-  height: 100vh;
-  height: 100dvh;
-  overflow: hidden;
+  min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -57,7 +55,7 @@ a {
 /* ── Vídeo de fondo ────────────────────────────────────────────────── */
 
 .bg {
-  position: absolute;
+  position: fixed;
   inset: 0;
   background: #000;
   overflow: hidden;
@@ -80,10 +78,15 @@ a {
   display: flex;
   flex-direction: column;
   align-items: center;
-  height: 100vh;
-  height: 100dvh;
+  min-height: 100dvh;
   padding: clamp(16px, 2.4vh, 28px) clamp(14px, 3vw, 32px);
-  overflow: hidden;
+}
+
+/* La cabecera acompaña al scroll en lugar de perderse arriba. */
+.header {
+  position: sticky;
+  top: clamp(16px, 2.4vh, 28px);
+  z-index: 30;
 }
 
 .header,
@@ -649,4 +652,232 @@ body.menu-open {
   .headline {
     color: #fff;
   }
+}
+
+/* =========================================================================
+   Secciones bajo el hero.
+
+   El hero ocupa el primer viewport con el vídeo detrás; a partir de aquí el
+   fondo pasa a negro sólido para que el texto largo se lea sin competir con
+   el metraje.
+   ========================================================================= */
+
+.sections {
+  position: relative;
+  z-index: 5;
+  background: #000;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.section {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: clamp(64px, 11vh, 128px) clamp(18px, 4vw, 40px);
+}
+
+.section + .section { border-top: 1px solid rgba(255, 255, 255, 0.08); }
+
+.eyebrow {
+  display: block;
+  margin-bottom: 16px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+}
+
+.s-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(28px, 5vw, 54px);
+  line-height: 1.06;
+  letter-spacing: -0.045em;
+}
+
+.s-lead {
+  max-width: 62ch;
+  margin: 20px 0 0;
+  font-size: clamp(15px, 1.5vw, 18px);
+  line-height: 1.62;
+  color: #b8b8b8;
+}
+
+.cards {
+  display: grid;
+  gap: 14px;
+  margin-top: 44px;
+  grid-template-columns: repeat(auto-fit, minmax(226px, 1fr));
+}
+
+.card {
+  padding: 26px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012));
+  transition: border-color 0.45s ease, transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.card:hover { border-color: rgba(255, 255, 255, 0.26); transform: translateY(-3px); }
+
+.card h3 {
+  margin: 14px 0 0;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.card p { margin: 10px 0 0; font-size: 14px; line-height: 1.62; color: #9d9d9d; }
+
+.card-num {
+  font-family: var(--font-display);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+/* ── Cifras ─────────────────────────────────────────────────────────── */
+
+.figures {
+  display: grid;
+  gap: 14px;
+  margin-top: 44px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.figure {
+  padding: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+}
+
+.figure b {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(30px, 4.4vw, 48px);
+  line-height: 1;
+  letter-spacing: -0.045em;
+}
+
+.figure span { display: block; margin-top: 12px; font-size: 13px; color: var(--muted); }
+
+/* ── Planes ─────────────────────────────────────────────────────────── */
+
+.plans {
+  display: grid;
+  gap: 14px;
+  margin-top: 44px;
+  grid-template-columns: repeat(auto-fit, minmax(272px, 1fr));
+}
+
+.plan {
+  display: flex;
+  flex-direction: column;
+  padding: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.022);
+}
+
+.plan[data-destacado="true"] {
+  border-color: rgba(255, 255, 255, 0.34);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.plan-name {
+  font-family: var(--font-display);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.plan-price {
+  margin-top: 16px;
+  font-family: var(--font-display);
+  font-size: 42px;
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.plan-price small { font-family: var(--font-sans); font-size: 13px; color: var(--muted); letter-spacing: 0; }
+
+.plan ul { margin: 22px 0 0; padding: 0; list-style: none; display: grid; gap: 11px; }
+
+.plan li {
+  position: relative;
+  padding-left: 20px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #b8b8b8;
+}
+
+.plan li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.plan .cta { margin-top: auto; padding-top: 26px; }
+
+.btn {
+  display: inline-grid;
+  place-items: center;
+  padding: 13px 26px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.3s ease, transform 0.3s ease;
+}
+
+.btn:hover { background: rgba(255, 255, 255, 0.13); transform: translateY(-1px); }
+.btn[data-v="light"] { background: #fff; color: #000; border-color: transparent; font-weight: 600; }
+.btn[data-v="light"]:hover { background: #e9e9e9; }
+
+/* ── Pie ────────────────────────────────────────────────────────────── */
+
+.foot {
+  position: relative;
+  z-index: 5;
+  padding: 44px clamp(18px, 4vw, 40px) 56px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: #000;
+}
+
+.foot-in {
+  max-width: 1120px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.foot a { color: #b8b8b8; }
+.foot a:hover { color: #fff; }
+
+/* ── Entrada por scroll ─────────────────────────────────────────────── */
+
+.rev {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity 0.85s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.85s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.rev.is-in { opacity: 1; transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rev { opacity: 1; transform: none; transition: none; }
 }

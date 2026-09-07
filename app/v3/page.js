@@ -152,25 +152,35 @@ function Contador({ target, suffix, decimals, i }) {
 
     let raf = 0;
     let timer = 0;
+
+    function arrancar() {
+      io.disconnect();
+      timer = window.setTimeout(() => {
+        const t0 = performance.now();
+        const dur = 1500 + i * 80;
+        const paso = (now) => {
+          const p = Math.min(1, (now - t0) / dur);
+          setV(target * (1 - Math.pow(1 - p, 3)));
+          if (p < 1) raf = requestAnimationFrame(paso);
+        };
+        raf = requestAnimationFrame(paso);
+      }, 480 + i * 90);
+    }
+
     const io = new IntersectionObserver(
       ([e]) => {
         if (!e.isIntersecting) return;
-        io.disconnect();
-        timer = window.setTimeout(() => {
-          const t0 = performance.now();
-          const dur = 1500 + i * 80;
-          const paso = (now) => {
-            const p = Math.min(1, (now - t0) / dur);
-            setV(target * (1 - Math.pow(1 - p, 3)));
-            if (p < 1) raf = requestAnimationFrame(paso);
-          };
-          raf = requestAnimationFrame(paso);
-        }, 480 + i * 90);
+        arrancar();
       },
       { threshold: 0.25 }
     );
     io.observe(el);
+
+    // Red de seguridad: si el callback no llega nunca, la cifra se quedaría
+    // clavada en cero. Un número a cero miente; mejor animarla igualmente.
+    const rescate = window.setTimeout(arrancar, 2500);
     return () => {
+      window.clearTimeout(rescate);
       io.disconnect();
       cancelAnimationFrame(raf);
       window.clearTimeout(timer);

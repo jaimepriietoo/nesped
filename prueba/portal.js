@@ -29,6 +29,47 @@ const { useCallback, useEffect, useMemo, useRef, useState } = React;
  * vez que se abre su pestaña. Las que no lo tienen se dibujan con los datos
  * de /api/portal/overview, que ya se piden al entrar.
  */
+/* =========================================================================
+   Planes.
+
+   El portal no distinguía planes: un cliente de Starter veía exactamente lo
+   mismo que uno de Pro, aunque pagase la cuarta parte. Las columnas `plan` y
+   `calls_limit` estaban en la base desde el principio y nadie las leía.
+
+   Lo que no entra en el plan no se esconde: se enseña bloqueado. Un cliente
+   de Starter viendo qué le daría Pro es la mejor palanca de subida que hay,
+   y esconderlo sólo consigue que no sepa que existe.
+   ========================================================================= */
+
+const PLANES = {
+  starter: {
+    nombre: "Starter",
+    incluye: ["resumen", "leads", "llamadas", "equipo", "ajustes", "estado"],
+    siguiente: "pro",
+  },
+  pro: {
+    nombre: "Pro",
+    // Pro lo abre todo.
+    incluye: null,
+    siguiente: null,
+  },
+  premium: { nombre: "Premium", incluye: null, siguiente: null },
+  enterprise: { nombre: "Enterprise", incluye: null, siguiente: null },
+};
+
+/** Qué se le da a alguien cuyo plan no reconocemos: lo mínimo, nunca todo. */
+const PLAN_POR_DEFECTO = "starter";
+
+function planDe(cliente) {
+  const bruto = String(cliente?.plan || "").toLowerCase().trim();
+  return PLANES[bruto] ? bruto : PLAN_POR_DEFECTO;
+}
+
+function vistaIncluida(idVista, plan) {
+  const def = PLANES[plan] || PLANES[PLAN_POR_DEFECTO];
+  return def.incluye === null || def.incluye.includes(idVista);
+}
+
 const VISTAS = [
   { grupo: "Operación" },
   { id: "resumen", label: "Resumen", ico: "◆" },
@@ -1716,6 +1757,65 @@ function Playbooks({ playbooks, cargando, onRecargar }) {
   );
 }
 
+/* ── plan insuficiente ───────────────────────────────────────────────── */
+
+/**
+ * Lo que queda fuera del plan.
+ *
+ * Se cuenta qué hace la pantalla y qué se está perdiendo, no un simple
+ * "actualiza tu plan". Alguien que ve para qué sirve lo que no tiene decide;
+ * alguien que ve un candado sin explicación, se va.
+ */
+function FueraDePlan({ vista, plan, onContratar, ocupado }) {
+  const QUE_APORTA = {
+    conversaciones: {
+      titulo: "Cada cliente, en un solo hilo",
+      texto:
+        "Todas las llamadas, mensajes y notas de una misma persona juntas y en orden, con el histórico completo. Puedes responder desde aquí por SMS o WhatsApp sin salir del portal.",
+    },
+    voz: {
+      titulo: "Saber cómo lo está haciendo la voz",
+      texto:
+        "Una nota por llamada, qué se le escapa al agente, qué objeciones aparecen más y si está cumpliendo el guion. Es lo que te permite corregirlo en vez de suponer.",
+    },
+    playbooks: {
+      titulo: "Decidir tú cómo habla la voz",
+      texto:
+        "El objetivo de la llamada, el tono, qué tiene que preguntar siempre y cómo responder a cada objeción. Sin esto, el agente usa el guion genérico.",
+    },
+  }[vista] || {
+    titulo: "Esta sección es del plan Pro",
+    texto: "Tu plan actual no la incluye.",
+  };
+
+  return (
+    <div className="pv3-view">
+      <div className="pv3-card pv3-bloqueo">
+        <span className="pv3-lab">INCLUIDO EN PRO · TU PLAN ES {String(plan).toUpperCase()}</span>
+        <h2 className="pv3-bloqueo-titulo">{QUE_APORTA.titulo}</h2>
+        <p className="pv3-p" style={{ marginTop: 12, fontSize: 15, maxWidth: "62ch" }}>
+          {QUE_APORTA.texto}
+        </p>
+
+        <div style={{ display: "flex", gap: 10, marginTop: 26, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="pv3-btn"
+            data-v="light"
+            onClick={onContratar}
+            disabled={ocupado}
+          >
+            {ocupado ? "Abriendo…" : "Pasar a Pro"}
+          </button>
+          <a className="pv3-btn" href="mailto:ventas@nesped.com?subject=Ampliar%20a%20Pro">
+            Hablarlo con ventas
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 class Aislante extends React.Component {
   constructor(props) {
     super(props);
@@ -1797,6 +1897,11 @@ function PortalV3() {
   const [extra, setExtra] = useState({});
   const [cargando, setCargando] = useState({});
 
+  /* `abrir` se define antes de que lleguen los datos del cliente, así que el
+     plan viaja por referencia en vez de por dependencia: si fuera dependencia,
+     cambiaría la identidad de la función en cada carga. */
+  const planActual = useRef(PLAN_POR_DEFECTO);
+
   useEffect(() => {
     let vivo = true;
     pedir("/api/portal/overview")
@@ -1866,6 +1971,10 @@ function PortalV3() {
   const abrir = useCallback((id) => {
     setVista(id);
 
+    // Sin plan no se piden sus datos: la API los rechazaría o, peor, los
+    // daría, y no tiene sentido gastar una llamada en algo que no se pinta.
+    if (!vistaIncluida(id, planActual.current)) return;
+
     const destino = [...VISTAS, ...VISTAS_OCULTAS].find((v) => v.id === id);
     if (!destino) return;
 
@@ -1890,6 +1999,28 @@ function PortalV3() {
 
   const meta = META[vista] || ["PORTAL", "Nesped", ""];
   const marca = datos?.client?.brand_name || datos?.client?.name || "Nesped";
+  const plan = planDe(datos?.client);
+  planActual.current = plan;
+  const [subiendoPlan, setSubiendoPlan] = useState(false);
+
+  /** Lleva al checkout de Pro desde la pantalla de sección bloqueada. */
+  const contratarPro = useCallback(async () => {
+    setSubiendoPlan(true);
+    try {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: "pro" }),
+      });
+      const json = await res.json().catch(() => null);
+      if (json?.url) { window.location.href = json.url; return; }
+      alert(json?.message || "No se pudo abrir el pago. Escríbenos a ventas@nesped.com.");
+    } catch (e) {
+      alert(e?.message || "No se pudo abrir el pago.");
+    } finally {
+      setSubiendoPlan(false);
+    }
+  }, []);
   const alertasAbiertas = (datos?.alerts || []).length;
   const cargandoVista = Boolean(cargando[vista]);
 
@@ -1902,6 +2033,18 @@ function PortalV3() {
   const datosVista = extra[vista];
 
   function contenido() {
+    // Puerta única: nada de comprobar el plan en cada rama y olvidarse en una.
+    if (!vistaIncluida(vista, plan)) {
+      return (
+        <FueraDePlan
+          vista={vista}
+          plan={PLANES[plan]?.nombre || plan}
+          onContratar={contratarPro}
+          ocupado={subiendoPlan}
+        />
+      );
+    }
+
     switch (vista) {
       case "resumen": return <Resumen datos={datos} />;
       case "leads": return <Leads datos={datos} onRecargar={recargar} />;
@@ -1951,6 +2094,7 @@ function PortalV3() {
             <span>
               <b>{marca}</b>
               <small>PORTAL</small>
+              {datos ? <span className="pv3-plan">PLAN {PLANES[plan]?.nombre?.toUpperCase() || plan.toUpperCase()}</span> : null}
             </span>
           </div>
 
@@ -1963,13 +2107,16 @@ function PortalV3() {
                 type="button"
                 className="pv3-nav"
                 data-on={vista === v.id}
+                data-plan={vistaIncluida(v.id, plan) ? undefined : "fuera"}
                 onClick={() => abrir(v.id)}
+                title={vistaIncluida(v.id, plan) ? undefined : "Incluido en el plan Pro"}
               >
                 <span className="pv3-ico">{v.ico}</span>
                 {v.label}
                 {v.id === "resumen" && alertasAbiertas > 0 ? (
                   <span className="pv3-badge">{alertasAbiertas}</span>
                 ) : null}
+                {vistaIncluida(v.id, plan) ? null : <span className="pv3-candado">PRO</span>}
               </button>
             )
           )}

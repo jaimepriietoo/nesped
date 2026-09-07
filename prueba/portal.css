@@ -401,3 +401,44 @@ html, body { margin: 0; padding: 0; background: #000; }
 }
 
 .pv3-marca[data-ok="true"] { color: var(--ok); }
+
+/* ── Sección fuera de plan ──────────────────────────────────────────── */
+
+.pv3-bloqueo {
+  margin-top: 22px;
+  padding: clamp(26px, 4vw, 44px);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.pv3-bloqueo-titulo {
+  margin: 14px 0 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(22px, 3vw, 30px);
+  letter-spacing: -0.04em;
+}
+
+/* Entrada del menú que el plan no incluye: visible pero apagada, para que
+   se sepa que existe sin invitar a pulsarla por error. */
+.pv3-nav[data-plan="fuera"] { color: #626262; }
+.pv3-nav[data-plan="fuera"]:hover { color: #9a9a9a; }
+
+.pv3-candado {
+  margin-left: auto;
+  font-size: 11px;
+  color: #626262;
+}
+
+.pv3-plan {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 2px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-size: 10.5px;
+  letter-spacing: 0.07em;
+  color: var(--dim);
+}

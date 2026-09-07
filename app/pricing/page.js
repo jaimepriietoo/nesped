@@ -1,43 +1,36 @@
-"use client";
 import Link from "next/link";
-
 import { Inter } from "next/font/google";
 import "@/components/v3/v3.css";
 import { Footer, Header } from "@/components/v3/chrome";
 import { Rev } from "@/components/v3/rev";
+import { obtenerPrecios } from "@/lib/server/precios";
 
 const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600"], display: "swap" });
 
-/* Importes y rutas de checkout: las de producción, sin tocar. */
+/**
+ * Los importes NO están aquí: se leen de Stripe en cada carga, que es lo
+ * único que se cobra de verdad. Aquí queda sólo lo que Stripe no sabe.
+ */
 const PLANES = [
   {
     name: "Starter",
-    price: "97 €",
-    billing: "mensual",
+    plan: "starter",
     sub: "Entrada rápida para validar experiencia y captación.",
     feats: ["Recepción IA básica", "Captura de leads", "Resumen por llamada", "Panel inicial"],
-    href: "/api/stripe/public-checkout?plan=starter",
-    cta: "Empezar con Starter",
     hi: false,
   },
   {
     name: "Pro",
-    price: "197 €",
-    billing: "mensual",
+    plan: "pro",
     sub: "La versión más seria para mostrar valor y cerrar clientes.",
     feats: ["Voz más natural", "Portal premium", "Métricas y resúmenes", "Soporte prioritario"],
-    href: "/api/stripe/public-checkout?plan=pro",
-    cta: "Contratar Pro",
     hi: true,
   },
   {
     name: "Enterprise",
-    price: "Custom",
-    billing: "según alcance",
+    plan: "enterprise",
     sub: "Despliegues multi-cliente, integraciones y rollouts premium.",
     feats: ["Branding avanzado", "Automatizaciones custom", "Mayor control operativo", "Onboarding dedicado"],
-    href: "mailto:ventas@nesped.com?subject=Plan%20Enterprise%20Nesped",
-    cta: "Hablar con ventas",
     hi: false,
   },
 ];
@@ -51,7 +44,26 @@ const COMPARATIVA = [
   { f: "Soporte", s: "Email", p: "Prioritario", e: "Dedicado" },
 ];
 
-export default function V3Pricing() {
+/* Sin caché: si se cambia un precio en Stripe, se ve en la siguiente carga. */
+export const dynamic = "force-dynamic";
+
+export default async function Pricing() {
+  const precios = await obtenerPrecios();
+
+  const planes = PLANES.map((p) => {
+    const real = precios[p.plan];
+    return {
+      ...p,
+      // Sin precio en Stripe se pasa a contacto: mejor eso que una cifra falsa.
+      price: real?.precio || "Consultar",
+      billing: real?.periodo || "según alcance",
+      href: real
+        ? `/api/stripe/public-checkout?plan=${p.plan}`
+        : `mailto:ventas@nesped.com?subject=${encodeURIComponent(`Plan ${p.name} de Nesped`)}`,
+      cta: real ? `Contratar ${p.name}` : "Hablar con ventas",
+    };
+  });
+
   return (
     <div className={`v3 ${inter.className}`}>
       <Header activo="pricing" />
@@ -68,7 +80,7 @@ export default function V3Pricing() {
           </Rev>
 
           <div className="v3-grid" data-c="3">
-            {PLANES.map((p, i) => (
+            {planes.map((p, i) => (
               <Rev as="article" key={p.name} d={i * 0.09} className={`v3-card v3-plan ${p.hi ? "v3-plan--hi" : ""}`}>
                 <span className="v3-card-meta">{p.hi ? "Recomendado" : "Plan"}</span>
                 <h2 className="v3-h3">{p.name}</h2>

@@ -64,12 +64,23 @@ export default function ClientLanding({ params }) {
     }
   }
 
+  // Mientras se resuelve el cliente no se sabe ni la marca, así que en vez de
+  // enseñar una palabra suelta sobre negro se dibuja la silueta de la página.
   if (cliente === undefined) {
     return (
-      <div className={`v3 ${inter.className}`} style={{ minHeight: "100dvh" }}>
-        <div className="v3-wrap" style={{ paddingTop: "22vh" }}>
-          <span className="v3-eyebrow">Cargando</span>
+      <div className={`v3 ${inter.className}`} style={{ minHeight: "100dvh" }} aria-busy="true">
+        <div className="v3-wrap" style={{ paddingTop: "16vh" }}>
+          <div className="v3-hueso" style={{ width: 120, height: 13 }} />
+          <div className="v3-hueso" style={{ width: "min(560px, 90%)", height: 46, marginTop: 22 }} />
+          <div className="v3-hueso" style={{ width: "min(430px, 80%)", height: 46, marginTop: 12 }} />
+          <div className="v3-hueso" style={{ width: "min(620px, 95%)", height: 15, marginTop: 26 }} />
+          <div className="v3-hueso" style={{ width: "min(520px, 85%)", height: 15, marginTop: 10 }} />
+          <div style={{ display: "flex", gap: 14, marginTop: 42, flexWrap: "wrap" }}>
+            <div className="v3-hueso" style={{ flex: "1 1 260px", height: 210 }} />
+            <div className="v3-hueso" style={{ flex: "1 1 260px", height: 210 }} />
+          </div>
         </div>
+        <span className="v3-oculto">Cargando la página</span>
       </div>
     );
   }

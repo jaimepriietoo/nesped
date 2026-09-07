@@ -869,15 +869,17 @@ body.menu-open {
 
 /* ── Entrada por scroll ─────────────────────────────────────────────── */
 
+/* Visible por defecto: si main.js no llega a correr, la página se lee igual
+   en vez de quedarse con el hero y nada debajo. Sólo se esconde cuando el
+   script ha marcado <html data-rev="1">. */
 .rev {
-  opacity: 0;
-  transform: translateY(22px);
   transition: opacity 0.85s cubic-bezier(0.22, 1, 0.36, 1),
               transform 0.85s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.rev.is-in { opacity: 1; transform: none; }
+html[data-rev="1"] .rev { opacity: 0; transform: translateY(22px); }
+html[data-rev="1"] .rev.is-in { opacity: 1; transform: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  .rev { opacity: 1; transform: none; transition: none; }
+  html[data-rev="1"] .rev { opacity: 1; transform: none; transition: none; }
 }

@@ -147,6 +147,9 @@
   const elementos = document.querySelectorAll(".rev");
   if (elementos.length === 0) return;
 
+  // A partir de aquí el CSS puede esconderlos: hay JavaScript para revelarlos.
+  document.documentElement.dataset.rev = "1";
+
   if (!("IntersectionObserver" in window)) {
     elementos.forEach((el) => el.classList.add("is-in"));
     return;

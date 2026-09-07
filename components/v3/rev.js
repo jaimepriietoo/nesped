@@ -3,6 +3,19 @@
 import { useEffect, useRef, useState } from "react";
 
 /**
+ * Marca el documento en cuanto este módulo se ejecuta.
+ *
+ * El CSS deja los bloques visibles por defecto y sólo los esconde cuando
+ * existe esta marca. Así, si el paquete de JavaScript no llega a cargarse
+ * —un chunk que falla, una extensión que lo bloquea, una red mala—, la
+ * página se lee entera sin animación en vez de quedarse en blanco. Va en el
+ * módulo y no en un efecto porque tiene que pasar antes del primer pintado.
+ */
+if (typeof document !== "undefined") {
+  document.documentElement.dataset.rev = "1";
+}
+
+/**
  * Revela a sus hijos al entrar en pantalla.
  *
  * IntersectionObserver en vez de escuchar el scroll: el navegador lo

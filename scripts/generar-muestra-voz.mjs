@@ -29,13 +29,15 @@ const env = Object.fromEntries(
 
 const MODELO = "gpt-realtime-2.1";
 const FRECUENCIA = 24000;      // lo mínimo que acepta la API
-const FRECUENCIA_SALIDA = 12000;
 const SALIDA = path.join("public", "muestra-llamada.wav");
 const EMPRESA = "Instalaciones Vega";
 
 /* Voces de distinto timbre. Con la misma en los dos lados se nota que es el
    mismo modelo hablando solo, por muy bien que module. */
-const VOCES = { agente: env.OPENAI_VOICE || "marin", cliente: "ash" };
+/* marin y cedar son las voces nuevas de la versión GA, las que suenan más
+   humanas. "ash" tiene un timbre más plano y en una conversación corta se
+   nota mucho. */
+const VOCES = { agente: env.OPENAI_VOICE || "marin", cliente: "cedar" };
 
 /**
  * Qué tiene que conseguir el agente en cada turno.
@@ -47,9 +49,9 @@ const VOCES = { agente: env.OPENAI_VOICE || "marin", cliente: "ash" };
  * que hace que suene a persona y no a guion leído.
  */
 const OBJETIVOS = [
-  "Acusa recibo en una palabra y pide su nombre. UNA frase corta.",
-  "Usa su nombre y pídele un teléfono de contacto. UNA frase corta.",
-  "Repite el teléfono en grupos de tres para confirmarlo y di que le llaman hoy. Dos frases cortas.",
+  "Acusa recibo en una palabra y pide su nombre. UNA frase corta, en tono cálido y cercano.",
+  "Usa su nombre y pídele un teléfono de contacto. UNA frase corta y natural, sin fórmulas.",
+  "Repite el teléfono en grupos de tres y di que le llaman hoy. Dos frases cortas. Empieza por \"vale\" o \"perfecto\", nunca por \"confirmo\".",
 ];
 
 /* ── Personas ────────────────────────────────────────────────────────── */
@@ -67,7 +69,19 @@ Trabajas en ${EMPRESA}. Cuando te presentes, di ${EMPRESA}. Nunca uses un
 nombre inventado ni un marcador de posición.
 
 Esta llamada es corta: en cuanto tengas nombre, teléfono y qué necesita,
-confirma el teléfono repitiéndolo y cierra. No alargues.`;
+confirma el teléfono repitiéndolo y cierra. No alargues.
+
+CÓMO SUENAS
+Cálida y cercana, como quien coge el teléfono de buen humor un martes por la
+mañana. Nada de tono de locución ni de atención al cliente de compañía
+telefónica.
+
+- No digas "confirmo", "procedo", "le informo" ni "de acuerdo con".
+  Di "vale", "perfecto", "genial", "muy bien".
+- Sonríe al hablar. Se nota en la voz.
+- No vocalices de más. Habla como se habla, no como se lee.
+- Deja que la frase caiga al final en vez de terminarla con tono neutro.
+- Trata de tú, nunca de usted.`;
 }
 
 const PERSONA_CLIENTE = `Eres Marta, una mujer de unos cuarenta años que llama desde el móvil a una
@@ -86,6 +100,11 @@ No estás leyendo nada. Hablas como quien llama de verdad:
 - Sueltas un "vale", "ajá", "sí, sí" cuando te están explicando algo.
 - No das todos los datos de golpe. Contestas sólo lo que te preguntan.
 - Al final te despides corto, como quien cuelga: "vale, pues genial, gracias".
+
+CÓMO SUENAS
+Relajada, con la voz de quien está en casa y habla por el móvil. Ni proyectas
+ni vocalizas: hablas normal, incluso un poco desganada al principio, como
+quien hace una gestión más del día.
 
 Nunca digas que eres una IA ni menciones que esto es una demostración.
 Responde SIEMPRE en UNA frase corta. Nunca dos, nunca una explicación.
@@ -158,69 +177,21 @@ function habla(ws, instrucciones) {
 
 /* ── Tratamiento del audio ───────────────────────────────────────────── */
 
-/**
- * Deja pasar sólo la banda telefónica, de 300 a 3400 Hz.
+/*
+ * Aquí había un filtro de banda telefónica de 300 a 3400 Hz y una bajada a
+ * la mitad de frecuencia.
  *
- * Es lo que más acerca la muestra a una llamada de verdad. La red telefónica
- * recorta ahí, y el oído reconoce ese recorte al instante: sin él, una voz
- * perfecta suena a locución de anuncio, no a alguien al otro lado del hilo.
+ * La idea era que sonase "a llamada de verdad". El resultado fue el
+ * contrario: recortar todo por debajo de 300 Hz se lleva el cuerpo de la
+ * voz, y cortar por arriba a 3400 se lleva la claridad de las consonantes.
+ * Lo que queda es una voz fina y metálica: precisamente lo que suena a
+ * máquina. Y encima nadie escucha esta muestra por un auricular de teléfono,
+ * sino por los altavoces del portátil, donde ese recorte no aporta realismo,
+ * sólo lo estropea.
  *
- * Dos biquad de segundo orden en cascada, calculados con las fórmulas
- * estándar de Robert Bristow-Johnson.
+ * El audio va ahora tal y como sale del modelo, a 24 kHz y sin tocar. Pesa
+ * más, pero sólo se descarga si alguien pulsa al play.
  */
-function bandaTelefonica(pcm, frecuencia) {
-  function biquad(muestras, tipo, f0, Q) {
-    const w = (2 * Math.PI * f0) / frecuencia;
-    const alfa = Math.sin(w) / (2 * Q);
-    const cos = Math.cos(w);
-
-    let b0, b1, b2;
-    if (tipo === "paso-alto") {
-      b0 = (1 + cos) / 2; b1 = -(1 + cos); b2 = (1 + cos) / 2;
-    } else {
-      b0 = (1 - cos) / 2; b1 = 1 - cos; b2 = (1 - cos) / 2;
-    }
-    const a0 = 1 + alfa, a1 = -2 * cos, a2 = 1 - alfa;
-
-    let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
-    const salida = new Float32Array(muestras.length);
-    for (let i = 0; i < muestras.length; i += 1) {
-      const x0 = muestras[i];
-      const y0 = (b0 / a0) * x0 + (b1 / a0) * x1 + (b2 / a0) * x2 - (a1 / a0) * y1 - (a2 / a0) * y2;
-      x2 = x1; x1 = x0; y2 = y1; y1 = y0;
-      salida[i] = y0;
-    }
-    return salida;
-  }
-
-  const n = pcm.length / 2;
-  let m = new Float32Array(n);
-  for (let i = 0; i < n; i += 1) m[i] = pcm.readInt16LE(i * 2) / 32768;
-
-  m = biquad(m, "paso-alto", 300, 0.707);
-  m = biquad(m, "paso-bajo", 3400, 0.707);
-
-  // Filtrar baja el nivel; se recupera sin llegar a saturar.
-  let pico = 0;
-  for (let i = 0; i < n; i += 1) pico = Math.max(pico, Math.abs(m[i]));
-  const ganancia = pico > 0 ? Math.min(3, 0.92 / pico) : 1;
-
-  const salida = Buffer.alloc(n * 2);
-  for (let i = 0; i < n; i += 1) {
-    salida.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(m[i] * ganancia * 32768))), i * 2);
-  }
-  return salida;
-}
-
-/** Baja la frecuencia a la mitad promediando pares, para no meter siseo. */
-function mitadDeFrecuencia(pcm) {
-  const n = pcm.length / 2;
-  const salida = Buffer.alloc(Math.floor(n / 2) * 2);
-  for (let i = 0; i + 1 < n; i += 2) {
-    salida.writeInt16LE(Math.round((pcm.readInt16LE(i * 2) + pcm.readInt16LE((i + 1) * 2)) / 2), (i / 2) * 2);
-  }
-  return salida;
-}
 
 function silencio(ms) {
   return Buffer.alloc(Math.round((FRECUENCIA * ms) / 1000) * 2);
@@ -280,10 +251,10 @@ agente.close();
 cliente.close();
 
 const crudo = Buffer.concat(partes);
-const pcm = mitadDeFrecuencia(bandaTelefonica(crudo, FRECUENCIA));
-fs.writeFileSync(SALIDA, envolverWav(pcm, FRECUENCIA_SALIDA));
+const pcm = crudo;
+fs.writeFileSync(SALIDA, envolverWav(pcm, FRECUENCIA));
 
-const segundos = pcm.length / 2 / FRECUENCIA_SALIDA;
+const segundos = pcm.length / 2 / FRECUENCIA;
 console.log(`\n✓ ${SALIDA} · ${segundos.toFixed(1)} s · ${(fs.statSync(SALIDA).size / 1024 / 1024).toFixed(2)} MB`);
 
 // El guion se guarda para que la portada resalte la línea que suena sin

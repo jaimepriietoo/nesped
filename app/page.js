@@ -109,36 +109,34 @@ const SENAL = [
   },
 ];
 
-/* Importes y rutas de checkout: las de producción, sin tocar. */
+/**
+ * Planes. Los importes NO están aquí.
+ *
+ * Estaban, y por eso la portada anunciaba 97 € y 197 € mientras Stripe
+ * cobraba 75 € y 150 €, y /pricing —que ya leía de Stripe— enseñaba los
+ * buenos: la propia web se contradecía. Ahora los pide a /api/precios, que
+ * los saca de Stripe. Para cambiar un precio se cambia allí y ya está.
+ */
 const PLANES = [
   {
     name: "Starter",
-    price: "97 €",
-    billing: "mensual",
+    plan: "starter",
     sub: "Entrada rápida para validar experiencia y captación.",
     feats: ["Recepción IA básica", "Captura de leads", "Resumen por llamada", "Panel inicial"],
-    href: "/api/stripe/public-checkout?plan=starter",
-    cta: "Empezar con Starter",
     hi: false,
   },
   {
     name: "Pro",
-    price: "197 €",
-    billing: "mensual",
+    plan: "pro",
     sub: "La versión más seria para mostrar valor y cerrar clientes.",
     feats: ["Voz más natural", "Portal premium", "Métricas y resúmenes", "Soporte prioritario"],
-    href: "/api/stripe/public-checkout?plan=pro",
-    cta: "Contratar Pro",
     hi: true,
   },
   {
     name: "Enterprise",
-    price: "Custom",
-    billing: "arquitectura a medida",
+    plan: "enterprise",
     sub: "Despliegues multi-cliente, integraciones y rollouts premium.",
     feats: ["Branding avanzado", "Automatizaciones custom", "Mayor control operativo", "Onboarding dedicado"],
-    href: "mailto:ventas@nesped.com?subject=Plan%20Enterprise%20Nesped",
-    cta: "Hablar con ventas",
     hi: false,
   },
 ];
@@ -212,6 +210,7 @@ function Contador({ target, suffix, decimals, i }) {
 export default function Home() {
   const [menu, setMenu] = useState(false);
   const [seccion, setSeccion] = useState("");
+  const [precios, setPrecios] = useState(null);
   const [telefono, setTelefono] = useState("");
   const [cargando, setCargando] = useState(false);
   const [estado, setEstado] = useState(null);
@@ -229,6 +228,17 @@ export default function Home() {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("resize", onResize);
     };
+  }, []);
+
+  useEffect(() => {
+    let vivo = true;
+    fetch("/api/precios")
+      .then((r) => r.json())
+      .then((j) => { if (vivo) setPrecios(j?.data || {}); })
+      // Sin precios la tarjeta enseña "Consultar" y lleva a ventas: es
+      // preferible a arriesgarse a mostrar una cifra que no se cobra.
+      .catch(() => { if (vivo) setPrecios({}); });
+    return () => { vivo = false; };
   }, []);
 
   /**
@@ -403,31 +413,45 @@ export default function Home() {
           </Rev>
 
           <div className="v3-grid" data-c="3">
-            {PLANES.map((p, i) => (
-              <Rev
-                as="article"
-                key={p.name}
-                d={i * 0.09}
-                className={`v3-card v3-plan ${p.hi ? "v3-plan--hi" : ""}`}
-              >
-                <span className="v3-card-meta">{p.hi ? "Recomendado" : "Plan"}</span>
-                <h3 className="v3-h3">{p.name}</h3>
-                <p className="v3-p">{p.sub}</p>
-                <div className="v3-price">{p.price}</div>
-                <div className="v3-billing">{p.billing}</div>
-                <ul className="v3-feats">
-                  {p.feats.map((f) => (
-                    <li key={f}><span className="v3-tick">/</span>{f}</li>
-                  ))}
-                </ul>
-                <a
-                  className={`v3-btn ${p.hi ? "v3-btn--white" : "v3-btn--dark"}`}
-                  href={p.href}
+            {PLANES.map((p, i) => {
+              const real = precios?.[p.plan];
+              // Mientras llegan los precios se deja el hueco en blanco en vez
+              // de enseñar una cifra provisional que luego cambia sola.
+              const importe = precios === null ? "" : real?.precio || "Consultar";
+              const contratable = Boolean(real);
+
+              return (
+                <Rev
+                  as="article"
+                  key={p.name}
+                  d={i * 0.09}
+                  className={`v3-card v3-plan ${p.hi ? "v3-plan--hi" : ""}`}
                 >
-                  {p.cta}
-                </a>
-              </Rev>
-            ))}
+                  <span className="v3-card-meta">{p.hi ? "Recomendado" : "Plan"}</span>
+                  <h3 className="v3-h3">{p.name}</h3>
+                  <p className="v3-p">{p.sub}</p>
+                  <div className="v3-price" aria-busy={precios === null}>
+                    {importe || "\u00a0"}
+                  </div>
+                  <div className="v3-billing">{real?.periodo || "según alcance"}</div>
+                  <ul className="v3-feats">
+                    {p.feats.map((f) => (
+                      <li key={f}><span className="v3-tick">/</span>{f}</li>
+                    ))}
+                  </ul>
+                  <a
+                    className={`v3-btn ${p.hi ? "v3-btn--white" : "v3-btn--dark"}`}
+                    href={
+                      contratable
+                        ? `/api/stripe/public-checkout?plan=${p.plan}`
+                        : `mailto:ventas@nesped.com?subject=${encodeURIComponent(`Plan ${p.name} de Nesped`)}`
+                    }
+                  >
+                    {contratable ? `Contratar ${p.name}` : "Hablar con ventas"}
+                  </a>
+                </Rev>
+              );
+            })}
           </div>
         </div>
       </section>

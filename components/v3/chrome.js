@@ -144,16 +144,17 @@ export function Footer() {
 
         <div className="v3-foot-bottom">
           <span>© {new Date().getFullYear()} Nesped</span>
-          {/* La tipografía display es CC BY 4.0: la atribución es obligatoria. */}
+          {/* La tipografía display es CC BY 4.0: la atribución es obligatoria,
+              y una licencia CC BY exige nombrar la obra, no sólo enlazarla. */}
           <span>
-            Tipografía display:{" "}
+            Tipografía{" "}
             <a
-              href="http://www.onlinewebfonts.com/fonts"
+              href="https://www.onlinewebfonts.com/fonts"
               target="_blank"
-              rel="noreferrer"
+              rel="noreferrer noopener"
               style={{ color: "#fff", textDecoration: "underline", textUnderlineOffset: 3 }}
             >
-              Web Fonts
+              BubbledotICG-FinePos
             </a>{" "}
             · CC BY 4.0
           </span>

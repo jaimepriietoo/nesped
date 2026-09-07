@@ -44,8 +44,15 @@ const COMPARATIVA = [
   { f: "Soporte", s: "Email", p: "Prioritario", e: "Dedicado" },
 ];
 
-/* Sin caché: si se cambia un precio en Stripe, se ve en la siguiente carga. */
-export const dynamic = "force-dynamic";
+/*
+ * Los precios se guardan en caché cinco minutos.
+ *
+ * Sin caché la página llamaba a Stripe en cada visita: el visitante pagaba
+ * esa latencia y una caída de Stripe se llevaba por delante la página de
+ * precios. Cinco minutos es margen de sobra para que un cambio de tarifa se
+ * vea enseguida sin convertir cada carga en una llamada a un tercero.
+ */
+export const revalidate = 300;
 
 export default async function Pricing() {
   const precios = await obtenerPrecios();

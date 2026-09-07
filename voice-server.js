@@ -468,91 +468,113 @@ function cleanupPendingRecordings() {
   }
 }
 
+/* =========================================================================
+   Modelo y voz.
+
+   Comprobado contra la API antes de fijarlo: gpt-realtime-2.1 existe y
+   acepta esta configuración. Las voces "marin" y "cedar" son las nuevas de
+   la versión GA y suenan bastante más naturales que "verse", que es la que
+   había. Se dejan configurables para poder cambiarlas sin desplegar.
+   ========================================================================= */
+
+const MODELO_VOZ = process.env.OPENAI_REALTIME_MODEL || "gpt-realtime-2.1";
+const VOZ = process.env.OPENAI_VOICE || "marin";
+
+/**
+ * Instrucciones del agente.
+ *
+ * Escritas para voz, no para chat. La diferencia importa: por escrito una
+ * respuesta larga se hojea, y por teléfono se sufre. Lo que delata a una
+ * máquina no es el timbre —eso ya está resuelto— sino el comportamiento:
+ * frases demasiado completas, cero titubeos, contestar sin acusar recibo,
+ * y esa manía de rematar con "¿hay algo más en lo que pueda ayudarte?".
+ *
+ * Por eso las reglas son de conducta concreta y con ejemplos, en vez de
+ * adjetivos como "sé natural", que un modelo no sabe traducir a nada.
+ */
 function getFallbackPrompt() {
   return `
-Eres un asistente telefónico humano, natural y profesional. No pareces una IA. Suenas como una persona real hablando por teléfono.
+Eres quien coge el teléfono en esta empresa. Una persona del equipo, no un
+contestador ni un asistente virtual. Nunca digas que eres una IA, un bot ni
+un asistente automático. Si te lo preguntan directamente, di que eres del
+equipo y sigue con lo que estabais hablando.
 
-Hablas en español de España, con castellano natural de España. Nunca suenas latinoamericano ni usas giros de México o de otros países.
-Usas frases cortas, tono humano y expresiones reales de España como "vale", "perfecto", "claro", "te cuento", "sin problema", "fenomenal".
+IDIOMA
+Castellano de España. Nada de "ahorita", "platicar", "carro", "celular",
+"¿me regalas tu nombre?" ni voseo. Aquí se dice móvil, coche, vale, venga,
+en un momento.
 
-Tu objetivo es:
-1. atender la llamada
-2. entender qué necesita el usuario
-3. recoger sus datos si hay interés
-4. cerrar la conversación de forma natural y terminar
+CÓMO SUENA UNA PERSONA POR TELÉFONO
+Esto es lo que más importa. Una persona real:
+- Habla corto. Una o dos frases y calla. Nunca sueltas un párrafo.
+- Acusa recibo antes de contestar: "ajá", "vale", "sí, sí", "entiendo",
+  "mmm", "claro". Es lo que hace que quien llama sepa que le escuchas.
+- Empieza a veces por la mitad: "Sí, mira, eso lo llevamos", "Pues depende
+  un poco de…", "A ver, te cuento".
+- Duda de vez en cuando cuando piensa: "espera que mire", "a ver…",
+  "pues…". No en cada frase, que suena a tic.
+- Se repite y se corrige, como todo el mundo: "eso son… bueno, depende del
+  tamaño".
+- No repite la pregunta antes de responder. Si te preguntan el precio, no
+  digas "me preguntas por el precio". Contesta.
+- No enumera. Nada de "primero", "segundo", "por último". Si hay tres
+  cosas, se dicen seguidas y ya.
 
-ESTILO:
-- Hablas como una persona real
-- Usas expresiones naturales como "vale", "perfecto", "genial", "entiendo", "claro", "sin problema"
-- No hablas demasiado seguido
-- No usas frases largas
-- No explicas de más
-- No suenas formal ni técnico
-- No haces listas largas
-- No das respuestas tipo chatbot
-- Suenas cálido, seguro y realista, como una persona amable del equipo comercial
-- Metes pequeñas variaciones naturales y cierres cortos
+LO QUE TE DELATARÍA, NO LO HAGAS NUNCA
+- "¿En qué más puedo ayudarte?" ni "¿Hay algo más?"
+- "Como asistente/como IA…"
+- "Excelente pregunta", "Por supuesto", "Estaré encantado de…"
+- Repetir el nombre de la persona en cada frase.
+- Decir listas con guiones o números.
+- Contestar tres cosas cuando te han preguntado una.
+- Frases perfectas, largas y sin una sola arruga.
 
-COMPORTAMIENTO:
-- Saluda de forma breve y natural
-- Haz solo una pregunta cada vez
-- No interrumpas
-- Si el usuario tiene interés, recoge los datos rápido y con naturalidad
-- Si no sabes algo, dilo de forma natural y ofrece que el equipo contacte después
+NÚMEROS Y DATOS
+- Los teléfonos se repiten en grupos, como se hace: "seis cero dos… dos
+  nueve siete… siete siete cero", no dígito a dígito ni de corrido.
+- Los precios en euros, sin decimales si son redondos: "mil doscientos".
+- Las horas como se dicen: "a las cuatro y media", no "16:30".
+- Antes de dar por bueno un teléfono o un email, repítelo una vez para
+  confirmar. Es lo que hace cualquiera y evita apuntar mal.
 
-RUIDO:
-- Ignora toses, carraspeos, respiraciones, golpes, ruidos de fondo y sonidos cortos
-- No respondas a sonidos sueltos
-- No cambies de tema por ruido
-- Si no has entendido bien, pide repetirlo de forma natural
-- Si no hay una frase clara del usuario, no respondas
+QUÉ TIENES QUE CONSEGUIR
+Enterarte de qué necesita quien llama y quedarte con cómo localizarle.
+Nada más. No vendes en la llamada, no cierras precio, no prometes plazos.
 
-RITMO:
-- Espera a que la persona termine claramente
-- No respondas a pausas cortas
-- Si la frase queda a medias, espera
-- No te precipites
-- Deja micro pausas naturales y evita sonar acelerado
+Averigua, sin soltarlo como un cuestionario y de uno en uno:
+- qué necesita
+- su nombre
+- un teléfono de contacto
+Y si sale de forma natural: dónde está, cuándo le viene bien, si tiene
+prisa, si está pidiendo más presupuestos.
 
-CAPTURA DE LEAD:
-Recoge, de forma natural:
-- nombre
-- teléfono
-- necesidad
+Cuando tengas nombre, teléfono y necesidad, llama a guardar_lead. No
+anuncies que lo estás guardando; hazlo mientras sigues la conversación.
 
-Opcional:
-- ciudad
-- preferencia
-- urgencia
+SI NO SABES ALGO
+Dilo sin rodeos y ofrece que te llamen: "pues eso concreto no te lo sé
+decir yo, pero te lo miran y te llaman". No te inventes precios, plazos,
+disponibilidad ni condiciones. Jamás.
 
-No pidas todo de golpe.
+RUIDO Y CORTES
+- Si oyes un golpe, una tos o ruido de fondo, no digas nada. Espera.
+- Si la frase se ha cortado a la mitad, espera un momento antes de hablar.
+- Si de verdad no has entendido, pídelo con naturalidad: "perdona, que no
+  te he cogido bien, ¿me lo repites?".
+- Si te interrumpen, cállate al momento y escucha. No termines tu frase.
 
-Cuando ya tengas como mínimo:
-- nombre
-- teléfono
-- necesidad
+CERRAR
+Cuando ya tienes lo que necesitas, cierra y calla. Algo corto:
+"Vale, pues ya lo tengo apuntado, te llaman en un rato" o
+"Perfecto, queda anotado y te dicen algo hoy mismo".
+Después no preguntes más, no resumas y no alargues.
 
-usa la función guardar_lead.
+Si la otra persona se despide —adiós, hasta luego, me tengo que ir, venga,
+un saludo—, despídete corto y termina. No reabras la conversación.
 
-CIERRE:
-Después de guardar el lead o cerrar la consulta, di una frase breve y natural como:
-- "Perfecto, ya lo tengo todo apuntado, te contactan en breve"
-- "Genial, queda registrado y te dicen algo pronto"
-- "Vale, todo listo, te contactan enseguida"
-
-Después de eso:
-- no hagas más preguntas
-- no alargues la conversación
-- no sigas hablando
-
-DESPEDIDAS:
-- si la persona se despide o deja claro que se tiene que ir, respóndele con una despedida breve, cálida y natural
-- ejemplos: "adios", "hasta luego", "hablamos", "chao", "me tengo que ir", "nos vemos", "un saludo", "gracias, adios", "vale, hablamos luego"
-- cuando detectes una despedida, no reabras la conversación, no hagas preguntas y termina por completo
-
-LEGAL:
-- la llamada ya ha sido avisada como grabada y transcrita antes de entrar contigo
-- si la persona no quiere ser grabada o muestra reparos de privacidad, responde con empatía, ofrece contacto por otra vía y cierra sin insistir
+GRABACIÓN
+El aviso de grabación ya se ha dado antes de pasarte la llamada. Si alguien
+muestra reparos, dale la razón, ofrécele otra vía de contacto y no insistas.
 `.trim();
 }
 
@@ -1023,19 +1045,35 @@ wss.on("connection", async (providerWs, req) => {
   let callSaved = false;
 
   let totalMediaChunks = 0;
-  let speechStartChunk = null;
-  let lastUtteranceChunks = 0;
-  let noiseResponseGuard = false;
   let pendingHangup = null;
 
+  /*
+   * Estado para cortar la voz cuando el usuario interrumpe.
+   *
+   * El audio que se manda a la operadora se queda encolado y sigue sonando
+   * aunque el modelo deje de generar. Sin esto, la persona empieza a hablar y
+   * el agente le pisa encima durante segundos: es lo que más delata que hay
+   * una máquina al otro lado. Hace falta saber qué respuesta está sonando y
+   * cuánto se ha oído ya, para descartar la cola y decirle al modelo hasta
+   * dónde llegó de verdad.
+   */
+  let msAudioRecibido = 0;        // reloj de la llamada, en ms
+  let itemHablando = null;        // id del mensaje que se está reproduciendo
+  let msInicioRespuesta = null;   // reloj al empezar a sonar esa respuesta
+
+  /*
+   * API GA de Realtime.
+   *
+   * Antes se conectaba con la cabecera `OpenAI-Beta: realtime=v1`, y esa API
+   * ya no existe: OpenAI responde "The Realtime Beta API is no longer
+   * supported". Es decir, las llamadas no funcionaban en absoluto, no es que
+   * sonaran regular. Comprobado contra la API real antes de cambiarlo.
+   *
+   * De paso sube de gpt-realtime-1.5 a la versión indicada en MODELO_VOZ.
+   */
   const openaiWs = new WebSocket(
-    "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        "OpenAI-Beta": "realtime=v1",
-      },
-    }
+    `wss://api.openai.com/v1/realtime?model=${encodeURIComponent(MODELO_VOZ)}`,
+    { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` } }
   );
 
   console.log("🔄 Intentando conectar con OpenAI realtime...");
@@ -1329,20 +1367,62 @@ wss.on("connection", async (providerWs, req) => {
       JSON.stringify({
         type: "session.update",
         session: {
-          modalities: ["audio", "text"],
-          voice: process.env.OPENAI_VOICE || "verse",
-          input_audio_format: "g711_ulaw",
-          output_audio_format: "g711_ulaw",
+          type: "realtime",
+          model: MODELO_VOZ,
+          output_modalities: ["audio"],
+
+          audio: {
+            input: {
+              // g711 μ-law a 8 kHz: lo que habla la red telefónica.
+              format: { type: "audio/pcmu" },
+
+              /*
+               * Una llamada trae ruido de fondo, eco de manos libres y calle.
+               * Sin esto, el modelo confunde ese ruido con habla y se lanza a
+               * responder encima de nadie. far_field es el perfil de móvil y
+               * manos libres, que es como llama la gente de verdad.
+               */
+              noise_reduction: { type: "far_field" },
+
+              transcription: {
+                model: "gpt-4o-mini-transcribe",
+                // Fijar el idioma evita que una palabra suelta en inglés
+                // haga saltar la transcripción de idioma a mitad de llamada.
+                language: "es",
+              },
+
+              /*
+               * El turno se decide por sentido, no por silencio.
+               *
+               * Estaba en "low", que espera mucho antes de contestar: deja un
+               * hueco raro después de cada frase y es de las cosas que más
+               * delatan a una máquina. "medium" responde con el ritmo de una
+               * persona sin llegar a pisar a quien todavía está pensando.
+               */
+              turn_detection: {
+                type: "semantic_vad",
+                eagerness: "medium",
+                create_response: true,
+                interrupt_response: true,
+              },
+            },
+
+            output: {
+              format: { type: "audio/pcmu" },
+              voice: VOZ,
+              speed: 1.0,
+            },
+          },
+
           instructions: (config.prompt || getFallbackPrompt()).trim(),
-          input_audio_transcription: {
-            model: "gpt-4o-mini-transcribe",
-          },
-          turn_detection: {
-            type: "semantic_vad",
-            eagerness: "low",
-            create_response: true,
-            interrupt_response: true,
-          },
+
+          /*
+           * Techo de respuesta. Sin límite, el modelo se arranca a explicar y
+           * por teléfono un monólogo de treinta segundos es insoportable:
+           * quien llama cuelga. Da de sobra para dos o tres frases.
+           */
+          max_output_tokens: 320,
+
           tools: [
             {
               type: "function",
@@ -1410,6 +1490,14 @@ wss.on("connection", async (providerWs, req) => {
       if (data.event === "media") {
         totalMediaChunks += 1;
 
+        /*
+         * Reloj de la llamada. Se usa el sello de tiempo de la operadora si
+         * viene; si no, cada trozo de g711 son 20 ms. Sirve para saber cuánto
+         * audio del agente se ha llegado a oír antes de una interrupción.
+         */
+        const sello = Number(data.media?.timestamp);
+        msAudioRecibido = Number.isFinite(sello) ? sello : totalMediaChunks * 20;
+
         if (!streamSid && (data.streamSid || data.stream_id)) {
           streamSid = data.streamSid || data.stream_id;
           console.log("📌 streamSid recuperado desde media:", streamSid);
@@ -1476,13 +1564,23 @@ wss.on("connection", async (providerWs, req) => {
 
         if (!greeted) {
           greeted = true;
+          /*
+           * El saludo es lo único que se oye antes de que nadie hable, así
+           * que es donde se decide si suena a persona o a centralita. Se
+           * pide explícitamente corto y con la fórmula que usa cualquiera al
+           * descolgar; sin esto el modelo tiende a soltar una bienvenida
+           * comercial de tres frases que delata la máquina en el segundo uno.
+           */
           openaiWs.send(
             JSON.stringify({
               type: "response.create",
               response: {
-                modalities: ["audio", "text"],
-                instructions:
-                  `Saluda de forma muy natural, breve, cálida y realista, en español de España, como una persona real de ${config.name}. Haz una sola pregunta corta sobre en qué puedes ayudar. Nada de tono robótico ni comercial agresivo.`,
+                instructions: `Descuelga el teléfono como lo haría una persona de ${config.name}.
+Una sola frase, muy corta, en castellano de España. La fórmula normal:
+saludo, nombre de la empresa y en qué puedes ayudar. Por ejemplo
+"${config.name}, buenos días, ¿dígame?" o "Hola, ${config.name}, ¿en qué te puedo ayudar?".
+Nada de bienvenidas largas, nada de "le atiende", nada de tono de anuncio.
+Después de saludar, calla y espera.`,
               },
             })
           );
@@ -1490,66 +1588,87 @@ wss.on("connection", async (providerWs, req) => {
         }
       }
 
-      if (event.type === "input_audio_buffer.speech_started") {
-        speechStartChunk = totalMediaChunks;
-        noiseResponseGuard = false;
-        console.log("🟢 speech_started");
+      // Guarda qué mensaje se está reproduciendo, para poder truncarlo si
+      // la persona interrumpe.
+      if (event.type === "response.output_item.added" && event.item?.id) {
+        itemHablando = event.item.id;
+        msInicioRespuesta = null;
+      }
 
+      if (event.type === "input_audio_buffer.speech_started") {
         if (pendingHangup) {
           clearTimeout(pendingHangup);
           pendingHangup = null;
         }
-      }
 
-      if (event.type === "input_audio_buffer.speech_stopped") {
-        if (speechStartChunk !== null) {
-          lastUtteranceChunks = totalMediaChunks - speechStartChunk;
-        } else {
-          lastUtteranceChunks = 0;
+        /*
+         * La persona ha empezado a hablar mientras el agente hablaba.
+         *
+         * Hay que hacer tres cosas, y antes no se hacía ninguna:
+         *
+         *  1. Cancelar la generación en curso.
+         *  2. Vaciar el audio que ya está encolado en la operadora. Esto es
+         *     lo que de verdad importa: el modelo puede dejar de generar,
+         *     pero lo ya enviado sigue sonando en el auricular y el agente
+         *     pisa a quien llama durante segundos.
+         *  3. Decirle al modelo hasta qué milisegundo se llegó a oír. Si no,
+         *     se queda creyendo que dijo la frase entera y sigue como si la
+         *     otra persona la hubiera escuchado.
+         */
+        if (itemHablando && msInicioRespuesta !== null) {
+          const oidoMs = Math.max(0, msAudioRecibido - msInicioRespuesta);
+
+          openaiWs.send(JSON.stringify({ type: "response.cancel" }));
+
+          openaiWs.send(
+            JSON.stringify({
+              type: "conversation.item.truncate",
+              item_id: itemHablando,
+              content_index: 0,
+              audio_end_ms: oidoMs,
+            })
+          );
+
+          if (providerWs.readyState === WebSocket.OPEN) {
+            providerWs.send(
+              JSON.stringify(
+                streamSid
+                  ? { event: "clear", streamSid }
+                  : { event: "clear" }
+              )
+            );
+          }
+
+          console.log(`✋ Interrumpido: se habían oído ${oidoMs} ms`);
+          itemHablando = null;
+          msInicioRespuesta = null;
         }
-
-        noiseResponseGuard = lastUtteranceChunks < 45;
-
-        console.log(
-          `🟡 speech_stopped | chunks=${lastUtteranceChunks} | noiseGuard=${noiseResponseGuard}`
-        );
-      }
-
-      if (event.type === "response.created" && noiseResponseGuard) {
-        console.log("🚫 Cancelando respuesta por input demasiado corto/ruido");
-        openaiWs.send(
-          JSON.stringify({
-            type: "response.cancel",
-          })
-        );
-        return;
       }
 
       if (
         event.type === "response.audio.delta" ||
         event.type === "response.output_audio.delta"
       ) {
-        if (noiseResponseGuard) {
-          console.log("🚫 Audio descartado por noiseGuard");
-          return;
-        }
-
         if (!event.delta) {
           console.log("⚠️ Audio delta sin payload");
         } else if (!streamSid) {
           console.log("⚠️ Audio delta recibido pero no hay streamSid todavía");
         } else {
+          // Primer trozo de esta respuesta: se ancla el reloj para poder
+          // calcular después cuánto se oyó si la interrumpen.
+          if (msInicioRespuesta === null) {
+            msInicioRespuesta = msAudioRecibido;
+          }
+
           providerWs.send(
-            JSON.stringify(
-              {
-                event: "media",
-                media: {
-                  payload: event.delta,
-                },
-              }
-            )
+            JSON.stringify({
+              event: "media",
+              media: { payload: event.delta },
+            })
           );
-          console.log(`🔊 Audio enviado a ${provider}`);
+          /* Sin traza por trozo: son unas cincuenta líneas por segundo y
+             llamada. Llenaba el registro, costaba CPU y no decía nada que no
+             diga ya `response.done`. */
         }
       }
 
@@ -1561,6 +1680,8 @@ wss.on("connection", async (providerWs, req) => {
       }
 
       if (event.type === "response.done") {
+        itemHablando = null;
+        msInicioRespuesta = null;
         console.log("✅ response.done recibido");
 
         if (closingRequested) {

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Inter } from "next/font/google";
 import "@/components/v3/v3.css";
@@ -28,6 +28,14 @@ function Acceso() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [debugCode, setDebugCode] = useState("");
+
+  /**
+   * Hasta que React no ha hidratado, el onSubmit no existe: un clic ahí hace
+   * un envío nativo y el navegador recarga /login perdiendo lo escrito. Pasa
+   * de verdad en móviles lentos. El botón queda inerte hasta entonces.
+   */
+  const [listo, setListo] = useState(false);
+  useEffect(() => { setListo(true); }, []);
 
   async function handleLogin(event) {
     event.preventDefault();
@@ -172,7 +180,7 @@ function Acceso() {
               />
             </div>
 
-            <button className="v3-btn v3-btn--white" type="submit" disabled={loading}>
+            <button className="v3-btn v3-btn--white" type="submit" disabled={loading || !listo}>
               {loading ? "Entrando…" : "Entrar"}
             </button>
           </form>
@@ -192,7 +200,7 @@ function Acceso() {
               />
             </div>
 
-            <button className="v3-btn v3-btn--white" type="submit" disabled={loading}>
+            <button className="v3-btn v3-btn--white" type="submit" disabled={loading || !listo}>
               {loading ? "Verificando…" : "Verificar"}
             </button>
 

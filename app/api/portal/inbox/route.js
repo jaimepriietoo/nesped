@@ -1,10 +1,6 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { buildInboxThreads } from "@/lib/portal-product";
 
-function normalizePhone(value = "") {
-  return String(value || "").replace(/[^\d+]/g, "").trim();
-}
-
 export async function GET() {
   try {
     const ctx = await getPortalContext();
@@ -45,11 +41,6 @@ export async function GET() {
 
     const leads = leadsRes.data || [];
     const leadIds = leads.map((lead) => lead.id).filter(Boolean);
-    const phones = [
-      ...new Set(
-        leads.map((lead) => normalizePhone(lead.telefono)).filter(Boolean)
-      ),
-    ];
 
     let reminders = [];
     if (leadIds.length > 0) {
@@ -67,53 +58,32 @@ export async function GET() {
       reminders = data || [];
     }
 
-    const eventQueries = [];
+    /*
+     * Los eventos se buscan sólo por lead_id.
+     *
+     * Antes había una segunda consulta `.in("phone", phones)`, pero
+     * lead_events no tiene columna `phone` —sus columnas son id, lead_id,
+     * client_id, type, title, description, meta y created_at—, así que
+     * Postgres devolvía error y el inbox entero respondía 500. Estaba roto
+     * siempre que la cuenta tuviera algún lead con teléfono, es decir casi
+     * siempre.
+     */
+    let events = [];
 
     if (leadIds.length > 0) {
-      eventQueries.push(
-        ctx.supabase
-          .from("lead_events")
-          .select("*")
-          .in("lead_id", leadIds)
-          .order("created_at", { ascending: false })
-          .limit(800)
-      );
+      const { data, error } = await ctx.supabase
+        .from("lead_events")
+        .select("*")
+        .in("lead_id", leadIds)
+        .order("created_at", { ascending: false })
+        .limit(800);
+
+      if (error) {
+        throw new Error(error.message || "No se pudieron cargar eventos");
+      }
+
+      events = data || [];
     }
-
-    if (phones.length > 0) {
-      eventQueries.push(
-        ctx.supabase
-          .from("lead_events")
-          .select("*")
-          .in("phone", phones)
-          .order("created_at", { ascending: false })
-          .limit(800)
-      );
-    }
-
-    const eventResults = await Promise.all(eventQueries);
-    const eventErrors = eventResults
-      .map((result) => result.error)
-      .filter(Boolean);
-
-    if (eventErrors.length > 0) {
-      throw new Error(eventErrors[0].message || "No se pudieron cargar eventos");
-    }
-
-    const events = [];
-    const seenEventIds = new Set();
-
-    eventResults.forEach((result) => {
-      (result.data || []).forEach((event) => {
-        const eventId =
-          event?.id ||
-          `${event?.lead_id || "no-lead"}:${event?.phone || "no-phone"}:${event?.type || "event"}:${event?.created_at || ""}`;
-
-        if (seenEventIds.has(eventId)) return;
-        seenEventIds.add(eventId);
-        events.push(event);
-      });
-    });
 
     const inbox = buildInboxThreads({
       leads,

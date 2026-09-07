@@ -463,6 +463,11 @@ function Resumen({ datos }) {
   }, [datos.calls]);
 
   const maximo = Math.max(1, ...serie.map((d) => d.n));
+  const totalSerie = serie.reduce((a, d) => a + d.n, 0);
+
+  // La más reciente de todas, para poder situar al usuario cuando no hay
+  // nada en la ventana de dos semanas.
+  const ultimaLlamada = (datos.calls || [])[0]?.created_at || null;
 
   return (
     <div className="pv3-view">
@@ -476,16 +481,34 @@ function Resumen({ datos }) {
       <div className="pv3-grid" data-c="2">
         <div className="pv3-card">
           <div className="pv3-lab">ACTIVIDAD · 14 DÍAS</div>
-          <div className="pv3-chart">
-            {serie.map((d, i) => (
-              <i
-                key={d.clave}
-                title={`${d.clave}: ${d.n}`}
-                style={{ height: `${Math.max(3, (d.n / maximo) * 100)}%`, animationDelay: `${i * 35}ms`, opacity: d.n ? 1 : 0.22 }}
-              />
-            ))}
-          </div>
-          <div className="pv3-det">{num(serie.reduce((a, d) => a + d.n, 0))} llamadas en las últimas dos semanas</div>
+
+          {/* Una gráfica con todas las barras a cero se lee como algo roto,
+              no como "no ha pasado nada". Mejor decirlo con palabras. */}
+          {totalSerie === 0 ? (
+            <>
+              <p className="pv3-p" style={{ marginTop: 16 }}>
+                No ha entrado ninguna llamada en las dos últimas semanas.
+              </p>
+              {ultimaLlamada ? (
+                <div className="pv3-det">La última fue el {fecha(ultimaLlamada)}.</div>
+              ) : (
+                <div className="pv3-det">Todavía no hay ninguna llamada registrada.</div>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="pv3-chart">
+                {serie.map((d, i) => (
+                  <i
+                    key={d.clave}
+                    title={`${d.clave}: ${d.n}`}
+                    style={{ height: `${Math.max(3, (d.n / maximo) * 100)}%`, animationDelay: `${i * 35}ms`, opacity: d.n ? 1 : 0.22 }}
+                  />
+                ))}
+              </div>
+              <div className="pv3-det">{num(totalSerie)} llamadas en las últimas dos semanas</div>
+            </>
+          )}
         </div>
 
         <div className="pv3-card">
@@ -1735,40 +1758,48 @@ function Permisos({ acceso, cargando }) {
   if (cargando) return <div className="pv3-grid" data-c="3">{[0, 1, 2].map((i) => <div key={i} className="pv3-skel" />)}</div>;
   if (!acceso) return <div style={{ marginTop: 22 }}><Vacio>No se pudo cargar el centro de accesos.</Vacio></div>;
 
+  /*
+   * La matriz llega como { catalog, rows }, donde cada fila trae `grants`:
+   * el catálogo completo de permisos con un `enabled` por cada uno. Se lee
+   * de ahí y no de un mapa de columnas, que es lo que se supuso al principio
+   * y hacía que la tabla saliera siempre vacía.
+   */
   const matriz = acceso.permissionMatrix || {};
-  const filas = matriz.rows || matriz.users || [];
-  const cols = matriz.columns || matriz.permissions || [];
+  const catalogo = matriz.catalog || [];
+  const filas = matriz.rows || [];
 
   return (
     <div className="pv3-view">
       {acceso.summary ? <Resumenes resumen={acceso.summary} /> : null}
 
       {filas.length === 0 ? (
-        <div style={{ marginTop: 22 }}><Vacio>No hay permisos configurados todavía.</Vacio></div>
+        <div style={{ marginTop: 22 }}><Vacio>Todavía no hay nadie con acceso al portal.</Vacio></div>
       ) : (
         <div className="pv3-tablewrap" style={{ marginTop: 22 }}>
           <table className="pv3-table">
             <thead>
               <tr>
                 <th>USUARIO</th>
-                {cols.map((c, i) => (
-                  <th key={i}>{String(primerCampo(c, CLAVES_TITULO) ?? c).toUpperCase()}</th>
+                <th>ROL</th>
+                {catalogo.map((c) => (
+                  <th key={c.id} title={c.description || c.label}>
+                    {String(c.label || c.id).toUpperCase()}
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filas.map((f, i) => (
-                <tr key={f.id || f.email || i}>
-                  <td className="pv3-strong">{f.email || f.name || f.user || "—"}</td>
-                  {cols.map((c, ci) => {
-                    const clave = c?.id || c?.key || c;
-                    const v = f.permissions?.[clave] ?? f[clave];
-                    return (
-                      <td key={ci}>
-                        <span className="pv3-tag" data-t={v ? "ok" : "grey"}>{v ? "Sí" : "No"}</span>
-                      </td>
-                    );
-                  })}
+              {filas.map((f) => (
+                <tr key={f.userId || f.email}>
+                  <td className="pv3-strong">{f.email || "—"}</td>
+                  <td><span className="pv3-tag" data-t="grey">{f.role || "viewer"}</span></td>
+                  {(f.grants || []).map((g) => (
+                    <td key={g.id}>
+                      <span className="pv3-tag" data-t={g.enabled ? "ok" : "grey"}>
+                        {g.enabled ? "Sí" : "No"}
+                      </span>
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>
@@ -1778,11 +1809,10 @@ function Permisos({ acceso, cargando }) {
 
       <Lista titulo="Políticas" items={acceso.policies} />
       <Lista titulo="Recomendaciones" items={acceso.recommendations} />
+      <Lista titulo="Actividad reciente" items={acceso.auditLogs} />
     </div>
   );
 }
-
-
 
 /* ── facturación ─────────────────────────────────────────────────────── */
 

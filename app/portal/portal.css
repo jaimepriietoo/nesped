@@ -373,3 +373,18 @@
   padding-top: 16px;
   border-top: 1px solid var(--line);
 }
+
+/* ── Contención del texto largo ─────────────────────────────────────────
+   Una URL o un identificador sin espacios no tiene dónde partirse y empuja
+   la tarjeta hasta sacar barra horizontal a toda la página. Se vio en la
+   vista de API y webhooks, que muestra endpoints completos.
+   -------------------------------------------------------------------- */
+
+.pv3-p,
+.pv3-det,
+.pv3-small,
+.pv3-lab,
+.pv3-stat { overflow-wrap: anywhere; }
+
+.pv3-card { min-width: 0; }
+.pv3-grid > * { min-width: 0; }

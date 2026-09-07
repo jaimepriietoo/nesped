@@ -22,23 +22,10 @@ const sustituciones = [
   // El navegador no tiene módulos aquí: React entra por UMD.
   ['"use client";\n\n', ""],
   [
-    `import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  buildControlTowerSnapshot,
-  buildDerivedNotifications,
-  buildMessageExperimentSummary,
-  buildOnboardingWorkspace,
-  buildRoiSnapshot,
-} from "@/lib/portal-product";
-import "./portal.css";`,
-    `const { useCallback, useEffect, useMemo, useRef, useState } = React;
-
-// En la demo no hay módulos: los helpers derivados se sustituyen por stubs
-// que devuelven lo que el fichero de muestra ya trae hecho.
-const { buildControlTowerSnapshot, buildDerivedNotifications,
-        buildMessageExperimentSummary, buildOnboardingWorkspace,
-        buildRoiSnapshot } = window.DEMO_HELPERS;`,
+    'import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";\nimport "./portal.css";',
+    "const { useCallback, useEffect, useMemo, useRef, useState } = React;",
   ],
+
   // La demo no tiene sesión: los datos salen del fichero de muestra.
   [
     `/** Cualquier 401 significa sesión caducada: volvemos al login conservando el destino. */

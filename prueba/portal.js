@@ -7,17 +7,20 @@
  * El middleware de proxy.js exige sesión en todo lo que empieza por /portal,
  * así que esta ruta y sus hijas quedan protegidas de fábrica.
  *
- * El portal anterior sigue accesible en /portal/clasico mientras se termina
- * de trasladar aquí todo lo que sabía hacer.
+ * Nueve pantallas, y a propósito.
+ *
+ * Llegó a tener treinta y una. El problema no era el número: era que la
+ * mayoría no leía datos, los generaba. Con una cuenta de dos leads y
+ * veintinueve llamadas, "Enterprise" pintaba treinta y una tarjetas de
+ * consejos y "Revenue OS" explicaba dónde se escapaba el dinero. Eso no es
+ * información con buena tipografía, es relleno, y en un producto que se
+ * vende por miles de euros al mes resta credibilidad en vez de sumarla.
+ *
+ * Lo que queda es lo que se mira a diario —qué ha entrado, a quién llamar,
+ * qué se dijo— y lo que configura el agente. Nada más.
  */
 
 const { useCallback, useEffect, useMemo, useRef, useState } = React;
-
-// En la demo no hay módulos: los helpers derivados se sustituyen por stubs
-// que devuelven lo que el fichero de muestra ya trae hecho.
-const { buildControlTowerSnapshot, buildDerivedNotifications,
-        buildMessageExperimentSummary, buildOnboardingWorkspace,
-        buildRoiSnapshot } = window.DEMO_HELPERS;
 
 /* ── utilidades ──────────────────────────────────────────────────────── */
 
@@ -29,57 +32,31 @@ const { buildControlTowerSnapshot, buildDerivedNotifications,
 const VISTAS = [
   { grupo: "Operación" },
   { id: "resumen", label: "Resumen", ico: "◆" },
-  { id: "alertas", label: "Alertas", ico: "!", deps: ["facturacion", "estado", "qa"] },
   { id: "leads", label: "Leads", ico: "◇" },
   { id: "llamadas", label: "Llamadas", ico: "◉" },
-  { id: "pipeline", label: "Pipeline", ico: "▤" },
   { id: "conversaciones", label: "Conversaciones", ico: "◈", api: "/api/portal/inbox" },
-  { id: "operaciones", label: "Operaciones", ico: "⌁", deps: ["estado", "qa"] },
 
-  { grupo: "Inteligencia" },
-  { id: "copiloto", label: "Copiloto", ico: "✦", api: "/api/portal/copilot" },
+  { grupo: "El agente" },
   { id: "voz", label: "Calidad de voz", ico: "◎", api: "/api/portal/voice-center" },
-  { id: "qa", label: "Revisión de llamadas", ico: "◍", api: "/api/portal/voice-qa" },
-  { id: "señales", label: "Señales", ico: "△" },
-  { id: "estrategia", label: "Estrategia", ico: "✧", api: "/api/portal/strategy" },
-  { id: "control", label: "Torre de control", ico: "◎", deps: ["facturacion", "estado", "qa", "experimentos"] },
   { id: "playbooks", label: "Guion comercial", ico: "✎", api: "/api/playbooks" },
 
-  { grupo: "Crecimiento" },
-  { id: "growth", label: "Growth", ico: "↗", api: "/api/portal/growth" },
-  { id: "revenue", label: "Revenue OS", ico: "€", api: "/api/portal/revenue-os" },
-  { id: "facturacion", label: "Facturación", ico: "◫", api: "/api/analytics/billing" },
-  { id: "analitica", label: "Analítica", ico: "▥" },
-  { id: "retorno", label: "Retorno", ico: "⊙", deps: ["analitica", "facturacion"] },
-  { id: "experimentos", label: "Experimentos", ico: "⚗", api: "/api/analytics/message-experiments" },
-  { id: "marca", label: "Marca", ico: "◐", api: "/api/portal/brand-lab" },
-
-  { grupo: "Plataforma" },
-  { id: "workflows", label: "Automatizaciones", ico: "⇄", api: "/api/portal/workflows" },
-  { id: "procesos", label: "Lanzar procesos", ico: "▶" },
-  { id: "integraciones", label: "Integraciones", ico: "⊞", api: "/api/portal/integrations-center" },
-  { id: "api", label: "API y webhooks", ico: "⌘", api: "/api/portal/api-hub" },
-  { id: "enterprise", label: "Enterprise", ico: "▦", api: "/api/portal/enterprise" },
-
   { grupo: "Cuenta" },
-  { id: "puesta", label: "Puesta en marcha", ico: "▷", deps: ["facturacion", "estado", "playbooks"] },
-  { id: "equipo", label: "Equipo", ico: "○" },
-  { id: "permisos", label: "Permisos", ico: "⚿", api: "/api/portal/access-center" },
-  { id: "estado", label: "Estado", ico: "▣", api: "/api/portal/health" },
+  { id: "equipo", label: "Equipo", ico: "○", deps: ["permisos"] },
   { id: "ajustes", label: "Ajustes", ico: "▢" },
+  { id: "estado", label: "Estado", ico: "▣", api: "/api/portal/health" },
 ];
 
-/** Los ocho endpoints que alimentan la vista de Analítica. */
-const ENDPOINTS_ANALITICA = [
-  ["revenue", "/api/analytics/revenue"],
-  ["leadRevenue", "/api/analytics/lead-revenue"],
-  ["ownerRevenue", "/api/analytics/owner-revenue"],
-  ["voiceStats", "/api/analytics/voice-stats"],
-  ["priorityStats", "/api/analytics/priority-stats"],
-  ["reactivationStats", "/api/analytics/reactivation-stats"],
-  ["appointmentStats", "/api/analytics/appointment-stats"],
-  ["upsellStats", "/api/analytics/upsells"],
+/*
+ * Endpoints que alimentan una pantalla sin ser una pantalla.
+ *
+ * "permisos" no tiene entrada en el menú: sus datos se pintan dentro de
+ * Equipo, porque es información de las mismas personas y no merecía una
+ * pantalla propia.
+ */
+const VISTAS_OCULTAS = [
+  { id: "permisos", api: "/api/portal/access-center" },
 ];
+
 
 const ETIQUETA_ESTADO = {
   new: { txt: "Nuevo", t: "grey" },
@@ -581,6 +558,9 @@ function Leads({ datos, onRecargar }) {
   const [busqueda, setBusqueda] = useState("");
   const [filtro, setFiltro] = useState("todos");
   const [abierto, setAbierto] = useState(null);
+  // El embudo era una pantalla aparte. Son los mismos leads mirados de otra
+  // forma, así que vive aquí como un cambio de vista.
+  const [forma, setForma] = useState("tabla");
 
   const visibles = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -625,7 +605,16 @@ function Leads({ datos, onRecargar }) {
         </div>
       </div>
 
-      {visibles.length === 0 ? (
+      <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
+        <button type="button" className="pv3-btn" data-v={forma === "tabla" ? "light" : undefined}
+          onClick={() => setForma("tabla")}>Lista</button>
+        <button type="button" className="pv3-btn" data-v={forma === "embudo" ? "light" : undefined}
+          onClick={() => setForma("embudo")}>Embudo</button>
+      </div>
+
+      {forma === "embudo" ? (
+        <Embudo leads={visibles} onAbrir={setAbierto} />
+      ) : visibles.length === 0 ? (
         <div style={{ marginTop: 16 }}><Vacio>No hay leads que encajen con este filtro.</Vacio></div>
       ) : (
         <div className="pv3-tablewrap" style={{ marginTop: 16 }}>
@@ -741,101 +730,53 @@ function Llamadas({ datos }) {
 
 const COLUMNAS_PIPELINE = ["new", "contacted", "qualified", "won", "lost"];
 
-function Pipeline({ datos }) {
+/** Los mismos leads en columnas por fase. Antes era una pantalla aparte. */
+function Embudo({ leads, onAbrir }) {
   const porEstado = useMemo(() => {
     const mapa = Object.fromEntries(COLUMNAS_PIPELINE.map((c) => [c, []]));
-    for (const l of datos.leads || []) {
-      const s = l.status || "new";
-      if (mapa[s]) mapa[s].push(l);
+    for (const l of leads || []) {
+      const s2 = l.status || "new";
+      if (mapa[s2]) mapa[s2].push(l);
     }
     return mapa;
-  }, [datos]);
+  }, [leads]);
 
   return (
-    <div className="pv3-view">
-      <div className="pv3-grid" data-c="3" style={{ alignItems: "start" }}>
-        {COLUMNAS_PIPELINE.map((clave, ci) => (
-          <div key={clave} className="pv3-card" style={{ animationDelay: `${ci * 60}ms` }}>
-            <div className="pv3-row">
-              <span className="pv3-lab">{ETIQUETA_ESTADO[clave].txt.toUpperCase()}</span>
-              <span className="pv3-strong">{num(porEstado[clave].length)}</span>
-            </div>
-            <div style={{ marginTop: 14, display: "grid", gap: 8 }}>
-              {porEstado[clave].length === 0 ? (
-                <span className="pv3-small">Vacío</span>
-              ) : (
-                porEstado[clave].slice(0, 12).map((l, i) => (
-                  <div
-                    key={l.id || i}
-                    style={{ padding: "10px 12px", border: "1px solid var(--line)", borderRadius: 12, background: "rgba(0,0,0,0.35)" }}
-                  >
-                    <div className="pv3-strong" style={{ fontSize: 13 }}>{l.nombre || "Sin nombre"}</div>
-                    <div className="pv3-small" style={{ marginTop: 3 }}>
-                      {l.telefono || "—"}{l.valor_estimado ? ` · ${eur(l.valor_estimado)}` : ""}
-                    </div>
+    <div className="pv3-grid" data-c="3" style={{ alignItems: "start" }}>
+      {COLUMNAS_PIPELINE.map((clave, ci) => (
+        <div key={clave} className="pv3-card" style={{ animationDelay: `${ci * 60}ms` }}>
+          <div className="pv3-row">
+            <span className="pv3-lab">{ETIQUETA_ESTADO[clave].txt.toUpperCase()}</span>
+            <span className="pv3-strong">{num(porEstado[clave].length)}</span>
+          </div>
+          <div style={{ marginTop: 14, display: "grid", gap: 8 }}>
+            {porEstado[clave].length === 0 ? (
+              <span className="pv3-small">Vacío</span>
+            ) : (
+              porEstado[clave].slice(0, 12).map((l, i) => (
+                <button
+                  key={l.id || i}
+                  type="button"
+                  onClick={() => onAbrir(l.id)}
+                  style={{
+                    padding: "10px 12px", border: "1px solid var(--line)", borderRadius: 12,
+                    background: "rgba(0,0,0,0.35)", textAlign: "left", cursor: "pointer",
+                    font: "inherit", color: "inherit", width: "100%",
+                  }}
+                >
+                  <div className="pv3-strong" style={{ fontSize: 13 }}>{l.nombre || "Sin nombre"}</div>
+                  <div className="pv3-small" style={{ marginTop: 3 }}>
+                    {l.telefono || "—"}{l.valor_estimado ? ` · ${eur(l.valor_estimado)}` : ""}
                   </div>
-                ))
-              )}
-              {porEstado[clave].length > 12 ? (
-                <span className="pv3-small">+{num(porEstado[clave].length - 12)} más</span>
-              ) : null}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function Señales({ datos }) {
-  const insights = datos.insights || [];
-  const rankings = datos.rankings || {};
-
-  return (
-    <div className="pv3-view">
-      <div className="pv3-grid" data-c="2">
-        <div className="pv3-card">
-          <div className="pv3-lab">MEJORES DÍAS</div>
-          <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
-            {(rankings.bestDays || []).length === 0 ? <span className="pv3-small">Aún sin datos suficientes.</span> : null}
-            {(rankings.bestDays || []).slice(0, 5).map((d, i) => (
-              <div key={i} className="pv3-row">
-                <span className="pv3-small">{d.label || d.day || d.name || "—"}</span>
-                <span className="pv3-strong">{num(d.count ?? d.total ?? d.value)}</span>
-              </div>
-            ))}
+                </button>
+              ))
+            )}
+            {porEstado[clave].length > 12 ? (
+              <span className="pv3-small">+{num(porEstado[clave].length - 12)} más</span>
+            ) : null}
           </div>
         </div>
-        <div className="pv3-card">
-          <div className="pv3-lab">MEJORES HORAS</div>
-          <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
-            {(rankings.bestHours || []).length === 0 ? <span className="pv3-small">Aún sin datos suficientes.</span> : null}
-            {(rankings.bestHours || []).slice(0, 5).map((h, i) => (
-              <div key={i} className="pv3-row">
-                <span className="pv3-small">{h.label || h.hour || h.name || "—"}</span>
-                <span className="pv3-strong">{num(h.count ?? h.total ?? h.value)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <h2 className="pv3-h2">Recomendaciones</h2>
-      {insights.length === 0 ? (
-        <Vacio>Todavía no hay suficiente histórico para generar recomendaciones.</Vacio>
-      ) : (
-        <div className="pv3-grid" data-c="2">
-          {insights.slice(0, 10).map((s, i) => (
-            <div key={s.id || i} className="pv3-card" style={{ animationDelay: `${i * 50}ms` }}>
-              <div className="pv3-lab">{String(s.type || s.category || "SEÑAL").toUpperCase()}</div>
-              <p className="pv3-p" style={{ marginTop: 10 }}>{s.title || s.message || s.text || "—"}</p>
-              {s.description && s.description !== s.title ? (
-                <p className="pv3-p" style={{ marginTop: 8, color: "var(--muted)" }}>{s.description}</p>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      )}
+      ))}
     </div>
   );
 }
@@ -882,6 +823,34 @@ function Voz({ voz, cargando }) {
           </div>
         </div>
       </div>
+
+      <h2 className="pv3-h2">Llamada a llamada</h2>
+      {(voz.calls || []).length === 0 ? (
+        <Vacio>Todavía no hay llamadas puntuadas.</Vacio>
+      ) : (
+        <div className="pv3-tablewrap">
+          <table className="pv3-table">
+            <thead>
+              <tr><th>FECHA</th><th>NOTA</th><th>CUMPLIMIENTO</th><th>DURACIÓN</th><th>LEAD</th><th>RESUMEN</th></tr>
+            </thead>
+            <tbody>
+              {(voz.calls || []).slice(0, 60).map((c, i) => {
+                const nota = Number(c.qa?.overall || 0);
+                return (
+                  <tr key={c.id || i}>
+                    <td>{fecha(c.created_at)}</td>
+                    <td><span className="pv3-tag" data-t={nota >= 75 ? "ok" : nota >= 55 ? "warn" : "bad"}>{num(nota)}</span></td>
+                    <td>{num(c.compliance?.score)}</td>
+                    <td>{duracion(c.duration_seconds)}</td>
+                    <td>{c.lead_captured ? "Sí" : "No"}</td>
+                    <td style={{ maxWidth: 340, overflow: "hidden", textOverflow: "ellipsis" }}>{c.summary || "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <h2 className="pv3-h2">Política de retención</h2>
       <div className="pv3-card">
@@ -961,7 +930,7 @@ function Estado({ salud, cargando }) {
   );
 }
 
-function Equipo({ datos, onRecargar }) {
+function Equipo({ datos, onRecargar, acceso }) {
   const usuarios = datos.users || [];
   const [nuevo, setNuevo] = useState({ full_name: "", email: "", role: "agent", phone: "", password: "" });
   const [reinicio, setReinicio] = useState({});
@@ -1076,7 +1045,7 @@ function Equipo({ datos, onRecargar }) {
                         className="pv3-input"
                         type="password"
                         autoComplete="new-password"
-                        placeholder="Nueva contraseña"
+                        placeholder="Nueva contraseña (10+)"
                         style={{ width: 160, padding: "6px 11px", fontSize: 12.5 }}
                         aria-label={`Nueva contraseña de ${u.email}`}
                         value={reinicio[u.id] || ""}
@@ -1085,7 +1054,7 @@ function Equipo({ datos, onRecargar }) {
                       <Accion
                         onRun={async () => {
                           const clave = reinicio[u.id] || "";
-                          if (clave.length < 8) throw new Error("Mínimo 8 caracteres.");
+                          if (clave.length < 10) throw new Error("Mínimo 10 caracteres.");
                           await enviar("/api/portal/users/reset-password", "POST", {
                             userId: u.id,
                             password: clave,
@@ -1103,6 +1072,50 @@ function Equipo({ datos, onRecargar }) {
           </table>
         </div>
       )}
+
+      <h2 className="pv3-h2">Qué puede hacer cada uno</h2>
+      {(() => {
+        /* Era una pantalla aparte. Es información de las mismas personas, así
+           que va debajo de la tabla de acceso en vez de en otro sitio. */
+        const matriz = acceso?.permissionMatrix || {};
+        const catalogo = matriz.catalog || [];
+        const filas = matriz.rows || [];
+
+        if (!acceso) return <Vacio>Cargando permisos…</Vacio>;
+        if (filas.length === 0) return <Vacio>Todavía no hay nadie con acceso al portal.</Vacio>;
+
+        return (
+          <div className="pv3-tablewrap">
+            <table className="pv3-table">
+              <thead>
+                <tr>
+                  <th>USUARIO</th><th>ROL</th>
+                  {catalogo.map((c) => (
+                    <th key={c.id} title={c.description || c.label}>
+                      {String(c.label || c.id).toUpperCase()}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filas.map((f) => (
+                  <tr key={f.userId || f.email}>
+                    <td className="pv3-strong">{f.email || "—"}</td>
+                    <td><span className="pv3-tag" data-t="grey">{f.role || "viewer"}</span></td>
+                    {(f.grants || []).map((g) => (
+                      <td key={g.id}>
+                        <span className="pv3-tag" data-t={g.enabled ? "ok" : "grey"}>
+                          {g.enabled ? "Sí" : "No"}
+                        </span>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })()}
 
       <h2 className="pv3-h2">Registro de actividad</h2>
       {(datos.auditLogs || []).length === 0 ? (
@@ -1347,97 +1360,29 @@ function primerCampo(objeto, claves) {
  * palabras y se capitaliza, que ya es legible aunque quede en inglés.
  */
 const TRADUCCIONES = {
-  activeSeats: "Licencias activas",
-  activeUsers: "Usuarios activos",
-  assets: "Recursos de marca",
-  atRisk: "En riesgo",
-  auditEvents: "Eventos de auditoría",
-  available: "Disponibles",
-  avgCompliance: "Cumplimiento medio",
-  avgDuration: "Duración media",
-  avgScore: "Nota media",
-  bestCalls: "Llamadas buenas",
-  callCaptureRate: "Ratio de captura",
-  capturedLeads: "Leads captados",
-  connected: "Conectadas",
-  conversionProgress: "Avance de conversión",
-  elevated: "Con permisos elevados",
-  elevatedUsers: "Con permisos elevados",
-  endpoints: "Endpoints",
-  events: "Eventos",
-  experimentCoverage: "Cobertura de experimentos",
-  failures: "Fallos",
-  flows: "Flujos",
-  hotLeads: "Leads calientes",
-  hotOpenLeads: "Calientes abiertos",
-  keys: "Claves",
-  lastReview: "Última revisión",
-  leadWinRate: "Ratio de cierre",
-  leakedRevenue: "Ingresos que se escapan",
-  monthlyLeadProgress: "Avance de objetivo mensual",
-  needsAttention: "Necesitan repaso",
-  pending: "Pendientes",
-  pendingInvoices: "Facturas pendientes",
-  pendingToday: "Pendientes para hoy",
-  pipelineValue: "Valor del pipeline",
-  readiness: "Preparación",
-  readinessScore: "Preparación",
-  requiresAttention: "Requieren atención",
-  runsToday: "Ejecuciones hoy",
-  servicesReady: "Servicios listos",
-  suggestedCalls: "Llamadas sugeridas",
-  total: "Total",
-  totalRevenue: "Ingresos totales",
+  // Inbox
   totalThreads: "Conversaciones",
-  trialReady: "Listo para prueba",
-  twoFactor: "Con segundo factor",
-  twoFactorCoverage: "Cobertura de segundo factor",
-  users: "Usuarios",
-
-  // Títulos de sección (los nombres de las listas que devuelve cada workspace).
-  auditHighlights: "Actividad destacada",
-  campaigns: "Campañas",
-  catalog: "Catálogo",
-  commonIssues: "Incidencias frecuentes",
-  commonObjections: "Objeciones más oídas",
-  connectors: "Conectores",
-  controls: "Controles",
-  eventCatalog: "Catálogo de eventos",
-  identity: "Identidad y acceso",
-  insights: "Lecturas",
-  leakageMap: "Dónde se escapa",
-  levers: "Palancas",
-  logs: "Registro de ejecución",
-  nextMoves: "Siguientes pasos",
-  ownerFocus: "Por responsable",
-  partnerProgram: "Programa de socios",
-  policies: "Políticas",
-  privacy: "Privacidad",
-  productFocus: "Por producto",
-  ranking: "Ranking",
-  recipes: "Recetas",
-  recommendations: "Recomendaciones",
-  risks: "Riesgos",
-  rollout: "Despliegue",
-  scoreboard: "Marcador",
-  scripts: "Guiones",
-  serviceMap: "Mapa de servicios",
-  simulations: "Simulaciones",
-  suggestions: "Sugerencias",
-  summaryCards: "Resumen",
-  templates: "Plantillas",
-  upgradeSignals: "Señales de ampliación",
-  urls: "Direcciones",
-  usageBilling: "Consumo y facturación",
-  watchouts: "Vigilar",
-  wins: "Lo que va bien",
-  workflows: "Flujos",
+  requiresAttention: "Requieren atención",
   waitingForReply: "Esperando respuesta",
   withCalls: "Con llamadas",
-  withPayments: "Con pagos",
-  withRecording: "Con grabación",
   withRecordings: "Con grabación",
+  withPayments: "Con pagos",
+
+  // Calidad de voz
+  total: "Llamadas analizadas",
+  withRecording: "Con grabación",
+  avgScore: "Nota media",
+  avgDuration: "Duración media",
+  avgCompliance: "Cumplimiento medio",
+  capturedLeads: "Leads captados",
+
+  // Guion comercial
+  camposCubiertos: "Campos cubiertos",
+  ultimaEdicion: "Última edición",
+  recommendations: "Recomendaciones",
+  suggestions: "Sugerencias",
 };
+
 
 function humanizar(clave) {
   if (TRADUCCIONES[clave]) return TRADUCCIONES[clave];
@@ -1537,51 +1482,6 @@ function tono(estado) {
   if (/(error|fail|critical|missing|blocked|lost|down|risk)/.test(s)) return "bad";
   return "grey";
 }
-
-/**
- * Vista genérica de workspace: pinta el `summary` y después toda lista de
- * objetos que traiga la respuesta, en el orden en que venga.
- */
-function Workspace({ datos, cargando, vacio }) {
-  if (cargando) {
-    return <div className="pv3-grid" data-c="4">{[0, 1, 2, 3].map((i) => <div key={i} className="pv3-skel" />)}</div>;
-  }
-  if (!datos) {
-    return <div style={{ marginTop: 22 }}><Vacio>{vacio || "No se pudo cargar esta sección."}</Vacio></div>;
-  }
-
-  const listas = Object.entries(datos).filter(
-    ([clave, valor]) => Array.isArray(valor) && valor.length > 0 && clave !== "calls" && clave !== "leads"
-  );
-
-  // Cada workspace llama de forma distinta a su párrafo de lectura.
-  const textoSuelto = [datos.story, datos.briefing, datos.narrative].find(
-    (t) => typeof t === "string" && t.trim()
-  );
-
-  return (
-    <div className="pv3-view">
-      {datos.summary ? <Resumenes resumen={datos.summary} /> : null}
-
-      {textoSuelto ? (
-        <div className="pv3-card" style={{ marginTop: 22 }}>
-          <div className="pv3-lab">LECTURA</div>
-          <p className="pv3-p" style={{ marginTop: 10, fontSize: 15 }}>{textoSuelto}</p>
-        </div>
-      ) : null}
-
-      {listas.map(([clave, valor]) => (
-        <Lista key={clave} titulo={humanizar(clave)} items={valor} />
-      ))}
-
-      {!datos.summary && listas.length === 0 ? (
-        <Vacio>Esta sección todavía no tiene datos que mostrar.</Vacio>
-      ) : null}
-    </div>
-  );
-}
-
-/* ── conversaciones (inbox) ──────────────────────────────────────────── */
 
 function Conversaciones({ inbox, cargando, onRecargar }) {
   const [abierto, setAbierto] = useState(null);
@@ -1734,545 +1634,6 @@ function Conversaciones({ inbox, cargando, onRecargar }) {
   );
 }
 
-/* ── calidad de llamada (voice-qa) ───────────────────────────────────── */
-
-function CalidadQA({ qa, cargando }) {
-  if (cargando) return <div className="pv3-grid" data-c="4">{[0, 1, 2, 3].map((i) => <div key={i} className="pv3-skel" />)}</div>;
-  if (!qa) return <div style={{ marginTop: 22 }}><Vacio>No se pudo cargar la revisión de llamadas.</Vacio></div>;
-
-  const llamadas = qa.calls || [];
-
-  return (
-    <div className="pv3-view">
-      <Resumenes resumen={qa.summary} />
-
-      {llamadas.length === 0 ? (
-        <div style={{ marginTop: 22 }}><Vacio>Aún no hay llamadas puntuadas.</Vacio></div>
-      ) : (
-        <div className="pv3-tablewrap" style={{ marginTop: 22 }}>
-          <table className="pv3-table">
-            <thead>
-              <tr><th>FECHA</th><th>NOTA</th><th>CUMPLIMIENTO</th><th>DURACIÓN</th><th>LEAD</th><th>RESUMEN</th></tr>
-            </thead>
-            <tbody>
-              {llamadas.slice(0, 100).map((c, i) => {
-                const nota = Number(c.qa?.overall || 0);
-                return (
-                  <tr key={c.id || i}>
-                    <td>{fecha(c.created_at)}</td>
-                    <td>
-                      <span className="pv3-tag" data-t={nota >= 75 ? "ok" : nota >= 55 ? "warn" : "bad"}>{num(nota)}</span>
-                    </td>
-                    <td>{num(c.compliance?.score)}</td>
-                    <td>{duracion(c.duration_seconds)}</td>
-                    <td>{c.lead_captured ? "Sí" : "No"}</td>
-                    <td style={{ maxWidth: 380, overflow: "hidden", textOverflow: "ellipsis" }}>{c.summary || "—"}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ── permisos ────────────────────────────────────────────────────────── */
-
-function Permisos({ acceso, cargando }) {
-  if (cargando) return <div className="pv3-grid" data-c="3">{[0, 1, 2].map((i) => <div key={i} className="pv3-skel" />)}</div>;
-  if (!acceso) return <div style={{ marginTop: 22 }}><Vacio>No se pudo cargar el centro de accesos.</Vacio></div>;
-
-  /*
-   * La matriz llega como { catalog, rows }, donde cada fila trae `grants`:
-   * el catálogo completo de permisos con un `enabled` por cada uno. Se lee
-   * de ahí y no de un mapa de columnas, que es lo que se supuso al principio
-   * y hacía que la tabla saliera siempre vacía.
-   */
-  const matriz = acceso.permissionMatrix || {};
-  const catalogo = matriz.catalog || [];
-  const filas = matriz.rows || [];
-
-  return (
-    <div className="pv3-view">
-      {acceso.summary ? <Resumenes resumen={acceso.summary} /> : null}
-
-      {filas.length === 0 ? (
-        <div style={{ marginTop: 22 }}><Vacio>Todavía no hay nadie con acceso al portal.</Vacio></div>
-      ) : (
-        <div className="pv3-tablewrap" style={{ marginTop: 22 }}>
-          <table className="pv3-table">
-            <thead>
-              <tr>
-                <th>USUARIO</th>
-                <th>ROL</th>
-                {catalogo.map((c) => (
-                  <th key={c.id} title={c.description || c.label}>
-                    {String(c.label || c.id).toUpperCase()}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filas.map((f) => (
-                <tr key={f.userId || f.email}>
-                  <td className="pv3-strong">{f.email || "—"}</td>
-                  <td><span className="pv3-tag" data-t="grey">{f.role || "viewer"}</span></td>
-                  {(f.grants || []).map((g) => (
-                    <td key={g.id}>
-                      <span className="pv3-tag" data-t={g.enabled ? "ok" : "grey"}>
-                        {g.enabled ? "Sí" : "No"}
-                      </span>
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      <Lista titulo="Políticas" items={acceso.policies} />
-      <Lista titulo="Recomendaciones" items={acceso.recommendations} />
-      <Lista titulo="Actividad reciente" items={acceso.auditLogs} />
-    </div>
-  );
-}
-
-/* ── facturación ─────────────────────────────────────────────────────── */
-
-function Facturacion({ datos, cargando }) {
-  if (cargando) return <div className="pv3-grid" data-c="4">{[0,1,2,3].map((i) => <div key={i} className="pv3-skel" />)}</div>;
-  if (!datos) return <div style={{ marginTop: 22 }}><Vacio>No se pudo cargar la facturación.</Vacio></div>;
-
-  const sub = datos.activeSubscription;
-
-  return (
-    <div className="pv3-view">
-      <div className="pv3-grid" data-c="4">
-        <Tarjeta label="INGRESOS" valor={eur(datos.totalRevenue)} detalle={`${num(datos.totalPayments)} cobros`} />
-        <Tarjeta label="LEADS QUE PAGARON" valor={num(datos.paidLeads)} detalle="Con al menos un cobro" retraso={60} />
-        <Tarjeta label="FACTURAS PAGADAS" valor={num(datos.paidInvoicesCount)} detalle="Cerradas" retraso={120} />
-        <Tarjeta label="FACTURAS PENDIENTES" valor={num(datos.pendingInvoicesCount)} detalle="Sin cobrar" retraso={180} />
-      </div>
-
-      <h2 className="pv3-h2">Suscripción</h2>
-      <div className="pv3-card">
-        {sub ? (
-          <div style={{ display: "grid", gap: 11 }}>
-            <div className="pv3-row">
-              <span className="pv3-small">Estado</span>
-              <span className="pv3-tag" data-t={tono(sub.status)}>{sub.status || "—"}</span>
-            </div>
-            <div className="pv3-row">
-              <span className="pv3-small">Plan</span>
-              <span className="pv3-strong">{sub.plan || sub.price_id || "—"}</span>
-            </div>
-            <div className="pv3-row">
-              <span className="pv3-small">Renueva</span>
-              <span className="pv3-strong">{fecha(sub.current_period_end)}</span>
-            </div>
-          </div>
-        ) : (
-          <p className="pv3-p">No hay ninguna suscripción activa en esta cuenta.</p>
-        )}
-      </div>
-
-      <h2 className="pv3-h2">Leads que más han facturado</h2>
-      {(datos.topLeads || []).length === 0 ? (
-        <Vacio>Todavía no hay ingresos atribuidos a ningún lead.</Vacio>
-      ) : (
-        <div className="pv3-tablewrap">
-          <table className="pv3-table">
-            <thead><tr><th>LEAD</th><th>TELÉFONO</th><th>INGRESOS</th><th>COBROS</th></tr></thead>
-            <tbody>
-              {(datos.topLeads || []).map((l, i) => (
-                <tr key={l.id || i}>
-                  <td className="pv3-strong">{l.nombre || l.name || "—"}</td>
-                  <td>{l.telefono || "—"}</td>
-                  <td>{eur(l.revenue ?? l.total_revenue)}</td>
-                  <td>{num(l.payments ?? l.count)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      <h2 className="pv3-h2">Facturas</h2>
-      {(datos.invoices || []).length === 0 ? (
-        <Vacio>Sin facturas emitidas.</Vacio>
-      ) : (
-        <div className="pv3-tablewrap">
-          <table className="pv3-table">
-            <thead><tr><th>FECHA</th><th>IMPORTE</th><th>ESTADO</th><th>NÚMERO</th></tr></thead>
-            <tbody>
-              {(datos.invoices || []).slice(0, 40).map((f, i) => (
-                <tr key={f.id || i}>
-                  <td>{fecha(f.created_at || f.created)}</td>
-                  <td>{eur((f.amount_paid ?? f.amount ?? 0) / (f.amount_paid > 1000 ? 100 : 1))}</td>
-                  <td><span className="pv3-tag" data-t={tono(f.status)}>{f.status || "—"}</span></td>
-                  <td>{f.number || f.id || "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ── procesos ────────────────────────────────────────────────────────── */
-
-/**
- * Procesos que se pueden lanzar a mano.
- *
- * Normalmente corren solos por la noche; el botón está para cuando hace falta
- * el resultado ahora, o para comprobar que la pieza funciona. Los que tocan
- * al cliente (llamadas, recordatorios, informes) piden confirmación: pulsar
- * por error no debe acabar en un SMS a cincuenta personas.
- */
-const PROCESOS = [
-  {
-    grupo: "Sobre los leads",
-    items: [
-      { api: "/api/automation/recalculate-priority", label: "Recalcular prioridad",
-        desc: "Reordena a quién llamar primero con la señal de hoy." },
-      { api: "/api/automation/recalculate-dynamic-score", label: "Recalcular puntuación",
-        desc: "Vuelve a puntuar cada lead con su actividad reciente." },
-      { api: "/api/automation/recalculate-next-actions", label: "Recalcular siguientes pasos",
-        desc: "Regenera la acción propuesta para cada lead abierto." },
-      { api: "/api/automation/execute-next-action", label: "Ejecutar siguientes pasos",
-        desc: "Lanza las acciones ya propuestas.",
-        confirmar: "Esto ejecuta las acciones propuestas sobre leads reales. ¿Seguir?" },
-    ],
-  },
-  {
-    grupo: "Contacto",
-    items: [
-      { api: "/api/automation/reactivate-cold-leads", label: "Reactivar leads fríos",
-        desc: "Vuelve a tocar a quien lleva tiempo parado.",
-        confirmar: "Se contactará a los leads fríos. ¿Seguir?" },
-      { api: "/api/automation/run-voice-calls", label: "Lanzar llamadas",
-        desc: "Cola de llamadas salientes pendientes.",
-        confirmar: "Esto hace llamadas reales. ¿Seguir?" },
-      { api: "/api/automation/run-appointment-reminders", label: "Recordatorios de cita",
-        desc: "Avisa a quien tiene cita próxima.",
-        confirmar: "Se enviarán recordatorios reales. ¿Seguir?" },
-      { api: "/api/automation/run-onboarding", label: "Onboarding",
-        desc: "Secuencia de bienvenida para los que acaban de entrar.",
-        confirmar: "Se enviará la secuencia de bienvenida. ¿Seguir?" },
-      { api: "/api/automation/run-upsells", label: "Ampliaciones",
-        desc: "Propuestas de ampliación a clientes activos.",
-        confirmar: "Se enviarán propuestas de ampliación. ¿Seguir?" },
-      { api: "/api/automation/run-funnel", label: "Embudo completo",
-        desc: "Pasa todo el embudo de una vez.",
-        confirmar: "Esto ejecuta el embudo entero sobre datos reales. ¿Seguir?" },
-    ],
-  },
-  {
-    grupo: "Informes",
-    items: [
-      { api: "/api/daily-report/send", label: "Enviar informe diario",
-        desc: "Manda ahora el resumen del día.",
-        confirmar: "Se enviará el informe diario por email. ¿Seguir?" },
-      { api: "/api/weekly-report/send", label: "Enviar informe semanal",
-        desc: "Manda ahora el resumen de la semana.",
-        confirmar: "Se enviará el informe semanal por email. ¿Seguir?" },
-      { api: "/api/nightly", label: "Proceso nocturno",
-        desc: "Todo el mantenimiento que corre de madrugada.",
-        confirmar: "Ejecuta el proceso nocturno completo. ¿Seguir?" },
-    ],
-  },
-];
-
-function Procesos({ onRecargar }) {
-  return (
-    <div className="pv3-view">
-      <div className="pv3-card" style={{ marginTop: 22 }}>
-        <div className="pv3-lab">CÓMO FUNCIONA</div>
-        <p className="pv3-p" style={{ marginTop: 10 }}>
-          Estos procesos corren solos. Los botones son para cuando necesitas el
-          resultado ahora mismo o quieres comprobar que una pieza responde. Los
-          que contactan con clientes piden confirmación antes de nada.
-        </p>
-      </div>
-
-      {PROCESOS.map((seccion) => (
-        <div key={seccion.grupo}>
-          <h2 className="pv3-h2">{seccion.grupo}</h2>
-          <div className="pv3-grid" data-c="3" style={{ marginTop: 0 }}>
-            {seccion.items.map((it, i) => (
-              <div key={it.api} className="pv3-card" style={{ animationDelay: `${i * 45}ms` }}>
-                <div className="pv3-lab">{it.label.toUpperCase()}</div>
-                <p className="pv3-p" style={{ marginTop: 10 }}>{it.desc}</p>
-                <Accion
-                  confirmar={it.confirmar}
-                  onRun={async () => {
-                    await enviar(it.api, "POST", {});
-                    await onRecargar();
-                  }}
-                >
-                  Ejecutar
-                </Accion>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/* ── puesta en marcha ────────────────────────────────────────────────── */
-
-/**
- * Lista de arranque: qué falta por dejar listo en la cuenta.
- *
- * Se calcula en el navegador a partir del panel, la facturación, la salud
- * del sistema y los playbooks, con el mismo helper que usaba el portal
- * anterior, para que la lectura no cambie.
- */
-function PuestaEnMarcha({ datos, extra, cargando }) {
-  const w = useMemo(
-    () =>
-      buildOnboardingWorkspace({
-        data: datos,
-        billingData: extra.facturacion || null,
-        healthData: extra.estado || null,
-        playbookData: extra.playbooks || null,
-      }),
-    [datos, extra.facturacion, extra.estado, extra.playbooks]
-  );
-
-  if (cargando) {
-    return <div className="pv3-grid" data-c="3">{[0, 1, 2].map((i) => <div key={i} className="pv3-skel" />)}</div>;
-  }
-
-  // checklist llega como { items, completed, total, progress, nextStep }.
-  const lista = Array.isArray(w.checklist) ? w.checklist : w.checklist?.items || [];
-  const listos = lista.filter((c) => c.done).length;
-  const total = lista.length;
-  const progreso = w.checklist?.progress ?? w.readinessScore ?? 0;
-
-  return (
-    <div className="pv3-view">
-      <div className="pv3-card" style={{ marginTop: 22 }}>
-        <div className="pv3-row">
-          <span className="pv3-lab">PREPARACIÓN</span>
-          <span className="pv3-strong">{num(progreso)}%</span>
-        </div>
-        <div className="pv3-track" style={{ marginTop: 12 }}>
-          <div className="pv3-fill" style={{ width: `${Math.min(100, Number(progreso || 0))}%` }} />
-        </div>
-        <div className="pv3-det">{num(listos)} de {num(total)} puntos completados</div>
-      </div>
-
-      <h2 className="pv3-h2">Lista de arranque</h2>
-      {total === 0 ? (
-        <Vacio>No hay nada pendiente de configurar.</Vacio>
-      ) : (
-        <div style={{ display: "grid", gap: 9 }}>
-          {lista.map((c, i) => {
-            const hecho = Boolean(c.done);
-            return (
-              <div key={c.id || i} className="pv3-card" style={{ animationDelay: `${i * 40}ms` }}>
-                <div className="pv3-row">
-                  <span className="pv3-strong">
-                    <span className="pv3-marca" data-ok={hecho}>{hecho ? "✓" : "○"}</span>
-                    {c.title || c.label || "Punto"}
-                  </span>
-                  <span className="pv3-tag" data-t={hecho ? "ok" : "warn"}>
-                    {hecho ? "Listo" : "Pendiente"}
-                  </span>
-                </div>
-                {c.detail ? (
-                  <p className="pv3-p" style={{ marginTop: 9, paddingLeft: 26 }}>{c.detail}</p>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {typeof w.summary === "string" ? (
-        <div className="pv3-card" style={{ marginTop: 12 }}>
-          <p className="pv3-p" style={{ fontSize: 15 }}>{w.summary}</p>
-        </div>
-      ) : null}
-
-      <Lista titulo="Siguientes pasos" items={w.nextActions} />
-      <Lista titulo="Integraciones" items={w.integrations} columnas="3" />
-    </div>
-  );
-}
-
-/* ── alertas ─────────────────────────────────────────────────────────── */
-
-function Alertas({ datos, extra, cargando }) {
-  const n = useMemo(
-    () =>
-      buildDerivedNotifications({
-        data: datos,
-        billingData: extra.facturacion || null,
-        healthData: extra.estado || null,
-        voiceQaData: extra.qa || null,
-      }),
-    [datos, extra.facturacion, extra.estado, extra.qa]
-  );
-
-  if (cargando) {
-    return <div className="pv3-grid" data-c="4">{[0, 1, 2, 3].map((i) => <div key={i} className="pv3-skel" />)}</div>;
-  }
-
-  const hilos = n.threads || [];
-
-  return (
-    <div className="pv3-view">
-      <Resumenes resumen={n.summary} />
-
-      {hilos.length === 0 ? (
-        <div style={{ marginTop: 22 }}><Vacio>Ninguna alerta abierta. Todo va según lo previsto.</Vacio></div>
-      ) : (
-        <div style={{ display: "grid", gap: 10, marginTop: 22 }}>
-          {hilos.map((h, i) => (
-            <div key={h.id || i} className="pv3-card" style={{ animationDelay: `${i * 40}ms` }}>
-              <div className="pv3-row">
-                <span className="pv3-lab">{String(h.category || h.type || "AVISO").toUpperCase()}</span>
-                <span className="pv3-tag" data-t={tono(h.severity || h.level)}>
-                  {h.severity || h.level || "info"}
-                </span>
-              </div>
-              <p className="pv3-p" style={{ marginTop: 10, fontSize: 14.5 }}>
-                {h.title || h.message || "Aviso"}
-              </p>
-              {h.body && h.body !== h.title ? (
-                <p className="pv3-p" style={{ marginTop: 7, color: "var(--muted)" }}>{h.body}</p>
-              ) : null}
-              {h.created_at ? <div className="pv3-det">{fecha(h.created_at)}</div> : null}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ── analítica ───────────────────────────────────────────────────────── */
-
-/** Cada bloque es un endpoint distinto; se dibujan con el genérico. */
-const BLOQUES_ANALITICA = [
-  ["revenue", "Ingresos"],
-  ["leadRevenue", "Ingresos por lead"],
-  ["ownerRevenue", "Ingresos por responsable"],
-  ["voiceStats", "Voz"],
-  ["priorityStats", "Prioridad"],
-  ["reactivationStats", "Reactivación"],
-  ["appointmentStats", "Citas"],
-  ["upsellStats", "Ampliaciones"],
-];
-
-function Analitica({ analitica, cargando }) {
-  if (cargando) {
-    return <div className="pv3-grid" data-c="4">{[0, 1, 2, 3].map((i) => <div key={i} className="pv3-skel" />)}</div>;
-  }
-  if (!analitica) {
-    return <div style={{ marginTop: 22 }}><Vacio>No se pudo cargar la analítica.</Vacio></div>;
-  }
-
-  const conDatos = BLOQUES_ANALITICA.filter(([clave]) => analitica[clave]);
-
-  if (conDatos.length === 0) {
-    return <div style={{ marginTop: 22 }}><Vacio>Todavía no hay suficiente histórico para estas métricas.</Vacio></div>;
-  }
-
-  return (
-    <div className="pv3-view">
-      {conDatos.map(([clave, titulo]) => {
-        const d = analitica[clave];
-        // Cada endpoint devuelve algo distinto: si trae `summary` se pintan
-        // las cifras; si es un objeto plano de números, ese objeto sirve igual.
-        const resumen = d.summary && typeof d.summary === "object" ? d.summary : d;
-        const listas = Object.entries(d).filter(([, v]) => Array.isArray(v) && v.length > 0);
-
-        return (
-          <section key={clave}>
-            <h2 className="pv3-h2">{titulo}</h2>
-            <Resumenes resumen={resumen} />
-            {listas.map(([k, v]) => (
-              <Lista key={k} titulo={humanizar(k)} items={v} columnas="3" />
-            ))}
-          </section>
-        );
-      })}
-    </div>
-  );
-}
-
-/* ── torre de control ────────────────────────────────────────────────── */
-
-function Control({ datos, extra, cargando }) {
-  const snap = useMemo(
-    () =>
-      buildControlTowerSnapshot({
-        data: datos,
-        billingData: extra.facturacion || null,
-        healthData: extra.estado || null,
-        voiceQaData: extra.qa || null,
-        experimentSnapshot: extra.experimentos || null,
-      }),
-    [datos, extra.facturacion, extra.estado, extra.qa, extra.experimentos]
-  );
-
-  return <Workspace datos={cargando ? null : snap} cargando={cargando} />;
-}
-
-/* ── experimentos ────────────────────────────────────────────────────── */
-
-function Experimentos({ experimentos, cargando }) {
-  const resumen = useMemo(() => {
-    if (!experimentos) return null;
-    // El endpoint puede traer ya el resumen o sólo las variantes.
-    return experimentos.summary
-      ? experimentos
-      : buildMessageExperimentSummary({ variants: experimentos.variants || experimentos });
-  }, [experimentos]);
-
-  return (
-    <Workspace
-      datos={cargando ? null : resumen}
-      cargando={cargando}
-      vacio="Todavía no hay experimentos de mensaje en marcha."
-    />
-  );
-}
-
-/* ── retorno ─────────────────────────────────────────────────────────── */
-
-function Retorno({ datos, extra, cargando }) {
-  const snap = useMemo(
-    () =>
-      buildRoiSnapshot({
-        data: datos,
-        revenue: extra.analitica?.revenue || null,
-        billingData: extra.facturacion || null,
-        leadRevenue: extra.analitica?.leadRevenue || null,
-        ownerRevenue: extra.analitica?.ownerRevenue || null,
-      }),
-    [datos, extra.analitica, extra.facturacion]
-  );
-
-  return <Workspace datos={cargando ? null : snap} cargando={cargando} />;
-}
-
-/* ── playbooks ───────────────────────────────────────────────────────── */
-
-/**
- * Guion comercial de la cuenta: cómo debe hablar la voz y qué debe conseguir.
- * Es lo único de esta tanda que se edita, así que lleva formulario propio.
- */
 function Playbooks({ playbooks, cargando, onRecargar }) {
   const guardado = playbooks?.workspace || null;
 
@@ -2355,116 +1716,6 @@ function Playbooks({ playbooks, cargando, onRecargar }) {
   );
 }
 
-/* ── operaciones ─────────────────────────────────────────────────────── */
-
-function Operaciones({ datos, extra, cargando, onRecargar }) {
-  // Leer el reloj en cada render hace que el resultado cambie solo. Se fija
-  // al montar: para "lleva más de 7 días parado" da exactamente igual.
-  const [ahora] = useState(() => Date.now());
-
-  const sinDueno = useMemo(
-    () => (datos.leads || []).filter((l) => !l.owner),
-    [datos.leads]
-  );
-
-  const parados = useMemo(
-    () =>
-      (datos.leads || []).filter((l) => {
-        if (["won", "lost"].includes(l.status)) return false;
-        const t = new Date(l.updated_at || l.created_at || 0).getTime();
-        return t > 0 && ahora - t > 7 * 24 * 60 * 60 * 1000;
-      }),
-    [datos.leads, ahora]
-  );
-
-  if (cargando) {
-    return <div className="pv3-grid" data-c="4">{[0, 1, 2, 3].map((i) => <div key={i} className="pv3-skel" />)}</div>;
-  }
-
-  const salud = extra.estado || null;
-  const qa = extra.qa || null;
-  const m = datos.metrics || {};
-
-  return (
-    <div className="pv3-view">
-      <div className="pv3-grid" data-c="4">
-        <Tarjeta label="SIN RESPONSABLE" valor={num(sinDueno.length)} detalle="Nadie los está trabajando" />
-        <Tarjeta label="PARADOS +7 DÍAS" valor={num(parados.length)} detalle="Abiertos y sin movimiento" retraso={60} />
-        <Tarjeta label="LLAMADAS SIN LEAD" valor={num(Math.max(0, Number(m.totalCalls || 0) - Number(m.totalLeads || 0)))} detalle="No dejaron contacto" retraso={120} />
-        <Tarjeta label="NOTA DE VOZ" valor={qa ? num(qa.summary?.avgScore) : "—"} detalle="Media sobre 100" retraso={180} />
-      </div>
-
-      <h2 className="pv3-h2">Salud del sistema</h2>
-      {!salud ? (
-        <Vacio>Abre la pestaña Estado para cargar el diagnóstico.</Vacio>
-      ) : (
-        <div className="pv3-card">
-          <div className="pv3-row">
-            <span className="pv3-lab">DIAGNÓSTICO</span>
-            <span className="pv3-tag" data-t={tono(salud.summary?.level)}>{salud.summary?.level}</span>
-          </div>
-          <p className="pv3-p" style={{ marginTop: 10 }}>{salud.summary?.message}</p>
-        </div>
-      )}
-
-      <h2 className="pv3-h2">Lo que hay que desatascar</h2>
-      {sinDueno.length === 0 && parados.length === 0 ? (
-        <Vacio>Nada atascado. El pipeline se está moviendo.</Vacio>
-      ) : (
-        <div className="pv3-tablewrap">
-          <table className="pv3-table">
-            <thead><tr><th>LEAD</th><th>TELÉFONO</th><th>MOTIVO</th><th>ÚLTIMO MOVIMIENTO</th></tr></thead>
-            <tbody>
-              {[...new Set([...sinDueno, ...parados])].slice(0, 50).map((l, i) => (
-                <tr key={l.id || i}>
-                  <td className="pv3-strong">{l.nombre || "Sin nombre"}</td>
-                  <td>{l.telefono || "—"}</td>
-                  <td>
-                    {!l.owner ? <span className="pv3-tag" data-t="warn">Sin responsable</span> : null}
-                    {parados.includes(l) ? <span className="pv3-tag" data-t="bad" style={{ marginLeft: 6 }}>Parado</span> : null}
-                  </td>
-                  <td>{fecha(l.updated_at || l.created_at)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      <h2 className="pv3-h2">Mantenimiento</h2>
-      <div className="pv3-card">
-        <p className="pv3-p">
-          El proceso nocturno recalcula prioridades, reactiva fríos y limpia lo
-          caducado. Corre solo de madrugada; esto lo lanza ahora.
-        </p>
-        <Accion
-          confirmar="Ejecuta el proceso nocturno completo sobre datos reales. ¿Seguir?"
-          onRun={async () => {
-            await enviar("/api/nightly", "POST", {});
-            await onRecargar();
-          }}
-        >
-          Ejecutar ahora
-        </Accion>
-      </div>
-    </div>
-  );
-}
-
-
-/* ── contención de fallos ────────────────────────────────────────────── */
-
-/**
- * Aísla cada vista.
- *
- * Sin esto, un error de render en cualquiera de las treinta y una vistas
- * —un campo que la API deja de devolver, una forma que cambia— tumba el
- * árbol entero y el portal se queda en blanco: dejas de poder ver los leads
- * porque falla una pantalla de métricas. Con esto sólo cae ese panel, el
- * menú sigue vivo y se puede seguir trabajando.
- *
- * Es una clase porque componentDidCatch no tiene equivalente con hooks.
- */
 class Aislante extends React.Component {
   constructor(props) {
     super(props);
@@ -2522,37 +1773,16 @@ class Aislante extends React.Component {
 /** Encabezado de cada vista: antetítulo, título y una línea que la explica. */
 const META = {
   resumen: ["PANEL", "Resumen", "Lo que ha pasado y lo que hay abierto ahora mismo."],
-  alertas: ["AVISOS", "Alertas", "Todo lo que pide atención, en un sitio."],
-  operaciones: ["DÍA A DÍA", "Operaciones", "Lo atascado y lo que hay que desatascar."],
-  control: ["MANDO", "Torre de control", "Una lectura de toda la cuenta a la vez."],
-  playbooks: ["GUION", "Guion comercial", "Cómo habla la voz y qué tiene que conseguir."],
-  analitica: ["MÉTRICAS", "Analítica", "Ingresos, voz, prioridad, citas y reactivación."],
-  retorno: ["RETORNO", "Retorno", "Qué te está devolviendo la inversión."],
-  experimentos: ["PRUEBAS", "Experimentos", "Qué mensajes funcionan mejor y por qué."],
-  puesta: ["ARRANQUE", "Puesta en marcha", "Lo que falta para dejar la cuenta redonda."],
-  leads: ["CAPTACIÓN", "Leads", "Todo lo que la voz ha capturado, con su estado y su valor."],
+  leads: ["CAPTACIÓN", "Leads", "Todo lo que la voz ha capturado, en lista o por fases."],
   llamadas: ["REGISTRO", "Llamadas", "Cada conversación, con grabación y transcripción."],
-  pipeline: ["EMBUDO", "Pipeline", "Dónde está cada lead ahora mismo."],
-  conversaciones: ["INBOX", "Conversaciones", "Cada hilo con su historial completo de llamadas y mensajes."],
-  copiloto: ["ASISTENTE", "Copiloto", "Qué hacer hoy, en orden, y con qué decirlo."],
-  voz: ["CALIDAD", "Calidad de voz", "Cómo está funcionando el agente en cada llamada."],
-  qa: ["AUDITORÍA", "Revisión de llamadas", "Nota y cumplimiento llamada a llamada."],
-  "señales": ["ANÁLISIS", "Señales", "Patrones y recomendaciones sobre tus datos."],
-  estrategia: ["DIRECCIÓN", "Estrategia", "Benchmarks, foco y hacia dónde mover la cuenta."],
-  growth: ["EXPANSIÓN", "Growth", "Palancas y campañas para subir volumen y cierre."],
-  revenue: ["INGRESOS", "Revenue OS", "Dónde se escapa el dinero y dónde se puede subir."],
-  facturacion: ["COBROS", "Facturación", "Lo cobrado, lo pendiente y de qué leads viene."],
-  marca: ["IDENTIDAD", "Marca", "Cómo te ve el cliente: logo, colores, dominio y catálogo."],
-  workflows: ["AUTOMATIZACIÓN", "Automatizaciones", "Flujos, plantillas y su registro de ejecución."],
-  procesos: ["EJECUCIÓN", "Lanzar procesos", "Lo que corre solo, cuando lo necesitas ahora."],
-  integraciones: ["CONEXIONES", "Integraciones", "Qué está conectado y qué falta por conectar."],
-  api: ["DESARROLLO", "API y webhooks", "Endpoints, eventos y credenciales de integración."],
-  enterprise: ["GOBIERNO", "Enterprise", "Controles, riesgos y preparación para cuentas grandes."],
-  equipo: ["ORGANIZACIÓN", "Equipo", "Quién tiene acceso y qué ha hecho."],
-  permisos: ["SEGURIDAD", "Permisos", "Qué puede hacer cada persona de tu equipo."],
-  estado: ["SISTEMA", "Estado", "Servicios, integraciones y frescura de los datos."],
+  conversaciones: ["INBOX", "Conversaciones", "Cada hilo con su historial completo."],
+  voz: ["CALIDAD", "Calidad de voz", "Cómo está funcionando el agente, llamada a llamada."],
+  playbooks: ["GUION", "Guion comercial", "Cómo habla la voz y qué tiene que conseguir."],
+  equipo: ["ORGANIZACIÓN", "Equipo", "Quién tiene acceso, qué puede hacer y qué ha hecho."],
   ajustes: ["CONFIGURACIÓN", "Ajustes", "Tu cuenta, tus objetivos y tu facturación."],
+  estado: ["SISTEMA", "Estado", "Servicios, integraciones y frescura de los datos."],
 };
+
 
 function PortalV3() {
   const [vista, setVista] = useState("resumen");
@@ -2586,7 +1816,7 @@ function PortalV3() {
 
   /** Vuelve a pedir una sección concreta, tras tocar algo que le afecta. */
   const recargarSeccion = useCallback(async (id) => {
-    const destino = VISTAS.find((v) => v.id === id);
+    const destino = [...VISTAS, ...VISTAS_OCULTAS].find((v) => v.id === id);
     if (!destino?.api) return;
     const json = await pedir(destino.api);
     if (json) setExtra((p2) => ({ ...p2, [id]: json.data ?? json }));
@@ -2616,7 +1846,7 @@ function PortalV3() {
         .finally(() => setCargando((c) => ({ ...c, analitica: false })));
     }
 
-    const destino = VISTAS.find((v) => v.id === id);
+    const destino = [...VISTAS, ...VISTAS_OCULTAS].find((v) => v.id === id);
     if (!destino?.api) return Promise.resolve();
 
     setCargando((c) => ({ ...c, [id]: true }));
@@ -2636,11 +1866,11 @@ function PortalV3() {
   const abrir = useCallback((id) => {
     setVista(id);
 
-    const destino = VISTAS.find((v) => v.id === id);
+    const destino = [...VISTAS, ...VISTAS_OCULTAS].find((v) => v.id === id);
     if (!destino) return;
 
     const pendientes = [id, ...(destino.deps || [])].filter((x) => {
-      const v2 = VISTAS.find((n2) => n2.id === x);
+      const v2 = [...VISTAS, ...VISTAS_OCULTAS].find((n2) => n2.id === x);
       return x === "analitica" || v2?.api;
     });
 
@@ -2676,11 +1906,10 @@ function PortalV3() {
       case "resumen": return <Resumen datos={datos} />;
       case "leads": return <Leads datos={datos} onRecargar={recargar} />;
       case "llamadas": return <Llamadas datos={datos} />;
-      case "pipeline": return <Pipeline datos={datos} />;
-      case "señales": return <Señales datos={datos} />;
-      case "equipo": return <Equipo datos={datos} onRecargar={recargar} />;
       case "ajustes": return <Ajustes datos={datos} onRecargar={recargar} />;
-      case "procesos": return <Procesos onRecargar={recargar} />;
+
+      case "equipo":
+        return <Equipo datos={datos} onRecargar={recargar} acceso={extra.permisos} />;
 
       case "conversaciones":
         return (
@@ -2690,19 +1919,10 @@ function PortalV3() {
             onRecargar={() => recargarSeccion("conversaciones")}
           />
         );
-      case "voz": return <Voz voz={datosVista} cargando={cargandoVista} />;
-      case "qa": return <CalidadQA qa={datosVista} cargando={cargandoVista} />;
-      case "estado": return <Estado salud={datosVista} cargando={cargandoVista} />;
-      case "permisos": return <Permisos acceso={datosVista} cargando={cargandoVista} />;
-      case "facturacion": return <Facturacion datos={datosVista} cargando={cargandoVista} />;
 
-      case "alertas": return <Alertas datos={datos} extra={extra} cargando={cargandoDeps} />;
-      case "operaciones": return <Operaciones datos={datos} extra={extra} cargando={cargandoDeps} onRecargar={recargar} />;
-      case "control": return <Control datos={datos} extra={extra} cargando={cargandoDeps} />;
-      case "puesta": return <PuestaEnMarcha datos={datos} extra={extra} cargando={cargandoDeps} />;
-      case "retorno": return <Retorno datos={datos} extra={extra} cargando={cargandoDeps} />;
-      case "analitica": return <Analitica analitica={extra.analitica} cargando={cargandoVista} />;
-      case "experimentos": return <Experimentos experimentos={datosVista} cargando={cargandoVista} />;
+      case "voz": return <Voz voz={datosVista} cargando={cargandoVista} />;
+      case "estado": return <Estado salud={datosVista} cargando={cargandoVista} />;
+
       case "playbooks":
         return (
           <Playbooks
@@ -2712,10 +1932,10 @@ function PortalV3() {
           />
         );
 
-      // El resto son workspaces de forma homogénea: los pinta el genérico.
-      default: return <Workspace datos={datosVista} cargando={cargandoVista} />;
+      default: return null;
     }
   }
+
 
   return (
     <div className="pv3">

@@ -70,11 +70,15 @@ async function montarPortal(context, page, baseURL, { romper = null } = {}) {
 test("el portal carga con la marca y el menú completo", async ({ context, page, baseURL }) => {
   await montarPortal(context, page, baseURL);
 
-  // Si el menú se queda corto, alguien ha perdido una sección por el camino.
+  /*
+   * Nueve pantallas más "Cerrar sesión". El número está fijado a propósito:
+   * el portal llegó a tener treinta y una, casi todas de consejos generados,
+   * y esta prueba salta si vuelven a colarse pantallas de relleno.
+   */
   const entradas = page.locator(".pv3-nav");
-  expect(await entradas.count()).toBeGreaterThanOrEqual(30);
+  expect(await entradas.count()).toBe(10);
 
-  for (const etiqueta of ["Resumen", "Leads", "Llamadas", "Conversaciones", "Equipo", "Ajustes"]) {
+  for (const etiqueta of ["Resumen", "Leads", "Llamadas", "Conversaciones", "Calidad de voz", "Guion comercial", "Equipo", "Ajustes", "Estado"]) {
     await expect(page.getByRole("button", { name: new RegExp(etiqueta) })).toBeVisible();
   }
 });

@@ -283,3 +283,93 @@
 @media (prefers-reduced-motion: reduce) {
   .pv3 *, .pv3 *::before, .pv3 *::after { animation: none !important; transition: none !important; }
 }
+
+/* ── Formularios y acciones ─────────────────────────────────────────── */
+
+.pv3-accion { display: inline-flex; align-items: center; gap: 9px; margin-top: 12px; flex-wrap: wrap; }
+.pv3-accion + .pv3-accion { margin-left: 9px; }
+
+.pv3-btn:disabled { opacity: 0.55; cursor: progress; }
+
+.pv3-form { display: grid; gap: 12px; margin-top: 14px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+
+.pv3-campo { display: block; }
+.pv3-campo .pv3-lab { display: block; margin-bottom: 7px; }
+
+.pv3 select.pv3-input {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, #8e8e8e 50%),
+                    linear-gradient(135deg, #8e8e8e 50%, transparent 50%);
+  background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 34px;
+}
+
+/* El desplegable nativo hereda el fondo del sistema, no el de la página. */
+.pv3 select.pv3-input option { background: #141414; color: #fff; }
+
+.pv3 textarea.pv3-input { margin-top: 12px; resize: vertical; font-family: inherit; line-height: 1.55; }
+
+.pv3-h4 {
+  margin: 26px 0 0;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  color: var(--dim);
+}
+
+/* ── Ficha de lead ──────────────────────────────────────────────────── */
+
+.pv3-fila { cursor: pointer; }
+.pv3-fila:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.6); outline-offset: -2px; }
+
+.pv3-ficha {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 60;
+  width: min(480px, 100vw);
+  height: 100dvh;
+  padding: 24px;
+  overflow-y: auto;
+  border-left: 1px solid var(--line);
+  background: #060606;
+  box-shadow: -30px 0 70px rgba(0, 0, 0, 0.65);
+  animation: pv3Entra 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes pv3Entra { from { transform: translateX(28px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+.pv3-ficha-nombre {
+  margin: 6px 0 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 22px;
+  letter-spacing: -0.035em;
+}
+
+.pv3-historial { display: grid; gap: 8px; margin-top: 12px; }
+
+.pv3-historial-item {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.pv3-historial-item .pv3-small { display: block; margin-top: 5px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pv3-ficha { animation: none; }
+}
+
+/* Caja de respuesta del inbox. */
+.pv3-responder {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}

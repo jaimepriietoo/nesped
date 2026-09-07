@@ -789,3 +789,23 @@
   letter-spacing: -0.03em;
   color: #fff;
 }
+
+/* ── Cierre de la home ──────────────────────────────────────────────── */
+
+.v3 .v3-cta {
+  padding: clamp(30px, 4vw, 52px);
+  border: 1px solid var(--v3-line);
+  border-radius: 26px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.014));
+  text-align: center;
+}
+
+.v3 .v3-cta .v3-lede { margin-left: auto; margin-right: auto; }
+
+.v3 .v3-cta-row {
+  display: flex;
+  gap: 11px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 30px;
+}

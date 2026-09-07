@@ -45,6 +45,13 @@
       }
 
       requestAnimationFrame(paso);
+
+      // Si requestAnimationFrame no llega a correr, la cifra se quedaría en
+      // cero para siempre. Pasado el tiempo de la animación se pone el valor
+      // final; si ya terminó, esto escribe exactamente lo mismo.
+      window.setTimeout(function () {
+        el.textContent = formatea(objetivo, decimales, sufijo);
+      }, duracion + 1200);
     }, retraso);
   }
 

@@ -1,14 +1,14 @@
 /* GENERADO — no editar a mano.
-   Sale de app/portal-v3/page.js vía prueba/build-portal.mjs. */
+   Sale de app/portal/page.js vía prueba/build-portal.mjs. */
 
 /**
- * Portal de cliente en el lenguaje visual v3.
+ * Portal de cliente.
  *
- * Vive en /portal-v3 (y no en /v3/portal) a propósito: el middleware de
- * proxy.js sólo exige sesión en rutas que empiezan por /portal o /admin, así
- * que colgarlo bajo /v3 lo dejaría público.
+ * El middleware de proxy.js exige sesión en todo lo que empieza por /portal,
+ * así que esta ruta y sus hijas quedan protegidas de fábrica.
  *
- * No sustituye a /portal: convive con él. Lee los mismos endpoints reales.
+ * El portal anterior sigue accesible en /portal/clasico mientras se termina
+ * de trasladar aquí todo lo que sabía hacer.
  */
 
 const { useCallback, useEffect, useMemo, useState } = React;

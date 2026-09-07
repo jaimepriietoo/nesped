@@ -2,231 +2,176 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AppBackdrop, SiteHeader } from "@/components/site-chrome";
+import Link from "next/link";
+import { Inter } from "next/font/google";
+import "@/components/v3/v3.css";
+import { Logo } from "@/components/v3/chrome";
 
-async function readJsonResponse(res) {
-  const json = await res.json().catch(() => ({}));
+const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600"], display: "swap" });
 
+async function leerJson(res) {
+  const json = await res.json().catch(() => null);
   if (!res.ok || json?.success === false) {
-    throw new Error(json?.message || "La solicitud no se pudo completar.");
+    throw new Error(json?.message || "La operación no se pudo completar.");
   }
-
-  return json;
+  return json || {};
 }
 
+/**
+ * Pantalla final del alta: quien acaba de pagar fija aquí sus credenciales.
+ *
+ * Es la primera cosa que ve un cliente nuevo después de pasar por caja, así
+ * que va en el mismo lenguaje visual que el resto del sitio.
+ */
 export default function SetupAccountClient() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const sessionId = searchParams.get("session_id") || "";
+  const params = useSearchParams();
+  const sessionId = params.get("session_id") || "";
 
-  const [form, setForm] = useState({
-    email: "",
-    password: "",
-    confirmPassword: "",
-  });
-  const [context, setContext] = useState({
-    productName: "",
-    publicCheckout: false,
-  });
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
+  const [form, setForm] = useState({ email: "", password: "", confirmPassword: "" });
+  const [contexto, setContexto] = useState({ productName: "", publicCheckout: false });
+  const [cargando, setCargando] = useState(false);
+  const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
-    let cancelled = false;
+    let vivo = true;
 
-    async function loadContext() {
-      try {
-        const url = sessionId
-          ? `/api/portal/account/setup?session_id=${encodeURIComponent(sessionId)}`
-          : "/api/portal/account/setup";
-        const res = await fetch(url, { cache: "no-store" });
-        const json = await readJsonResponse(res);
+    const url = sessionId
+      ? `/api/portal/account/setup?session_id=${encodeURIComponent(sessionId)}`
+      : "/api/portal/account/setup";
 
-        if (cancelled) return;
-
-        setForm((prev) => ({
-          ...prev,
-          email: json?.email || "",
-        }));
-        setContext({
+    fetch(url, { cache: "no-store" })
+      .then(leerJson)
+      .then((json) => {
+        if (!vivo) return;
+        setForm((p) => ({ ...p, email: json?.email || "" }));
+        setContexto({
           productName: json?.productName || "",
           publicCheckout: Boolean(json?.publicCheckout),
         });
-      } catch (err) {
-        if (!cancelled) {
-          setError(err?.message || "No se pudo cargar la configuracion.");
-        }
-      }
-    }
-
-    loadContext();
-    return () => {
-      cancelled = true;
-    };
-  }, [sessionId]);
-
-  async function handleSubmit(event) {
-    event.preventDefault();
-
-    if (!form.email || !form.password) {
-      setError("Completa email y contrasena.");
-      return;
-    }
-
-    if (form.password !== form.confirmPassword) {
-      setError("Las contrasenas no coinciden.");
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError("");
-      setMessage("");
-
-      const res = await fetch("/api/portal/account/setup", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: form.email,
-          password: form.password,
-          sessionId,
-        }),
+      })
+      .catch((e) => {
+        if (vivo) setError(e?.message || "No se pudo cargar la configuración.");
       });
 
-      const json = await readJsonResponse(res);
-      setMessage(json.message || "Cuenta guardada correctamente.");
+    return () => { vivo = false; };
+  }, [sessionId]);
 
-      setTimeout(() => {
-        const target = json.requiresTwoFactor
+  async function enviar(e) {
+    e.preventDefault();
+
+    if (!form.email || !form.password) {
+      setError("Completa el email y la contraseña.");
+      return;
+    }
+    if (form.password.length < 8) {
+      setError("La contraseña necesita al menos 8 caracteres.");
+      return;
+    }
+    if (form.password !== form.confirmPassword) {
+      setError("Las contraseñas no coinciden.");
+      return;
+    }
+
+    setCargando(true);
+    setError("");
+    setMensaje("");
+
+    try {
+      const json = await leerJson(
+        await fetch("/api/portal/account/setup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: form.email, password: form.password, sessionId }),
+        })
+      );
+
+      setMensaje(json.message || "Cuenta guardada. Entrando…");
+
+      // Pausa corta para que dé tiempo a leer el mensaje antes de saltar.
+      window.setTimeout(() => {
+        const destino = json.requiresTwoFactor
           ? `${json.redirectTo || "/login"}?next=${encodeURIComponent("/portal")}`
           : json.redirectTo || "/portal";
-        router.push(target);
+        router.push(destino);
         router.refresh();
       }, 900);
     } catch (err) {
       setError(err?.message || "No se pudo guardar la cuenta.");
     } finally {
-      setLoading(false);
+      setCargando(false);
     }
   }
 
   return (
-    <div className="app-shell">
-      <AppBackdrop />
-      <div className="page-shell">
-        <SiteHeader
-          secondaryCta={{ href: "/", label: "Inicio" }}
-          primaryCta={{ href: "/portal", label: "Portal" }}
-        />
+    <div className={`v3 v3-auth ${inter.className}`}>
+      <div className="v3-auth-card">
+        <Link className="v3-logo" href="/" aria-label="Inicio" style={{ marginInline: "auto" }}>
+          <Logo />
+        </Link>
 
-        <main className="content-frame" style={{ paddingTop: "4.5rem", paddingBottom: "4rem" }}>
-          <div className="hero-grid" style={{ gridTemplateColumns: "minmax(0,1fr) minmax(390px,0.95fr)" }}>
-            <section className="stack-24">
-              <div className="eyebrow">
-                <span className="eyebrow-dot" />
-                Pago completado
-              </div>
+        <h1 className="v3-auth-title">Crea tu acceso</h1>
+        <p className="v3-auth-sub">
+          {contexto.productName
+            ? `Plan ${contexto.productName} activado. Sólo falta fijar tus credenciales.`
+            : "Tu cuenta está lista. Sólo falta fijar tus credenciales."}
+        </p>
 
-              <div className="stack-18">
-                <h1 className="display-title" style={{ fontSize: "clamp(2.8rem,6vw,5.3rem)" }}>
-                  Activa el acceso del cliente
-                  <span className="accent">y entra con una cuenta real.</span>
-                </h1>
-                <p className="lede">
-                  Tras el checkout, dejamos listo el acceso del cliente con un flujo
-                  limpio: definir email, guardar contrasena y entrar al portal sin
-                  pasos improvisados.
-                </p>
-              </div>
-
-              <div className="section-grid md:grid-cols-2">
-                <div className="metric-card">
-                  <div className="metric-label">Estado</div>
-                  <div className="metric-value">Cuenta lista</div>
-                  <div className="metric-detail">Solo falta fijar las credenciales de acceso.</div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-label">Plan activado</div>
-                  <div className="metric-value">{context.productName || "Portal"}</div>
-                  <div className="metric-detail">El acceso se asociara al cliente que acaba de pagar.</div>
-                </div>
-              </div>
-            </section>
-
-            <section className="form-shell" style={{ borderRadius: "32px", padding: "1.6rem" }}>
-              <div className="stack-24">
-                <div className="stack-12">
-                  <div className="subtle-label">Configuracion final</div>
-                  <h2 className="section-title" style={{ fontSize: "2.2rem" }}>
-                    Define el acceso
-                  </h2>
-                  <p className="support-copy">
-                    Este email y esta contrasena seran las credenciales con las que
-                    el cliente entrara al portal.
-                  </p>
-                </div>
-
-                <form onSubmit={handleSubmit} className="stack-18">
-                  <div className="stack-12">
-                    <label className="subtle-label">Email</label>
-                    <input
-                      type="email"
-                      value={form.email}
-                      onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
-                      placeholder="cliente@empresa.com"
-                      className="premium-input"
-                    />
-                  </div>
-
-                  <div className="stack-12">
-                    <label className="subtle-label">Contrasena</label>
-                    <input
-                      type="password"
-                      value={form.password}
-                      onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
-                      placeholder="Nueva contrasena"
-                      className="premium-input"
-                    />
-                  </div>
-
-                  <div className="stack-12">
-                    <label className="subtle-label">Repetir contrasena</label>
-                    <input
-                      type="password"
-                      value={form.confirmPassword}
-                      onChange={(e) =>
-                        setForm((prev) => ({ ...prev, confirmPassword: e.target.value }))
-                      }
-                      placeholder="Repite la contrasena"
-                      className="premium-input"
-                    />
-                  </div>
-
-                  {error ? <div className="status-pill error">{error}</div> : null}
-                  {message ? <div className="status-pill success">{message}</div> : null}
-
-                  <div className="flex flex-wrap gap-3">
-                    <button type="submit" disabled={loading} className="button-primary">
-                      {loading ? "Guardando..." : "Guardar acceso"}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => router.push("/portal")}
-                      disabled={context.publicCheckout && !message}
-                      className="button-secondary"
-                    >
-                      Volver al portal
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </section>
+        <form onSubmit={enviar} className="v3-auth-form">
+          <div className="v3-field">
+            <label className="v3-label" htmlFor="sa-email">Email</label>
+            <input
+              id="sa-email"
+              className="v3-input"
+              type="email"
+              autoComplete="username"
+              placeholder="cliente@empresa.com"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              required
+            />
           </div>
-        </main>
+
+          <div className="v3-field">
+            <label className="v3-label" htmlFor="sa-pass">Contraseña</label>
+            <input
+              id="sa-pass"
+              className="v3-input"
+              type="password"
+              autoComplete="new-password"
+              placeholder="Mínimo 8 caracteres"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className="v3-field">
+            <label className="v3-label" htmlFor="sa-pass2">Repite la contraseña</label>
+            <input
+              id="sa-pass2"
+              className="v3-input"
+              type="password"
+              autoComplete="new-password"
+              value={form.confirmPassword}
+              onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
+              required
+            />
+          </div>
+
+          <button className="v3-btn v3-btn--white" type="submit" disabled={cargando}>
+            {cargando ? "Guardando…" : "Crear acceso y entrar"}
+          </button>
+
+          <p className="v3-status" data-ok={mensaje ? "true" : error ? "false" : undefined} role="status" aria-live="polite">
+            {error || mensaje}
+          </p>
+        </form>
+
+        <p className="v3-legal">
+          ¿Ya tienes acceso? <Link href="/login">Entra por aquí</Link>
+        </p>
       </div>
     </div>
   );

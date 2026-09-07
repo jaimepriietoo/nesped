@@ -1,11 +1,24 @@
 "use client";
+import Link from "next/link";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { AppBackdrop, SiteHeader } from "@/components/site-chrome";
+import { Inter } from "next/font/google";
+import "@/components/v3/v3.css";
+import { Logo } from "@/components/v3/chrome";
 
-export default function LoginPage() {
+const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600"], display: "swap" });
+
+const VIDEO_SRC =
+  "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260809_012548_ef22562c-c0ae-4816-ad9d-f8922af4e6a7.mp4";
+
+/**
+ * Acceso con el mismo flujo real que /login: credenciales → 2FA por correo.
+ * Solo cambia la piel; los tres endpoints y sus contratos son idénticos.
+ */
+function Acceso() {
   const searchParams = useSearchParams();
+
   const [step, setStep] = useState("credentials");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -18,7 +31,6 @@ export default function LoginPage() {
 
   async function handleLogin(event) {
     event.preventDefault();
-
     try {
       setLoading(true);
       setError("");
@@ -27,9 +39,7 @@ export default function LoginPage() {
 
       const res = await fetch("/api/login", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email,
           password,
@@ -46,17 +56,14 @@ export default function LoginPage() {
 
       if (json.requiresTwoFactor) {
         setStep("verify");
-        setMessage(
-          `Te hemos enviado un código de verificación a ${email}.`
-        );
+        setMessage(`Te hemos enviado un código de verificación a ${email}.`);
         setDebugCode(json.debugCode || "");
         return;
       }
 
       window.location.replace(json.redirectTo || "/portal");
-    } catch (err) {
-      console.error(err);
-      setError("Error iniciando sesion");
+    } catch {
+      setError("Error iniciando sesión");
     } finally {
       setLoading(false);
     }
@@ -64,7 +71,6 @@ export default function LoginPage() {
 
   async function handleVerify(event) {
     event.preventDefault();
-
     try {
       setLoading(true);
       setError("");
@@ -72,9 +78,7 @@ export default function LoginPage() {
 
       const res = await fetch("/api/login/2fa", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code }),
       });
 
@@ -86,8 +90,7 @@ export default function LoginPage() {
       }
 
       window.location.replace(json.redirectTo || "/portal");
-    } catch (err) {
-      console.error(err);
+    } catch {
       setError("Error verificando el código");
     } finally {
       setLoading(false);
@@ -100,11 +103,9 @@ export default function LoginPage() {
       setError("");
       setMessage("");
 
-      const res = await fetch("/api/login/2fa/resend", {
-        method: "POST",
-      });
-
+      const res = await fetch("/api/login/2fa/resend", { method: "POST" });
       const json = await res.json().catch(() => ({}));
+
       if (!res.ok || !json.success) {
         setError(json.message || "No se pudo reenviar el código");
         return;
@@ -112,8 +113,7 @@ export default function LoginPage() {
 
       setMessage(`Te hemos enviado un nuevo código a ${email}.`);
       setDebugCode(json.debugCode || "");
-    } catch (err) {
-      console.error(err);
+    } catch {
       setError("Error reenviando el código");
     } finally {
       setResending(false);
@@ -121,154 +121,116 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="app-shell">
-      <AppBackdrop />
-      <div className="page-shell">
-        <SiteHeader
-          secondaryCta={{ href: "/", label: "Volver a inicio" }}
-          primaryCta={{ href: "/pricing", label: "Ver planes" }}
-        />
-
-        <main className="content-frame" style={{ paddingTop: "4.5rem", paddingBottom: "4rem" }}>
-          <div className="hero-grid" style={{ gridTemplateColumns: "minmax(0,1fr) minmax(380px,0.9fr)" }}>
-            <section className="stack-24">
-              <div className="eyebrow">
-                <span className="eyebrow-dot" />
-                Acceso premium
-              </div>
-
-              <div className="stack-18">
-                <h1 className="display-title" style={{ fontSize: "clamp(2.8rem,6vw,5.3rem)" }}>
-                  Entra al portal con una experiencia limpia,
-                  <span className="accent">rapida y seria.</span>
-                </h1>
-                <p className="lede">
-                  Accede a leads, pipeline, metricas, automatizaciones y facturacion
-                  desde una sola capa. El objetivo no es solo entrar, sino sentir que
-                  estas dentro de un producto premium.
-                </p>
-              </div>
-
-              <div className="section-grid md:grid-cols-2">
-                <div className="metric-card">
-                  <div className="metric-label">Visibilidad</div>
-                  <div className="metric-value">CRM + voz</div>
-                  <div className="metric-detail">Todo el flujo comercial conectado.</div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-label">Operativa</div>
-                  <div className="metric-value">Tiempo real</div>
-                  <div className="metric-detail">Leads, acciones y revenue con contexto.</div>
-                </div>
-              </div>
-            </section>
-
-            <section className="form-shell" style={{ borderRadius: "32px", padding: "1.6rem" }}>
-              <div className="stack-24">
-                <div className="stack-12">
-                  <div className="eyebrow">
-                    <span className="eyebrow-dot" />
-                    Portal de cliente
-                  </div>
-                  <div>
-                    <h2 className="section-title" style={{ fontSize: "2.35rem" }}>
-                      {step === "verify" ? "Verificación segura" : "Acceso privado"}
-                    </h2>
-                    <p className="support-copy">
-                      {step === "verify"
-                        ? "Los perfiles owner y admin confirman el acceso con un código temporal."
-                        : "Usa el email y la contrasena del cliente para entrar a su panel."}
-                    </p>
-                  </div>
-                </div>
-
-                {step === "verify" ? (
-                  <form onSubmit={handleVerify} className="stack-18">
-                    <div className="stack-12">
-                      <label className="subtle-label">Código de verificación</label>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        value={code}
-                        onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                        className="premium-input"
-                        placeholder="123456"
-                      />
-                    </div>
-
-                    {message ? <div className="status-pill success">{message}</div> : null}
-                    {error ? <div className="status-pill error">{error}</div> : null}
-                    {debugCode ? (
-                      <div className="status-pill info">
-                        Código debug local: <strong>{debugCode}</strong>
-                      </div>
-                    ) : null}
-
-                    <button type="submit" disabled={loading} className="button-primary">
-                      {loading ? "Verificando..." : "Confirmar acceso"}
-                    </button>
-
-                    <div className="flex flex-wrap gap-3">
-                      <button
-                        type="button"
-                        onClick={resendCode}
-                        disabled={resending}
-                        className="button-secondary"
-                      >
-                        {resending ? "Reenviando..." : "Reenviar código"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setStep("credentials");
-                          setCode("");
-                          setError("");
-                          setMessage("");
-                          setDebugCode("");
-                        }}
-                        className="button-secondary"
-                      >
-                        Volver
-                      </button>
-                    </div>
-                  </form>
-                ) : (
-                  <form onSubmit={handleLogin} className="stack-18">
-                    <div className="stack-12">
-                      <label className="subtle-label">Email</label>
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="premium-input"
-                        placeholder="cliente@empresa.com"
-                      />
-                    </div>
-
-                    <div className="stack-12">
-                      <label className="subtle-label">Contrasena</label>
-                      <input
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="premium-input"
-                        placeholder="Tu acceso"
-                      />
-                    </div>
-
-                    {message ? <div className="status-pill success">{message}</div> : null}
-                    {error ? <div className="status-pill error">{error}</div> : null}
-
-                    <button type="submit" disabled={loading} className="button-primary">
-                      {loading ? "Entrando..." : "Entrar al portal"}
-                    </button>
-                  </form>
-                )}
-              </div>
-            </section>
-          </div>
-        </main>
+    <div className="v3-auth">
+      <div className="v3-bg" aria-hidden="true">
+        <video autoPlay muted loop playsInline preload="none" poster="/fonts/poster.svg">
+          <source src={VIDEO_SRC} type="video/mp4" />
+        </video>
       </div>
+
+      <div className="v3-auth-card">
+        <Link className="v3-logo" href="/" aria-label="Inicio" style={{ marginInline: "auto" }}>
+          <Logo />
+        </Link>
+
+        <h1 className="v3-auth-title">
+          {step === "credentials" ? "Área de clientes" : "Verificación"}
+        </h1>
+        <p className="v3-auth-sub">
+          {step === "credentials"
+            ? "Accede a tus llamadas, tus contactos y tu facturación."
+            : "Introduce el código que te hemos enviado por correo."}
+        </p>
+
+        {step === "credentials" ? (
+          <form className="v3-auth-form" onSubmit={handleLogin}>
+            <div className="v3-field">
+              <label className="v3-label" htmlFor="v3-email">Correo</label>
+              <input
+                id="v3-email"
+                className="v3-input"
+                type="email"
+                autoComplete="username"
+                placeholder="tu@empresa.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="v3-field">
+              <label className="v3-label" htmlFor="v3-pass">Contraseña</label>
+              <input
+                id="v3-pass"
+                className="v3-input"
+                type="password"
+                autoComplete="current-password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+
+            <button className="v3-btn v3-btn--white" type="submit" disabled={loading}>
+              {loading ? "Entrando…" : "Entrar"}
+            </button>
+          </form>
+        ) : (
+          <form className="v3-auth-form" onSubmit={handleVerify}>
+            <div className="v3-field">
+              <label className="v3-label" htmlFor="v3-code">Código de verificación</label>
+              <input
+                id="v3-code"
+                className="v3-input v3-input--code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="000000"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                required
+              />
+            </div>
+
+            <button className="v3-btn v3-btn--white" type="submit" disabled={loading}>
+              {loading ? "Verificando…" : "Verificar"}
+            </button>
+
+            <button
+              className="v3-btn v3-btn--ghost"
+              type="button"
+              onClick={resendCode}
+              disabled={resending}
+            >
+              {resending ? "Reenviando…" : "Reenviar código"}
+            </button>
+          </form>
+        )}
+
+        <p className="v3-status" data-ok={error ? "false" : message ? "true" : undefined} role="status" aria-live="polite">
+          {error || message}
+        </p>
+
+        {/* Solo aparece si el backend lo devuelve (entornos sin correo). */}
+        {debugCode ? (
+          <p className="v3-legal">Código de desarrollo: <strong>{debugCode}</strong></p>
+        ) : null}
+
+        <p className="v3-legal">
+          ¿Problemas para entrar?{" "}
+          <a href="mailto:soporte@nesped.com">Escríbenos a soporte</a>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export default function V3Login() {
+  return (
+    <div className={`v3 ${inter.className}`}>
+      <Suspense fallback={null}>
+        <Acceso />
+      </Suspense>
     </div>
   );
 }

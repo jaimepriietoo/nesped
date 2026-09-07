@@ -1,0 +1,97 @@
+/* Pantallas de error, 404 y carga. */
+
+.v3.estado {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: 24px;
+  background: #000;
+}
+
+.estado-caja {
+  width: min(520px, 100%);
+  padding: clamp(28px, 5vw, 48px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 26px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.014));
+  text-align: center;
+  animation: estadoEntra 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes estadoEntra { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+
+.estado-marca {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  margin: 0 auto 22px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.estado-marca svg { width: 68%; height: 68%; }
+
+.estado-codigo {
+  display: block;
+  margin-bottom: 10px;
+  font-family: "BubbledotICG-FinePos", monospace;
+  font-size: 12px;
+  letter-spacing: 0.09em;
+  color: #8e8e8e;
+}
+
+.estado-titulo {
+  margin: 0;
+  font-family: "BubbledotICG-FinePos", monospace;
+  font-weight: 400;
+  font-size: clamp(24px, 4vw, 36px);
+  line-height: 1.1;
+  letter-spacing: -0.045em;
+  color: #fff;
+}
+
+.estado-texto {
+  margin: 16px 0 0;
+  font-size: 14.5px;
+  line-height: 1.62;
+  color: #a8a8a8;
+}
+
+.estado-acciones {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 28px;
+}
+
+/* Latido de la pantalla de carga: sin texto, sólo señal de que hay actividad. */
+.estado-pulso {
+  width: 100%;
+  height: 3px;
+  margin-top: 26px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.09);
+  overflow: hidden;
+}
+
+.estado-pulso::after {
+  content: "";
+  display: block;
+  width: 34%;
+  height: 100%;
+  border-radius: 999px;
+  background: #fff;
+  animation: estadoPulso 1.5s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+@keyframes estadoPulso {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(330%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .estado-caja { animation: none; }
+  .estado-pulso::after { animation: none; width: 100%; opacity: 0.4; }
+}

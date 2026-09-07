@@ -1,200 +1,182 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { use, useEffect, useState } from "react";
+import Link from "next/link";
+import { Inter } from "next/font/google";
+import "@/components/v3/v3.css";
+import { Logo } from "@/components/v3/chrome";
+import { Rev } from "@/components/v3/rev";
 
+const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600"], display: "swap" });
+
+/**
+ * Página pública de un cliente (marca blanca).
+ *
+ * Pide sólo su ficha con ?id=. Antes se descargaba /api/clients entera y
+ * filtraba en el navegador, con lo que cualquier visitante se llevaba la
+ * cartera de clientes completa.
+ */
 export default function ClientLanding({ params }) {
-  const [client, setClient] = useState(null);
-  const [telefonoDemo, setTelefonoDemo] = useState("");
-  const [loadingCall, setLoadingCall] = useState(false);
-  const [callStatus, setCallStatus] = useState("");
+  // En Next 15+ los params llegan como promesa.
+  const { clientId } = use(params);
 
-  const clientId = params?.clientId;
+  const [cliente, setCliente] = useState(undefined); // undefined = cargando
+  const [telefono, setTelefono] = useState("");
+  const [cargando, setCargando] = useState(false);
+  const [estado, setEstado] = useState(null);
 
-  async function hacerLlamada() {
+  useEffect(() => {
+    let vivo = true;
+    fetch(`/api/clients?id=${encodeURIComponent(clientId)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((json) => {
+        if (vivo) setCliente(json?.data?.[0] || null);
+      })
+      .catch(() => {
+        if (vivo) setCliente(null);
+      });
+    return () => { vivo = false; };
+  }, [clientId]);
+
+  async function lanzarLlamada() {
+    if (!telefono.trim()) {
+      setEstado({ ok: false, text: "Introduce un teléfono para lanzar la demo." });
+      return;
+    }
+    setCargando(true);
+    setEstado(null);
     try {
-      setLoadingCall(true);
-      setCallStatus("");
-
       const res = await fetch("/api/demo-call", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          telefono: telefonoDemo,
-          client_id: clientId,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ telefono, client_id: clientId }),
       });
-
-      const json = await res.json();
-
+      const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.success) {
-        setCallStatus(json.message || "No se pudo lanzar la llamada.");
+        setEstado({ ok: false, text: json.message || "No se pudo lanzar la llamada." });
         return;
       }
-
-      setCallStatus("Llamada lanzada correctamente. Revisa tu móvil.");
-    } catch (err) {
-      console.error(err);
-      setCallStatus("Error técnico al lanzar la llamada.");
+      setEstado({ ok: true, text: "Llamada lanzada. Revisa tu móvil." });
+    } catch {
+      setEstado({ ok: false, text: "Error técnico al lanzar la llamada." });
     } finally {
-      setLoadingCall(false);
+      setCargando(false);
     }
   }
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadClient() {
-      try {
-        const res = await fetch("/api/clients", { cache: "no-store" });
-        const json = await res.json();
-        const allClients = Array.isArray(json.data) ? json.data : [];
-        const found = allClients.find((c) => c.id === clientId) || null;
-        if (!cancelled) {
-          setClient(found);
-        }
-      } catch (err) {
-        console.error(err);
-        if (!cancelled) {
-          setClient(null);
-        }
-      }
-    }
-
-    loadClient();
-    return () => {
-      cancelled = true;
-    };
-  }, [clientId]);
-
-  const theme = useMemo(() => {
-    return client?.theme || {
-      accent: "bg-blue-500/20",
-      accentText: "text-blue-300",
-      button: "bg-white text-black hover:bg-white/90",
-      badge: "bg-emerald-500/15 text-emerald-300",
-    };
-  }, [client]);
-
-  if (!client) {
+  if (cliente === undefined) {
     return (
-      <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center px-6">
-        <div className="text-center">
-          <div className="text-sm text-white/45">White-label page</div>
-          <div className="mt-2 text-3xl font-semibold">Cliente no encontrado</div>
+      <div className={`v3 ${inter.className}`} style={{ minHeight: "100dvh" }}>
+        <div className="v3-wrap" style={{ paddingTop: "22vh" }}>
+          <span className="v3-eyebrow">Cargando</span>
         </div>
       </div>
     );
   }
 
+  if (!cliente) {
+    return (
+      <div className={`v3 ${inter.className}`} style={{ display: "grid", placeItems: "center", minHeight: "100dvh" }}>
+        <div style={{ textAlign: "center", padding: 24 }}>
+          <span className="v3-eyebrow">Página de marca</span>
+          <h1 className="v3-h2" style={{ marginTop: 10 }}>Este cliente no existe</h1>
+          <p className="v3-lede" style={{ margin: "16px auto 26px" }}>
+            La dirección no corresponde a ninguna cuenta activa.
+          </p>
+          <Link className="v3-btn v3-btn--white" href="/">Ir a Nesped</Link>
+        </div>
+      </div>
+    );
+  }
+
+  const marca = cliente.brandName || cliente.name;
+
   return (
-    <div className="min-h-screen bg-[#040404] text-white">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.18),transparent_28%),radial-gradient(circle_at_top_right,rgba(16,185,129,0.14),transparent_24%),radial-gradient(circle_at_bottom,rgba(255,255,255,0.05),transparent_35%)]" />
-
-      <header className="border-b border-white/10 bg-black/40 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
-            {client.brandLogoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={client.brandLogoUrl}
-                alt={client.brandName || client.name}
-                className="h-11 w-11 rounded-2xl object-cover"
-              />
+    <div className={`v3 ${inter.className}`}>
+      <header className="v3-header">
+        <div className="v3-header-inner">
+          <span className="v3-logo" aria-hidden="true">
+            {cliente.brandLogoUrl ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={cliente.brandLogoUrl} alt="" width={52} height={52} />
             ) : (
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-black text-lg font-bold">
-                {client.logoText || "N"}
-              </div>
+              <Logo />
             )}
-            <div>
-              <div className="text-lg font-semibold tracking-tight">
-                {client.brandName || client.name}
-              </div>
-              <div className="text-xs text-white/45">{client.type}</div>
-            </div>
-          </div>
-
-          <div className={`rounded-full px-3 py-1 text-xs ${theme.badge}`}>
-            {client.status}
-          </div>
+          </span>
+          <nav className="v3-nav" aria-label="Principal">
+            <span className="v3-navlink" aria-current="page">{marca}</span>
+          </nav>
+          <a className="v3-btn v3-btn--dark" href="/portal">Acceso clientes</a>
         </div>
       </header>
 
-      <main className="relative mx-auto max-w-7xl px-6 pb-20 pt-20 md:pb-28 md:pt-28">
-        <div className="grid items-center gap-14 md:grid-cols-[1.08fr_0.92fr]">
-          <div>
-            <div className={`mb-5 inline-flex items-center gap-2 rounded-full border border-white/10 ${theme.accent} px-4 py-2 text-xs uppercase tracking-[0.22em] ${theme.accentText}`}>
-              <span className="h-2 w-2 rounded-full bg-emerald-400" />
-              Atención automatizada con IA
-            </div>
-
-            <h1 className="max-w-4xl text-5xl font-semibold tracking-tight md:text-7xl">
-              {client.brandName || client.name}
+      <section className="v3-section" style={{ paddingTop: "clamp(90px, 15vh, 170px)" }}>
+        <div className="v3-wrap">
+          <Rev>
+            <span className="v3-eyebrow">{cliente.type || "Atención telefónica"}</span>
+            <h1 className="v3-h1-page">
+              {cliente.tagline || "Contestamos siempre, a cualquier hora"}
             </h1>
-
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-white/65 md:text-xl">
-              {client.tagline}
+            <p className="v3-lede">
+              {marca} atiende cada llamada con una voz que entiende lo que
+              necesitas, lo apunta y te devuelve la respuesta sin esperas.
             </p>
+          </Rev>
 
-            <div className="mt-8 flex flex-wrap gap-4">
-              <a
-                href="#demo"
-                className={`rounded-2xl px-6 py-3 text-sm font-semibold transition ${theme.button}`}
-              >
-                Probar demo
-              </a>
+          <div className="v3-grid" data-c="2" style={{ marginTop: 40 }}>
+            <Rev className="v3-card">
+              <span className="v3-card-meta">Qué vas a oír</span>
+              <h3 className="v3-h3">Una llamada real, no una locución</h3>
+              <p className="v3-p">
+                Tono natural, preguntas con sentido y tu petición registrada al
+                colgar. Exactamente lo que oiría un cliente.
+              </p>
+            </Rev>
 
-              <a
-                href="/login"
-                className="rounded-2xl border border-white/15 px-6 py-3 text-sm font-semibold transition hover:bg-white/5"
-              >
-                Acceso clientes
-              </a>
-            </div>
-          </div>
-
-          <div
-            id="demo"
-            className="rounded-[32px] border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/50 backdrop-blur-2xl"
-          >
-            <div className="rounded-[28px] border border-white/10 bg-black/50 p-6">
-              <div className="text-sm text-white/45">Demo</div>
-              <div className="mt-1 text-2xl font-semibold">
-                Recibe una llamada en directo
+            <Rev className="v3-card" d={0.09}>
+              <div className="v3-field">
+                <label className="v3-label" htmlFor="c-tel">Teléfono para la demo</label>
+                <input
+                  id="c-tel"
+                  className="v3-input"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder="+346XXXXXXXX"
+                  value={telefono}
+                  onChange={(e) => setTelefono(e.target.value)}
+                />
               </div>
-              <p className="mt-3 text-sm leading-7 text-white/60">
-                Introduce tu número y prueba cómo responde la IA de {client.brandName || client.name}.
-                {client.customDomain ? ` Dominio activo: ${client.customDomain}.` : ""}
+
+              <button
+                type="button"
+                className="v3-btn v3-btn--white"
+                style={{ marginTop: 16, width: "100%" }}
+                onClick={lanzarLlamada}
+                disabled={cargando}
+              >
+                {cargando ? "Lanzando llamada…" : "Recibir la llamada"}
+              </button>
+
+              <p className="v3-status" data-ok={estado ? String(estado.ok) : undefined} role="status" aria-live="polite">
+                {estado?.text || ""}
               </p>
 
-              <div className="mt-6 space-y-3">
-                <input
-                  type="text"
-                  placeholder="+346XXXXXXXX"
-                  value={telefonoDemo}
-                  onChange={(e) => setTelefonoDemo(e.target.value)}
-                  className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white outline-none"
-                />
-
-                <button
-                  onClick={hacerLlamada}
-                  disabled={loadingCall}
-                  className={`w-full rounded-2xl px-5 py-4 text-sm font-semibold transition ${theme.button} disabled:opacity-60`}
-                >
-                  {loadingCall ? "Lanzando..." : "Llamar ahora"}
-                </button>
-
-                {callStatus && (
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/70">
-                    {callStatus}
-                  </div>
-                )}
-              </div>
-            </div>
+              <p className="v3-legal">
+                La llamada puede grabarse y transcribirse con fines de calidad y
+                seguimiento. <a href="/legal/voice-compliance">Ver política</a>
+              </p>
+            </Rev>
           </div>
         </div>
-      </main>
+      </section>
+
+      <footer className="v3-footer">
+        <div className="v3-wrap v3-footer-inner">
+          <span>© {new Date().getFullYear()} {marca}</span>
+          <span>Con tecnología de <Link href="/">Nesped</Link></span>
+        </div>
+      </footer>
     </div>
   );
 }

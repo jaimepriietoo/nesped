@@ -13,7 +13,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const raiz = join(import.meta.dirname, "..");
-const origen = join(raiz, "app/portal-v3/page.js");
+const origen = join(raiz, "app/portal/page.js");
 const destino = join(import.meta.dirname, "portal.js");
 
 let src = await readFile(origen, "utf8");
@@ -22,8 +22,8 @@ const sustituciones = [
   // El navegador no tiene módulos aquí: React entra por UMD.
   ['"use client";\n\n', ""],
   [
-    'import { useCallback, useEffect, useMemo, useState } from "react";\nimport "./portal-v3.css";',
-    "const { useCallback, useEffect, useMemo, useState } = React;",
+    'import { useCallback, useEffect, useMemo, useRef, useState } from "react";\nimport "./portal.css";',
+    "const { useCallback, useEffect, useMemo, useRef, useState } = React;",
   ],
   // La demo no tiene sesión: los datos salen del fichero de muestra.
   [
@@ -31,7 +31,7 @@ const sustituciones = [
 async function pedir(url) {
   const res = await fetch(url, { cache: "no-store" });
   if (res.status === 401) {
-    window.location.replace("/login?next=/portal-v3");
+    window.location.replace("/login?next=/portal");
     return null;
   }
   const json = await res.json().catch(() => null);
@@ -62,7 +62,7 @@ for (const [de, a] of sustituciones) {
 }
 
 const cabecera = `/* GENERADO — no editar a mano.
-   Sale de app/portal-v3/page.js vía prueba/build-portal.mjs. */
+   Sale de app/portal/page.js vía prueba/build-portal.mjs. */
 
 `;
 
@@ -71,4 +71,4 @@ ReactDOM.createRoot(document.getElementById("raiz")).render(<PortalV3 />);
 `;
 
 await writeFile(destino, cabecera + src + pie, "utf8");
-console.log("✓ portal.js generado desde app/portal-v3/page.js");
+console.log("✓ portal.js generado desde app/portal/page.js");

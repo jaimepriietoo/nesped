@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 /* =========================================================================
@@ -10,10 +11,10 @@ import { useEffect, useState } from "react";
    ========================================================================= */
 
 export const NAV = [
-  { href: "/v3#producto", label: "Producto", id: "producto" },
-  { href: "/v3#senal", label: "Señal", id: "senal" },
-  { href: "/v3/pricing", label: "Pricing", id: "pricing" },
-  { href: "/v3#demo", label: "Demo", id: "demo" },
+  { href: "/#producto", label: "Producto", id: "producto" },
+  { href: "/#senal", label: "Señal", id: "senal" },
+  { href: "/pricing", label: "Pricing", id: "pricing" },
+  { href: "/#demo", label: "Demo", id: "demo" },
 ];
 
 export function Logo() {
@@ -56,9 +57,9 @@ export function Header({ activo = "", cta = "Portal clientes", ctaHref = "/porta
     <>
       <header className="v3-header">
         <div className="v3-header-inner">
-          <a className="v3-logo" href="/v3" aria-label="Inicio">
+          <Link className="v3-logo" href="/" aria-label="Inicio">
             <Logo />
-          </a>
+          </Link>
 
           <nav className="v3-nav" aria-label="Principal">
             {NAV.map((l) => (
@@ -124,19 +125,19 @@ export function Footer() {
           <div className="v3-foot-cols">
             <div>
               <span className="v3-foot-title">Producto</span>
-              <a className="v3-foot-link" href="/v3#producto">Cómo funciona</a>
-              <a className="v3-foot-link" href="/v3#senal">Señal</a>
-              <a className="v3-foot-link" href="/v3#demo">Demo real</a>
+              <Link className="v3-foot-link" href="/#producto">Cómo funciona</Link>
+              <Link className="v3-foot-link" href="/#senal">Señal</Link>
+              <Link className="v3-foot-link" href="/#demo">Demo real</Link>
             </div>
             <div>
               <span className="v3-foot-title">Planes</span>
-              <a className="v3-foot-link" href="/v3/pricing">Pricing</a>
-              <a className="v3-foot-link" href="/v3/login">Acceder</a>
+              <a className="v3-foot-link" href="/pricing">Pricing</a>
+              <a className="v3-foot-link" href="/login">Acceder</a>
               <a className="v3-foot-link" href="mailto:ventas@nesped.com">Hablar con ventas</a>
             </div>
             <div>
               <span className="v3-foot-title">Legal</span>
-              <a className="v3-foot-link" href="/v3/legal">Política de grabaciones</a>
+              <a className="v3-foot-link" href="/legal/voice-compliance">Política de grabaciones</a>
             </div>
           </div>
         </div>

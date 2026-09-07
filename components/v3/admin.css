@@ -1,0 +1,148 @@
+/* =========================================================================
+   Armonización de /admin con el lenguaje visual del resto del sitio.
+
+   Las páginas de admin están escritas con utilidades de Tailwind. En vez de
+   reescribir 1.400 líneas de marcado —con el riesgo de romper el alta de
+   clientes, que es la pantalla más delicada que hay— esta hoja redefine el
+   aspecto de esos mismos paneles desde fuera: mismos radios, mismo borde,
+   mismo degradado y las cifras en la tipografía dot-matrix.
+
+   Todo cuelga de `.adm`, así que no sale de /admin.
+   ========================================================================= */
+
+@font-face {
+  font-family: "BubbledotICG-FinePos";
+  src: url("/fonts/bubbledot-finepos.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+
+.adm {
+  --line: rgba(255, 255, 255, 0.1);
+  --muted: #8e8e8e;
+  --font-display: "BubbledotICG-FinePos", monospace;
+  background: #000;
+  color: #fff;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Los contenedores de página traen su propio fondo y alto; ya los pone .adm. */
+.adm .min-h-screen { min-height: 0; background: transparent !important; }
+
+/* ── Barra superior ─────────────────────────────────────────────────── */
+
+.adm-top {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px clamp(14px, 3vw, 32px);
+  border-bottom: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.82);
+  backdrop-filter: blur(16px);
+}
+
+.adm-logo {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.adm-logo svg { width: 68%; height: 68%; }
+
+.adm-nav { display: flex; gap: 4px; flex-wrap: wrap; }
+
+.adm .adm-link {
+  padding: 8px 15px;
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 13.5px;
+  text-decoration: none;
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+.adm .adm-link:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
+.adm .adm-link[data-on="true"] { background: rgba(255, 255, 255, 0.11); color: #fff; }
+
+.adm-acciones { margin-left: auto; display: flex; gap: 9px; }
+
+.adm .adm-btn {
+  display: inline-grid;
+  place-items: center;
+  padding: 8px 17px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 0.25s ease;
+}
+
+.adm .adm-btn:hover { background: rgba(255, 255, 255, 0.12); }
+.adm .adm-btn[data-v="light"] { background: #fff; color: #000; border-color: transparent; font-weight: 600; }
+.adm .adm-btn[data-v="light"]:hover { background: #e9e9e9; }
+
+/* ── Paneles ────────────────────────────────────────────────────────── */
+
+/* Tailwind pinta estos fondos planos; aquí pasan al degradado del sitio. */
+.adm .bg-white\/\[0\.03\],
+.adm .bg-white\/\[0\.04\],
+.adm .bg-black\/40,
+.adm .bg-black\/30 {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.042), rgba(255, 255, 255, 0.013)) !important;
+  border-color: var(--line) !important;
+}
+
+.adm .rounded-2xl { border-radius: 18px; }
+.adm .rounded-\[24px\] { border-radius: 22px; }
+.adm .rounded-\[28px\] { border-radius: 24px; }
+
+/* ── Tipografía ─────────────────────────────────────────────────────── */
+
+/* Títulos y cifras en la dot-matrix, como en el resto del sitio. */
+.adm h1,
+.adm .text-4xl,
+.adm .text-3xl {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.04em;
+}
+
+.adm .text-4xl { font-size: clamp(26px, 3.4vw, 38px); }
+.adm .text-3xl { font-size: clamp(22px, 2.8vw, 30px); }
+
+.adm .uppercase.tracking-\[0\.16em\] {
+  font-family: var(--font-display);
+  letter-spacing: 0.07em;
+}
+
+/* ── Controles ──────────────────────────────────────────────────────── */
+
+.adm input,
+.adm select,
+.adm textarea {
+  border-radius: 12px !important;
+  border-color: var(--line) !important;
+  outline: none;
+  transition: border-color 0.25s ease;
+}
+
+.adm input:focus,
+.adm select:focus,
+.adm textarea:focus { border-color: rgba(255, 255, 255, 0.45) !important; }
+
+.adm button { border-radius: 999px !important; transition: transform 0.25s ease, background 0.25s ease; }
+.adm button:not(:disabled):hover { transform: translateY(-1px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .adm *, .adm *::before, .adm *::after { transition: none !important; animation: none !important; }
+}

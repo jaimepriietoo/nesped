@@ -1,53 +1,31 @@
 "use client";
 
 import * as Sentry from "@sentry/nextjs";
-import Link from "next/link";
 import { useEffect } from "react";
+import { EstadoPagina } from "@/components/v3/estado-pagina";
 
+/**
+ * Última red antes de la página en blanco: si falla el layout raíz, esto es
+ * lo único que se pinta. Por eso monta su propio <html> y <body>.
+ */
 export default function GlobalError({ error, reset }) {
   useEffect(() => {
-    Sentry.captureException(error, {
-      tags: {
-        boundary: "app.global-error",
-      },
-    });
+    Sentry.captureException(error, { tags: { boundary: "app.global-error" } });
   }, [error]);
 
   return (
     <html lang="es">
-      <body className="min-h-full">
-        <div className="app-shell">
-          <div
-            className="page-shell"
-            style={{ minHeight: "100vh", justifyContent: "center" }}
-          >
-            <main className="content-frame">
-              <section className="glass-panel stack-18" style={{ textAlign: "center" }}>
-                <div className="subtle-label">Global fallback</div>
-                <h1 className="section-title">La app ha necesitado reiniciarse</h1>
-                <p className="support-copy">
-                  Hemos registrado el incidente. Puedes reintentar la carga o volver
-                  a entrar al portal.
-                </p>
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "0.75rem",
-                    justifyContent: "center",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <button className="primary-button" onClick={() => reset()}>
-                    Reintentar
-                  </button>
-                  <Link className="ghost-button" href="/portal">
-                    Abrir portal
-                  </Link>
-                </div>
-              </section>
-            </main>
-          </div>
-        </div>
+      <body style={{ margin: 0 }}>
+        <EstadoPagina
+          codigo="ERROR GENERAL"
+          titulo="La app ha necesitado reiniciarse"
+          texto="Ya hemos registrado el incidente. Puedes reintentar la carga o volver a entrar al portal."
+        >
+          <button type="button" className="v3-btn v3-btn--white" onClick={() => reset()}>
+            Reintentar
+          </button>
+          <a className="v3-btn" href="/portal">Abrir portal</a>
+        </EstadoPagina>
       </body>
     </html>
   );

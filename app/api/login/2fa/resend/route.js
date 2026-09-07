@@ -44,6 +44,7 @@ async function handlePost(req) {
     code,
     deliveryChannel: "email",
     attempts: 0,
+    sessionEpoch: Number(challenge.sessionEpoch || 0),
   });
 
   // Mismo respaldo que en el primer envío: si el correo no sale, SMS.

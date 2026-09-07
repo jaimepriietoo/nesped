@@ -8,6 +8,7 @@ import {
   verifyPassword,
 } from "@/lib/server/auth";
 import { logEvent, observeRoute } from "@/lib/server/observability.mjs";
+import { avisarDeAcceso } from "@/lib/server/aviso-acceso.mjs";
 import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 import { sendTwoFactorCode } from "@/lib/server/two-factor.mjs";
 import { findUser } from "@/lib/auth";
@@ -53,7 +54,7 @@ async function handlePost(req) {
 
     const { data: user, error } = await supabase
       .from("users")
-      .select("email,password,password_hash,role,client_id")
+      .select("email,password,password_hash,role,client_id,session_epoch")
       .eq("email", email)
       .limit(1)
       .maybeSingle();
@@ -67,6 +68,8 @@ async function handlePost(req) {
         email,
         client_id: user.client_id,
         role: user.role || "client",
+        // La generación de sesión vigente, para firmarla dentro del token.
+        sessionEpoch: Number(user.session_epoch || 0),
       };
     } else {
       const legacyUser = findUser(email, password);
@@ -118,6 +121,7 @@ async function handlePost(req) {
         clientName,
         nextPath: redirectTo,
         code,
+        sessionEpoch: authenticatedUser.sessionEpoch || 0,
       });
 
       // El móvil sólo se usa si el correo falla, para no dejar a nadie fuera
@@ -151,6 +155,23 @@ async function handlePost(req) {
       clientId: authenticatedUser.client_id,
       role: normalizedRole,
       clientName,
+      sessionEpoch: authenticatedUser.sessionEpoch || 0,
+    });
+
+    /*
+     * Aviso de acceso, sin esperar a que salga.
+     *
+     * Se lanza a propósito sin await: quien acaba de meter bien su contraseña
+     * no tiene por qué esperar a que un proveedor de correo responda, y si el
+     * correo falla el acceso debe seguir funcionando igual. Es exactamente el
+     * error que ya tumbó el segundo factor una vez.
+     */
+    void avisarDeAcceso({
+      email,
+      rol: normalizedRole,
+      clientName,
+      ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "",
+      agente: req.headers.get("user-agent") || "",
     });
 
     logEvent("info", "auth.login_succeeded", {

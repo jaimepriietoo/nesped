@@ -1,4 +1,5 @@
 import { getSupabase } from "@/lib/supabase";
+import { avisarDeAcceso } from "@/lib/server/aviso-acceso.mjs";
 import {
   bumpTwoFactorChallengeAttempts,
   clearTwoFactorChallenge,
@@ -69,7 +70,16 @@ async function handlePost(req) {
       await bumpTwoFactorChallengeAttempts(challenge);
     }
 
-    await appendAuditLog({
+    // Igual que en el acceso sin doble factor: se avisa, pero no se espera.
+  void avisarDeAcceso({
+    email: challenge.email,
+    rol: challenge.role,
+    clientName: challenge.clientName,
+    ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "",
+    agente: req.headers.get("user-agent") || "",
+  });
+
+  await appendAuditLog({
       clientId: challenge.clientId,
       actor: challenge.email,
       action: "2fa_failed",
@@ -94,6 +104,7 @@ async function handlePost(req) {
     clientId: challenge.clientId,
     role: challenge.role || "viewer",
     clientName: challenge.clientName || challenge.clientId,
+    sessionEpoch: Number(challenge.sessionEpoch || 0),
   });
 
   await appendAuditLog({

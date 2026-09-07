@@ -108,6 +108,17 @@ for (const carga of ["//evil.com", "/\\evil.com", "https://evil.com", "/\\\\evil
   );
 }
 
+/* ── Páginas legales ───────────────────────────────────────────────── */
+
+/*
+ * Vender en España sin aviso legal ni política de privacidad publicados es
+ * una infracción, no un detalle pendiente. Se comprueba que sigan ahí.
+ */
+for (const ruta of ["/legal/aviso-legal", "/legal/privacidad", "/legal/terminos", "/legal/cookies"]) {
+  const r = await fetch(BASE + ruta);
+  comprobar(`${ruta} publicada`, r.status === 200, `devolvió ${r.status}`);
+}
+
 /* ── security.txt ──────────────────────────────────────────────────── */
 
 const sec = await fetch(BASE + "/.well-known/security.txt");

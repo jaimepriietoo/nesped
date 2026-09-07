@@ -1360,6 +1360,26 @@ function Ajustes({ datos, onRecargar }) {
         </Accion>
       </div>
 
+      <h2 className="pv3-h2">Seguridad</h2>
+      <div className="pv3-card">
+        <p className="pv3-p">
+          Cerrar sesión sólo cierra la de este navegador. Si te la has dejado
+          abierta en otro sitio, o crees que alguien ha entrado en tu cuenta,
+          ciérralas todas: los accesos abiertos dejan de valer al instante,
+          incluido este.
+        </p>
+        <Accion
+          confirmar="Se cerrarán todas las sesiones, también la tuya. Tendrás que volver a entrar. ¿Seguir?"
+          onRun={async () => {
+            await enviar("/api/portal/sesiones/revocar", "POST", {});
+            // La sesión actual también queda invalidada, así que se va al login.
+            window.location.replace("/login?next=/portal");
+          }}
+        >
+          Cerrar todas las sesiones
+        </Accion>
+      </div>
+
       <h2 className="pv3-h2">Facturación</h2>
       <div className="pv3-card">
         <p className="pv3-p">Gestiona tu suscripción, método de pago y facturas en el portal de Stripe.</p>

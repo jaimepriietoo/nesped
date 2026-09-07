@@ -1,6 +1,6 @@
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
 import { validarPassword } from "@/lib/server/passwords";
-import { hashPassword } from "@/lib/server/auth";
+import { hashPassword, revocarSesionesDe } from "@/lib/server/auth";
 import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 
 export async function POST(req) {
@@ -76,6 +76,15 @@ export async function POST(req) {
       },
       { onConflict: "email" }
     );
+
+    /*
+     * Cambiar la contraseña echa a quien estuviera dentro.
+     *
+     * Es lo primero que hace alguien que sospecha que le han entrado, y hasta
+     * ahora no servía de nada: la sesión del intruso seguía siendo válida
+     * siete días más. Subir la generación de sesión la invalida al instante.
+     */
+    await revocarSesionesDe(portalUser.email);
 
     await ctx.supabase.from("audit_logs").insert({
       client_id: ctx.clientId,

@@ -37,7 +37,10 @@ const EMPRESA = "Instalaciones Vega";
 /* marin y cedar son las voces nuevas de la versión GA, las que suenan más
    humanas. "ash" tiene un timbre más plano y en una conversación corta se
    nota mucho. */
-const VOCES = { agente: env.OPENAI_VOICE || "marin", cliente: "cedar" };
+const VOCES = {
+  agente: process.env.VOZ_AGENTE || env.OPENAI_VOICE || "marin",
+  cliente: process.env.VOZ_CLIENTE || "cedar",
+};
 
 /**
  * Qué tiene que conseguir el agente en cada turno.
@@ -51,7 +54,7 @@ const VOCES = { agente: env.OPENAI_VOICE || "marin", cliente: "cedar" };
 const OBJETIVOS = [
   "Acusa recibo en una palabra y pide su nombre. UNA frase corta, en tono cálido y cercano.",
   "Usa su nombre y pídele un teléfono de contacto. UNA frase corta y natural, sin fórmulas.",
-  "Repite el teléfono en grupos de tres y di que le llaman hoy. Dos frases cortas. Empieza por \"vale\" o \"perfecto\", nunca por \"confirmo\".",
+  "Repite el teléfono en grupos de tres y di que le llaman hoy pero tuteando: \"te llaman hoy\". Dos frases cortas. Empieza por \"vale\" o \"perfecto\", nunca por \"confirmo\". Jamás \"le llaman\" ni \"usted\".",
 ];
 
 /* ── Personas ────────────────────────────────────────────────────────── */
@@ -127,7 +130,7 @@ function abrirSesion({ voz, instrucciones }) {
           type: "realtime",
           model: MODELO,
           output_modalities: ["audio"],
-          audio: { output: { format: { type: "audio/pcm", rate: FRECUENCIA }, voice: voz, speed: 1 } },
+          audio: { output: { format: { type: "audio/pcm", rate: FRECUENCIA }, voice: voz, speed: 1.08 } },
           instructions: instrucciones,
           max_output_tokens: 400,
         },
@@ -193,6 +196,103 @@ function habla(ws, instrucciones) {
  * más, pero sólo se descarga si alguien pulsa al play.
  */
 
+/**
+ * Quita el silencio del principio y del final de una intervención.
+ *
+ * El modelo entrega cada respuesta con aire por delante y por detrás. Al
+ * pegar los turnos, ese aire se suma a la pausa que se mete entre ellos y
+ * salen huecos de casi un segundo entre frase y frase. Medido sobre la
+ * versión anterior: el 36 % de la llamada era silencio, con parones de
+ * 860 ms. En una conversación de verdad el hueco entre turnos ronda los
+ * 200 ms. Eso es lo que hace que suene a máquina turnándose, no a dos
+ * personas hablando.
+ *
+ * Se deja un pequeño margen para no cortar el ataque de la primera sílaba
+ * ni la caída de la última, que sonaría a corte brusco.
+ */
+function recortarSilencio(pcm, frecuencia) {
+  const n = pcm.length / 2;
+  const ventana = Math.round(frecuencia * 0.01); // 10 ms
+  const umbral = 700;                            // sobre 32768
+
+  function primerSonido(desde, hasta, paso) {
+    for (let i = desde; paso > 0 ? i < hasta : i > hasta; i += paso * ventana) {
+      let pico = 0;
+      for (let k = 0; k < ventana && i + k < n && i + k >= 0; k += 1) {
+        pico = Math.max(pico, Math.abs(pcm.readInt16LE((i + k) * 2)));
+      }
+      if (pico > umbral) return i;
+    }
+    return paso > 0 ? desde : hasta;
+  }
+
+  const margen = Math.round(frecuencia * 0.04); // 40 ms de respiro
+  const ini = Math.max(0, primerSonido(0, n, 1) - margen);
+  const fin = Math.min(n, primerSonido(n - ventana, 0, -1) + ventana + margen);
+
+  if (fin <= ini) return pcm;
+  return pcm.subarray(ini * 2, fin * 2);
+}
+
+/**
+ * Acorta los silencios largos que quedan DENTRO de una intervención.
+ *
+ * Recortar los bordes no bastaba: el modelo también se para a media frase, y
+ * ahí estaban la mayoría de los parones. Medido sobre la versión anterior,
+ * 31 huecos para 9 intervenciones y "Vale, el teléfono es 602 297 770"
+ * tardando 8,3 segundos en decirse.
+ *
+ * Se recortan sólo los que pasan del techo. Las micropausas cortas se dejan
+ * intactas a propósito: son las que hacen que suene a persona, y quitarlas
+ * todas produce el efecto contrario, un chorro de palabras sin respirar.
+ */
+function acortarPausasInternas(pcm, frecuencia, techoMs = 260) {
+  const n = pcm.length / 2;
+  const ventana = Math.round(frecuencia * 0.01);
+  const techo = Math.round((frecuencia * techoMs) / 1000);
+  const umbral = 700;
+
+  const trozos = [];
+  let inicioSilencio = null;
+  let cursor = 0;
+
+  for (let i = 0; i + ventana <= n; i += ventana) {
+    let pico = 0;
+    for (let k = 0; k < ventana; k += 1) pico = Math.max(pico, Math.abs(pcm.readInt16LE((i + k) * 2)));
+
+    if (pico < umbral) {
+      if (inicioSilencio === null) inicioSilencio = i;
+    } else if (inicioSilencio !== null) {
+      const largo = i - inicioSilencio;
+      if (largo > techo) {
+        // Todo hasta donde empieza el silencio, más el silencio ya recortado.
+        trozos.push(pcm.subarray(cursor * 2, (inicioSilencio + techo) * 2));
+        cursor = i;
+      }
+      inicioSilencio = null;
+    }
+  }
+
+  trozos.push(pcm.subarray(cursor * 2));
+  return Buffer.concat(trozos);
+}
+
+/**
+ * Hueco entre turnos.
+ *
+ * Ni fijo ni al azar puro. En una conversación española el relevo va de unos
+ * 120 a 320 ms, y se acorta cuando la respuesta es evidente —un nombre, un
+ * "sí"— y se alarga un poco cuando hay que pensar. Un hueco idéntico entre
+ * todas las frases suena a metrónomo, y las personas no somos metrónomos.
+ */
+function huecoEntreTurnos(indice, esRespuestaCorta) {
+  const base = esRespuestaCorta ? 130 : 210;
+  // Variación determinista: la misma escena suena igual en cada generación,
+  // pero los huecos no son todos iguales entre sí.
+  const variacion = [0, 60, -35, 90, -20, 45, 25, -45, 70][indice % 9];
+  return Math.max(90, base + variacion);
+}
+
 function silencio(ms) {
   return Buffer.alloc(Math.round((FRECUENCIA * ms) / 1000) * 2);
 }
@@ -217,35 +317,44 @@ const cliente = await abrirSesion({ voz: VOCES.cliente, instrucciones: PERSONA_C
 const partes = [];
 const guion = [];
 
-function apuntar(quien, texto, pcm, pausaMs) {
+let nTurno = 0;
+
+function apuntar(quien, texto, pcm) {
+  const limpio = acortarPausasInternas(recortarSilencio(pcm, FRECUENCIA), FRECUENCIA);
   const inicio = partes.reduce((a, b) => a + b.length, 0) / 2 / FRECUENCIA;
   guion.push({ t: +inicio.toFixed(1), quien, texto });
-  partes.push(pcm, silencio(pausaMs));
-  console.log(`   ${quien === "agente" ? "AGENTE " : "CLIENTE"} ${texto}`);
+
+  // Una respuesta de pocas palabras llega antes: no hay nada que pensar.
+  const corta = texto.split(/\s+/).length <= 4;
+  partes.push(limpio, silencio(huecoEntreTurnos(nTurno, corta)));
+  nTurno += 1;
+
+  const segundos = (limpio.length / 2 / FRECUENCIA).toFixed(1);
+  console.log(`   ${quien === "agente" ? "AGENTE " : "CLIENTE"} [${segundos}s] ${texto}`);
 }
 
 // Descuelga.
 let turno = await habla(agente, `Descuelga el teléfono. Di el nombre "${EMPRESA}" y un saludo corto. Nada más.`);
-apuntar("agente", turno.texto, turno.pcm, 380);
+apuntar("agente", turno.texto, turno.pcm);
 oye(cliente, turno.texto);
 
 for (let i = 0; i < OBJETIVOS.length; i += 1) {
   const c = await habla(cliente, "");
-  apuntar("cliente", c.texto, c.pcm, 300);
+  apuntar("cliente", c.texto, c.pcm);
   oye(agente, c.texto);
 
   const a = await habla(agente, OBJETIVOS[i]);
-  apuntar("agente", a.texto, a.pcm, 360);
+  apuntar("agente", a.texto, a.pcm);
   oye(cliente, a.texto);
 }
 
 // Cierre: se despide quien llama y el agente remata.
 const despedida = await habla(cliente, "Despídete en cuatro o cinco palabras y cuelga.");
-apuntar("cliente", despedida.texto, despedida.pcm, 260);
+apuntar("cliente", despedida.texto, despedida.pcm);
 oye(agente, despedida.texto);
 
 const remate = await habla(agente, "Despídete en tres o cuatro palabras. Nada más.");
-apuntar("agente", remate.texto, remate.pcm, 200);
+apuntar("agente", remate.texto, remate.pcm);
 
 agente.close();
 cliente.close();

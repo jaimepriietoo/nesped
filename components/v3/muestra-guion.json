@@ -2,46 +2,46 @@
   {
     "t": 0,
     "quien": "agente",
-    "texto": "Instalaciones Vega, buenos días."
+    "texto": "Instalaciones Vega, hola."
   },
   {
-    "t": 3.1,
+    "t": 1.8,
     "quien": "cliente",
-    "texto": "Sí, mira, es que quería pedir un presupuesto de aerotermia para un chalet y tengo algo de prisa."
+    "texto": "Sí, mira, es que quería pedir un presupuesto de aerotermia para mi chalet y voy un poco justa de tiempo."
   },
   {
-    "t": 9.1,
+    "t": 7.3,
     "quien": "agente",
-    "texto": "Perfecto, ¿me dices tu nombre?"
+    "texto": "Perfecto, ¿cómo te llamas?"
   },
   {
-    "t": 11.7,
+    "t": 9.2,
     "quien": "cliente",
     "texto": "Marta."
   },
   {
-    "t": 12.9,
+    "t": 9.8,
     "quien": "agente",
-    "texto": "Marta, ¿me dejas un número de teléfono de contacto?"
+    "texto": "Marta, ¿me das un teléfono de contacto para poder seguir contigo?"
   },
   {
-    "t": 16.7,
+    "t": 13,
     "quien": "cliente",
     "texto": "Sí, es el seis cero dos, dos nueve siete, siete siete cero."
   },
   {
-    "t": 23.4,
+    "t": 17.6,
     "quien": "agente",
-    "texto": "Perfecto, 602 297 770. Te llaman hoy."
+    "texto": "Vale, 602 297 770. Te llaman hoy."
   },
   {
-    "t": 29.4,
+    "t": 22.4,
     "quien": "cliente",
-    "texto": "Muchas gracias, hasta luego."
+    "texto": "Perfecto, quedo atenta, gracias."
   },
   {
-    "t": 31.9,
+    "t": 24.6,
     "quien": "agente",
-    "texto": "Hasta luego, que vaya bien."
+    "texto": "Hasta luego, Marta, gracias."
   }
 ]

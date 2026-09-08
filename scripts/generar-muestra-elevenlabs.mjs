@@ -39,6 +39,8 @@ const MODELO = process.env.MODELO_VOZ || "eleven_multilingual_v2";
    en algo que no se puede cumplir: al regenerar ya no es esa. */
 const SEMILLA = Number(process.env.SEMILLA || 20260908);
 
+const CONTEXTO = process.env.CONTEXTO || "cruzado";
+
 /* Se acepta nombre o ID. El nombre se resuelve contra la cuenta, que es lo
    práctico: los IDs no hay quien se los aprenda. */
 const VOCES = {
@@ -70,17 +72,29 @@ const GUION = [
  * Ajustes de voz.
  *
  * stability baja deja al modelo variar la entonación entre frases; alta lo
- * deja plano, que es exactamente lo que sonaba a tostadora. El agente va algo
- * más estable porque es quien atiende y no conviene que suene teatral; quien
- * llama tiene más libertad porque está explicando algo suyo.
+ * deja plano.
+ *
+ * Los dos lados van igual, y esto fue un error corregido. Al agente le puse
+ * la mano más firme pensando que quien atiende debe sonar profesional. Lo
+ * que se consigue es que suene a centralita: una voz plana contestando a una
+ * persona, no dos personas hablando. Si la muestra tiene que demostrar que
+ * al otro lado hay alguien, el agente necesita la misma libertad que quien
+ * llama.
  */
+const EXPRESIVO = { stability: 0.35, similarity_boost: 0.75, style: 0.45, use_speaker_boost: true };
+
+const AJUSTES = {
+  agente:  EXPRESIVO,
+  cliente: EXPRESIVO,
+};
+
 /**
  * Una línea de una o dos palabras necesita la mano más firme.
  *
- * stability baja da variación de entonación, que es lo que hace humana una
- * frase larga. Pero en "Marta." esa misma variación se come el nombre: salía
- * en 0,2 s, la mitad de lo que tarda nadie en decirlo, y justo ahí es donde
- * la demo tiene que lucirse porque es el dato que captura.
+ * La variación de entonación que hace humana una frase larga se come una
+ * corta: "Marta." salía en 0,2 s, la mitad de lo que tarda nadie en decirlo,
+ * y justo ahí es donde la demo tiene que lucirse porque es el dato que
+ * captura.
  */
 function ajustesDe(quien, texto) {
   const base = AJUSTES[quien];
@@ -88,11 +102,6 @@ function ajustesDe(quien, texto) {
   if (palabras > 2) return base;
   return { ...base, stability: Math.min(0.7, base.stability + 0.25), style: Math.max(0, base.style - 0.15) };
 }
-
-const AJUSTES = {
-  agente:  { stability: 0.45, similarity_boost: 0.75, style: 0.30, use_speaker_boost: true },
-  cliente: { stability: 0.35, similarity_boost: 0.75, style: 0.45, use_speaker_boost: true },
-};
 
 function exigirClave() {
   if (CLAVE) return;
@@ -302,10 +311,17 @@ for (let i = 0; i < GUION.length; i += 1) {
   const texto = linea.dicho || linea.texto;
   const voz = linea.quien === "agente" ? vozAgente : vozCliente;
 
-  // Contexto sólo del mismo hablante: pasarle la frase del otro le hace
-  // imitar su entonación, que es justo lo contrario de lo que queremos.
-  const anterior = [...GUION.slice(0, i)].reverse().find((l) => l.quien === linea.quien);
-  const siguiente = GUION.slice(i + 1).find((l) => l.quien === linea.quien);
+  /* Qué frases se le pasan como contexto.
+     "propio": cada voz sólo oye las suyas. No se contagia la entonación del
+       otro, pero tampoco reacciona a lo que le acaban de decir.
+     "cruzado": cada voz oye la frase inmediatamente anterior, sea de quien
+       sea, que es lo que pasa en una conversación de verdad. */
+  const anterior = CONTEXTO === "cruzado"
+    ? GUION[i - 1]
+    : [...GUION.slice(0, i)].reverse().find((l) => l.quien === linea.quien);
+  const siguiente = CONTEXTO === "cruzado"
+    ? GUION[i + 1]
+    : GUION.slice(i + 1).find((l) => l.quien === linea.quien);
 
   const bruto = await sintetizar(
     voz.id, texto, ajustesDe(linea.quien, texto),

@@ -14,7 +14,9 @@
  * voz, son los tiempos.
  */
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import {
   recortarSilencio, acortarPausasInternas, huecoEntreTurnos,
   silencio, envolverWav, leerEnv, medirParones,
@@ -101,10 +103,15 @@ async function listarVoces() {
 }
 
 /**
- * PCM a 24 kHz es lo que encaja con el resto del montaje sin conversiones.
- * En los planes bajos ese formato no está disponible, así que se cae a 16 kHz
- * y se interpola. Para voz la diferencia audible es mínima y es preferible a
- * que el script falle sin más.
+ * Sintetiza una intervención.
+ *
+ * Se pide MP3 a 44,1 kHz y se decodifica aquí. Parece un rodeo teniendo la
+ * API un formato PCM, pero el PCM por API es de plan Pro (99 $/mes) mientras
+ * que el MP3 a 44,1 está en todos los planes, gratuito incluido. Decodificando
+ * nosotros salimos ganando: 44,1 kHz de origen en vez de los 24 del PCM.
+ *
+ * afconvert viene con macOS. Donde no esté se cae a PCM, que sigue
+ * funcionando aunque con menos ancho de banda.
  */
 async function sintetizar(voiceId, texto, ajustes, anterior, siguiente) {
   const cuerpo = {
@@ -118,20 +125,63 @@ async function sintetizar(voiceId, texto, ajustes, anterior, siguiente) {
     ...(siguiente ? { next_text: siguiente } : {}),
   };
 
-  for (const formato of ["pcm_24000", "pcm_16000"]) {
-    try {
-      const r = await pedir(`/text-to-speech/${voiceId}?output_format=${formato}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(cuerpo),
-      });
-      const pcm = Buffer.from(await r.arrayBuffer());
-      return formato === "pcm_24000" ? pcm : remuestrear(pcm, 16000, FRECUENCIA);
-    } catch (e) {
-      if (formato === "pcm_16000") throw e;
-      console.log(`   (pcm_24000 no disponible en este plan, uso 16 kHz)`);
-    }
+  async function pedirAudio(formato) {
+    const r = await pedir(`/text-to-speech/${voiceId}?output_format=${formato}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(cuerpo),
+    });
+    return Buffer.from(await r.arrayBuffer());
   }
+
+  if (hayAfconvert()) {
+    return decodificarMp3(await pedirAudio("mp3_44100_128"));
+  }
+
+  try {
+    return await pedirAudio("pcm_24000");
+  } catch {
+    console.log("   (pcm_24000 no disponible en este plan, uso 16 kHz)");
+    return remuestrear(await pedirAudio("pcm_16000"), 16000, FRECUENCIA);
+  }
+}
+
+let _afconvert = null;
+function hayAfconvert() {
+  if (_afconvert === null) {
+    try {
+      execFileSync("/usr/bin/afconvert", ["-h"], { stdio: "ignore" });
+      _afconvert = true;
+    } catch { _afconvert = false; }
+  }
+  return _afconvert;
+}
+
+function decodificarMp3(mp3) {
+  const base = path.join(os.tmpdir(), `nesped-voz-${process.pid}-${Date.now()}`);
+  const entrada = `${base}.mp3`;
+  const salida = `${base}.wav`;
+  try {
+    fs.writeFileSync(entrada, mp3);
+    // LEI16@24000 = PCM 16 bits little-endian a 24 kHz; -c 1 mono.
+    execFileSync("/usr/bin/afconvert", ["-f", "WAVE", "-d", `LEI16@${FRECUENCIA}`, "-c", "1", entrada, salida], { stdio: "ignore" });
+    const wav = fs.readFileSync(salida);
+    return wav.subarray(saltarCabeceraWav(wav));
+  } finally {
+    for (const f of [entrada, salida]) { try { fs.unlinkSync(f); } catch {} }
+  }
+}
+
+/** afconvert no siempre deja la cabecera en 44 bytes: hay que buscar "data". */
+function saltarCabeceraWav(wav) {
+  let i = 12;
+  while (i + 8 <= wav.length) {
+    const id = wav.toString("ascii", i, i + 4);
+    const largo = wav.readUInt32LE(i + 4);
+    if (id === "data") return i + 8;
+    i += 8 + largo + (largo % 2);
+  }
+  return 44;
 }
 
 function remuestrear(pcm, de, a) {

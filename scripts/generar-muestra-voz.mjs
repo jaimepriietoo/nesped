@@ -1,31 +1,29 @@
 /**
- * Genera la llamada de muestra que suena en la portada.
+ * Genera la llamada de muestra de la portada con OpenAI Realtime.
  *
  *   node scripts/generar-muestra-voz.mjs
  *
- * Dos sesiones del modelo hablando entre ellas, no una locución.
+ * Dos sesiones del modelo hablando entre ellas, no una locución: cada lado
+ * tiene una persona detrás y una situación, y responde a lo que acaba de oír.
+ * Cuando a las dos voces se les dictaba la frase exacta sonaba a alguien
+ * leyendo un guion, que es justo lo que era.
  *
- * La primera versión sonaba a montaje por dos motivos, y los dos importan:
+ * Hubo una versión con un filtro de 300 a 3400 Hz para imitar el ancho de
+ * banda del teléfono. Sobre el papel tenía sentido; en la práctica sonaba a
+ * tostadora y está retirado. Se genera a 24 kHz limpios.
  *
- * 1. A las dos voces se les dictaba la frase exacta ("di esto"). Alguien
- *    leyendo un guion suena a alguien leyendo un guion: entonación plana,
- *    sin titubeos, sin arrancar por la mitad. Ahora cada lado tiene una
- *    persona detrás y una situación, y responde a lo que acaba de oír.
- *
- * 2. Salía en calidad de estudio. Una llamada real viaja por una red que
- *    sólo deja pasar de 300 a 3400 Hz, y ese recorte es justo lo que el oído
- *    reconoce como "teléfono". Sin él, por perfecta que sea la voz, no suena
- *    a llamada: suena a anuncio.
+ * Alternativa: scripts/generar-muestra-elevenlabs.mjs, con el guion fijado y
+ * mejor timbre. El ritmo lo pone el mismo módulo en los dos casos.
  */
 import fs from "node:fs";
 import path from "node:path";
 import WebSocket from "ws";
+import {
+  recortarSilencio, acortarPausasInternas, huecoEntreTurnos,
+  silencio as silencioDe, envolverWav, leerEnv, medirParones,
+} from "./lib/audio-llamada.mjs";
 
-const env = Object.fromEntries(
-  fs.readFileSync(".env.local", "utf8").split("\n")
-    .filter((l) => l.includes("=") && !l.trim().startsWith("#"))
-    .map((l) => { const i = l.indexOf("="); return [l.slice(0, i).trim(), l.slice(i + 1).trim().replace(/^["']|["']$/g, "")]; })
-);
+const env = leerEnv(fs);
 
 const MODELO = "gpt-realtime-2.1";
 const FRECUENCIA = 24000;      // lo mínimo que acepta la API
@@ -196,117 +194,6 @@ function habla(ws, instrucciones) {
  * más, pero sólo se descarga si alguien pulsa al play.
  */
 
-/**
- * Quita el silencio del principio y del final de una intervención.
- *
- * El modelo entrega cada respuesta con aire por delante y por detrás. Al
- * pegar los turnos, ese aire se suma a la pausa que se mete entre ellos y
- * salen huecos de casi un segundo entre frase y frase. Medido sobre la
- * versión anterior: el 36 % de la llamada era silencio, con parones de
- * 860 ms. En una conversación de verdad el hueco entre turnos ronda los
- * 200 ms. Eso es lo que hace que suene a máquina turnándose, no a dos
- * personas hablando.
- *
- * Se deja un pequeño margen para no cortar el ataque de la primera sílaba
- * ni la caída de la última, que sonaría a corte brusco.
- */
-function recortarSilencio(pcm, frecuencia) {
-  const n = pcm.length / 2;
-  const ventana = Math.round(frecuencia * 0.01); // 10 ms
-  const umbral = 700;                            // sobre 32768
-
-  function primerSonido(desde, hasta, paso) {
-    for (let i = desde; paso > 0 ? i < hasta : i > hasta; i += paso * ventana) {
-      let pico = 0;
-      for (let k = 0; k < ventana && i + k < n && i + k >= 0; k += 1) {
-        pico = Math.max(pico, Math.abs(pcm.readInt16LE((i + k) * 2)));
-      }
-      if (pico > umbral) return i;
-    }
-    return paso > 0 ? desde : hasta;
-  }
-
-  const margen = Math.round(frecuencia * 0.04); // 40 ms de respiro
-  const ini = Math.max(0, primerSonido(0, n, 1) - margen);
-  const fin = Math.min(n, primerSonido(n - ventana, 0, -1) + ventana + margen);
-
-  if (fin <= ini) return pcm;
-  return pcm.subarray(ini * 2, fin * 2);
-}
-
-/**
- * Acorta los silencios largos que quedan DENTRO de una intervención.
- *
- * Recortar los bordes no bastaba: el modelo también se para a media frase, y
- * ahí estaban la mayoría de los parones. Medido sobre la versión anterior,
- * 31 huecos para 9 intervenciones y "Vale, el teléfono es 602 297 770"
- * tardando 8,3 segundos en decirse.
- *
- * Se recortan sólo los que pasan del techo. Las micropausas cortas se dejan
- * intactas a propósito: son las que hacen que suene a persona, y quitarlas
- * todas produce el efecto contrario, un chorro de palabras sin respirar.
- */
-function acortarPausasInternas(pcm, frecuencia, techoMs = 260) {
-  const n = pcm.length / 2;
-  const ventana = Math.round(frecuencia * 0.01);
-  const techo = Math.round((frecuencia * techoMs) / 1000);
-  const umbral = 700;
-
-  const trozos = [];
-  let inicioSilencio = null;
-  let cursor = 0;
-
-  for (let i = 0; i + ventana <= n; i += ventana) {
-    let pico = 0;
-    for (let k = 0; k < ventana; k += 1) pico = Math.max(pico, Math.abs(pcm.readInt16LE((i + k) * 2)));
-
-    if (pico < umbral) {
-      if (inicioSilencio === null) inicioSilencio = i;
-    } else if (inicioSilencio !== null) {
-      const largo = i - inicioSilencio;
-      if (largo > techo) {
-        // Todo hasta donde empieza el silencio, más el silencio ya recortado.
-        trozos.push(pcm.subarray(cursor * 2, (inicioSilencio + techo) * 2));
-        cursor = i;
-      }
-      inicioSilencio = null;
-    }
-  }
-
-  trozos.push(pcm.subarray(cursor * 2));
-  return Buffer.concat(trozos);
-}
-
-/**
- * Hueco entre turnos.
- *
- * Ni fijo ni al azar puro. En una conversación española el relevo va de unos
- * 120 a 320 ms, y se acorta cuando la respuesta es evidente —un nombre, un
- * "sí"— y se alarga un poco cuando hay que pensar. Un hueco idéntico entre
- * todas las frases suena a metrónomo, y las personas no somos metrónomos.
- */
-function huecoEntreTurnos(indice, esRespuestaCorta) {
-  const base = esRespuestaCorta ? 130 : 210;
-  // Variación determinista: la misma escena suena igual en cada generación,
-  // pero los huecos no son todos iguales entre sí.
-  const variacion = [0, 60, -35, 90, -20, 45, 25, -45, 70][indice % 9];
-  return Math.max(90, base + variacion);
-}
-
-function silencio(ms) {
-  return Buffer.alloc(Math.round((FRECUENCIA * ms) / 1000) * 2);
-}
-
-function envolverWav(pcm, frecuencia) {
-  const c = Buffer.alloc(44);
-  c.write("RIFF", 0); c.writeUInt32LE(36 + pcm.length, 4); c.write("WAVE", 8);
-  c.write("fmt ", 12); c.writeUInt32LE(16, 16); c.writeUInt16LE(1, 20); c.writeUInt16LE(1, 22);
-  c.writeUInt32LE(frecuencia, 24); c.writeUInt32LE(frecuencia * 2, 28);
-  c.writeUInt16LE(2, 32); c.writeUInt16LE(16, 34);
-  c.write("data", 36); c.writeUInt32LE(pcm.length, 40);
-  return Buffer.concat([c, pcm]);
-}
-
 /* ── La llamada ──────────────────────────────────────────────────────── */
 
 console.log(`Generando la llamada con ${MODELO}\n`);
@@ -326,7 +213,7 @@ function apuntar(quien, texto, pcm) {
 
   // Una respuesta de pocas palabras llega antes: no hay nada que pensar.
   const corta = texto.split(/\s+/).length <= 4;
-  partes.push(limpio, silencio(huecoEntreTurnos(nTurno, corta)));
+  partes.push(limpio, silencioDe(huecoEntreTurnos(nTurno, corta), FRECUENCIA));
   nTurno += 1;
 
   const segundos = (limpio.length / 2 / FRECUENCIA).toFixed(1);
@@ -363,8 +250,9 @@ const crudo = Buffer.concat(partes);
 const pcm = crudo;
 fs.writeFileSync(SALIDA, envolverWav(pcm, FRECUENCIA));
 
-const segundos = pcm.length / 2 / FRECUENCIA;
-console.log(`\n✓ ${SALIDA} · ${segundos.toFixed(1)} s · ${(fs.statSync(SALIDA).size / 1024 / 1024).toFixed(2)} MB`);
+const m = medirParones(pcm, FRECUENCIA);
+console.log(`\n✓ ${SALIDA} · ${m.segundos.toFixed(1)} s · ${(fs.statSync(SALIDA).size / 1024 / 1024).toFixed(2)} MB`);
+console.log(`  parón máximo ${Math.round(m.huecoMaximoMs)} ms · silencio ${m.silencioPorCiento.toFixed(0)} %`);
 
 // El guion se guarda para que la portada resalte la línea que suena sin
 // tener que ajustar los tiempos a mano cada vez que se regenera el audio.

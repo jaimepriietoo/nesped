@@ -58,14 +58,14 @@ const VOCES = {
  */
 const GUION = [
   { quien: "agente",  texto: "Instalaciones Vega, hola." },
-  { quien: "cliente", texto: "Sí, mira, es que quería pedir un presupuesto de aerotermia para mi chalet y voy un poco justa de tiempo." },
+  { quien: "cliente", texto: "Sí, mira, es que quería pedir un presupuesto de aerotermia para mi chalet y voy un poco justo de tiempo." },
   { quien: "agente",  texto: "Perfecto, ¿cómo te llamas?" },
-  { quien: "cliente", texto: "Marta." },
-  { quien: "agente",  texto: "Marta, ¿me das un teléfono de contacto para poder seguir contigo?" },
+  { quien: "cliente", texto: "Javier." },
+  { quien: "agente",  texto: "Javier, ¿me das un teléfono de contacto para poder seguir contigo?" },
   { quien: "cliente", texto: "Sí, es el seis cero dos, dos nueve siete, siete siete cero." },
   { quien: "agente",  texto: "Vale, 602 297 770. Te llaman hoy.", dicho: "Vale, seis cero dos, dos nueve siete, siete siete cero. Te llaman hoy." },
-  { quien: "cliente", texto: "Perfecto, quedo atenta, gracias." },
-  { quien: "agente",  texto: "Hasta luego, Marta, gracias." },
+  { quien: "cliente", texto: "Perfecto, quedo atento, gracias." },
+  { quien: "agente",  texto: "Hasta luego, Javier, gracias." },
 ];
 
 /**
@@ -92,7 +92,7 @@ const AJUSTES = {
  * Una línea de una o dos palabras necesita la mano más firme.
  *
  * La variación de entonación que hace humana una frase larga se come una
- * corta: "Marta." salía en 0,2 s, la mitad de lo que tarda nadie en decirlo,
+ * corta: el nombre suelto salía en 0,2 s, la mitad de lo que tarda nadie,
  * y justo ahí es donde la demo tiene que lucirse porque es el dato que
  * captura.
  */

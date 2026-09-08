@@ -23,7 +23,8 @@ import {
 const env = leerEnv(fs);
 const CLAVE = process.env.ELEVENLABS_API_KEY || env.ELEVENLABS_API_KEY || "";
 const FRECUENCIA = 24000;
-const SALIDA = path.join("public", "muestra-llamada.wav");
+const SALIDA_POR_DEFECTO = path.join("public", "muestra-llamada.wav");
+const SALIDA = process.env.SALIDA || SALIDA_POR_DEFECTO;
 const API = "https://api.elevenlabs.io/v1";
 
 /* eleven_multilingual_v2 es el que mejor español da hoy. turbo y flash están
@@ -163,7 +164,31 @@ if (process.argv.includes("--listar")) {
   process.exit(0);
 }
 
-function resolver(quien, valor) {
+/**
+ * Busca una voz en la biblioteca pública y la añade a la cuenta.
+ *
+ * Hace falta porque la cuenta trae 24 voces y sólo dos hablan español
+ * peninsular, las dos mujeres. Las inglesas pueden decir español con el
+ * modelo multilingüe, pero con acento extranjero, que para una empresa
+ * española suena peor que el problema que veníamos a arreglar.
+ */
+async function añadirDeLaBiblioteca(valor) {
+  const r = await pedir("/shared-voices?language=es&page_size=100&sort=trending");
+  const { voices = [] } = await r.json();
+  const v = voices.find((x) => x.voice_id === valor)
+    || voices.find((x) => (x.name || "").toLowerCase().startsWith(valor.toLowerCase()));
+  if (!v) return null;
+
+  await pedir(`/voices/add/${v.public_owner_id}/${v.voice_id}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ new_name: v.name }),
+  });
+  console.log(`   + añadida a la cuenta: ${v.name}`);
+  return { id: v.voice_id, nombre: v.name };
+}
+
+async function resolver(quien, valor) {
   if (!valor) {
     console.error(
       `Falta la voz de "${quien}".\n\n` +
@@ -171,16 +196,23 @@ function resolver(quien, valor) {
     );
     process.exit(1);
   }
-  const porNombre = voces.find((v) => v.name.toLowerCase() === valor.toLowerCase());
+  // Los nombres de la biblioteca llevan coletilla ("Cristina - Empathetic
+  // Customer support"), así que basta con que empiece igual.
+  const v = valor.toLowerCase();
+  const porNombre = voces.find((x) => x.name.toLowerCase() === v)
+    || voces.find((x) => x.name.toLowerCase().startsWith(v));
   if (porNombre) return { id: porNombre.voice_id, nombre: porNombre.name };
   const porId = voces.find((v) => v.voice_id === valor);
   if (porId) return { id: porId.voice_id, nombre: porId.name };
-  // Puede ser un ID de la biblioteca pública que no está añadido a la cuenta.
-  return { id: valor, nombre: valor };
+  const deBiblioteca = await añadirDeLaBiblioteca(valor);
+  if (deBiblioteca) return deBiblioteca;
+
+  console.error(`No encuentro la voz "${valor}" ni en la cuenta ni en la biblioteca en español.`);
+  process.exit(1);
 }
 
-const vozAgente = resolver("agente", VOCES.agente);
-const vozCliente = resolver("cliente", VOCES.cliente);
+const vozAgente = await resolver("agente", VOCES.agente);
+const vozCliente = await resolver("cliente", VOCES.cliente);
 
 if (vozAgente.id === vozCliente.id) {
   console.error("Las dos voces son la misma. Con el mismo timbre en los dos lados se nota que es un montaje.");
@@ -228,8 +260,12 @@ const m = medirParones(pcm, FRECUENCIA);
 console.log(`\n✓ ${SALIDA} · ${m.segundos.toFixed(1)} s · ${(fs.statSync(SALIDA).size / 1024 / 1024).toFixed(2)} MB`);
 console.log(`  parón máximo ${Math.round(m.huecoMaximoMs)} ms · silencio ${m.silencioPorCiento.toFixed(0)} %`);
 
-fs.writeFileSync(
-  path.join("components", "v3", "muestra-guion.json"),
-  JSON.stringify(guion, null, 2) + "\n"
-);
-console.log(`✓ components/v3/muestra-guion.json · ${guion.length} intervenciones`);
+// El guion se guarda para que la portada resalte la línea que suena. Sólo
+// para el audio definitivo: las pruebas comparativas no deben tocarlo.
+if (SALIDA === SALIDA_POR_DEFECTO) {
+  fs.writeFileSync(
+    path.join("components", "v3", "muestra-guion.json"),
+    JSON.stringify(guion, null, 2) + "\n"
+  );
+  console.log(`✓ components/v3/muestra-guion.json · ${guion.length} intervenciones`);
+}

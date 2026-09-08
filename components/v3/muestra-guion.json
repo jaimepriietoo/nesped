@@ -10,37 +10,37 @@
     "texto": "Sí, mira, es que quería pedir un presupuesto de aerotermia para mi chalet y voy un poco justo de tiempo."
   },
   {
-    "t": 7.7,
+    "t": 7.9,
     "quien": "agente",
     "texto": "Perfecto, ¿cómo te llamas?"
   },
   {
-    "t": 9.2,
+    "t": 9.4,
     "quien": "cliente",
     "texto": "Javier."
   },
   {
-    "t": 10.2,
+    "t": 10.1,
     "quien": "agente",
     "texto": "Javier, ¿me das un teléfono de contacto para poder seguir contigo?"
   },
   {
-    "t": 13.5,
+    "t": 13.4,
     "quien": "cliente",
     "texto": "Sí, es el seis cero dos, dos nueve siete, siete siete cero."
   },
   {
-    "t": 18.9,
+    "t": 18,
     "quien": "agente",
     "texto": "Vale, 602 297 770. Te llaman hoy."
   },
   {
-    "t": 22.3,
+    "t": 21.4,
     "quien": "cliente",
     "texto": "Perfecto, quedo atento, gracias."
   },
   {
-    "t": 24.3,
+    "t": 24,
     "quien": "agente",
     "texto": "Hasta luego, Javier, gracias."
   }

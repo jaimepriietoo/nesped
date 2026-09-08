@@ -27,6 +27,7 @@ const CLAVE = process.env.ELEVENLABS_API_KEY || env.ELEVENLABS_API_KEY || "";
 const FRECUENCIA = 24000;
 const SALIDA_POR_DEFECTO = path.join("public", "muestra-llamada.wav");
 const SALIDA = process.env.SALIDA || SALIDA_POR_DEFECTO;
+const DESTINO_GUION = path.join("components", "v3", "muestra-guion.json");
 const API = "https://api.elevenlabs.io/v1";
 
 /* eleven_multilingual_v2 es el que mejor español da hoy. turbo y flash están
@@ -230,6 +231,26 @@ function remuestrear(pcm, de, a) {
 
 /* ── Arranque ────────────────────────────────────────────────────────── */
 
+/* Publica una versión ya generada sin volver a sintetizarla: es la única
+   forma de que en la portada quede exactamente lo que se escuchó. */
+const aInstalar = process.argv.indexOf("--instalar");
+if (aInstalar !== -1) {
+  const origen = process.argv[aInstalar + 1];
+  if (!origen || !fs.existsSync(origen)) {
+    console.error("Uso: --instalar ruta/al.wav (generado antes con SALIDA=)");
+    process.exit(1);
+  }
+  const guionOrigen = origen.replace(/\.wav$/, ".guion.json");
+  if (!fs.existsSync(guionOrigen)) {
+    console.error(`Falta ${guionOrigen}. Regenera esa versión para que se guarden sus tiempos.`);
+    process.exit(1);
+  }
+  fs.copyFileSync(origen, SALIDA_POR_DEFECTO);
+  fs.copyFileSync(guionOrigen, DESTINO_GUION);
+  console.log(`✓ ${SALIDA_POR_DEFECTO} y ${DESTINO_GUION} desde ${origen}`);
+  process.exit(0);
+}
+
 exigirClave();
 
 const voces = await listarVoces();
@@ -356,12 +377,20 @@ const m = medirParones(pcm, FRECUENCIA);
 console.log(`\n✓ ${SALIDA} · ${m.segundos.toFixed(1)} s · ${(fs.statSync(SALIDA).size / 1024 / 1024).toFixed(2)} MB`);
 console.log(`  parón máximo ${Math.round(m.huecoMaximoMs)} ms · silencio ${m.silencioPorCiento.toFixed(0)} %`);
 
-// El guion se guarda para que la portada resalte la línea que suena. Sólo
-// para el audio definitivo: las pruebas comparativas no deben tocarlo.
+/* Los tiempos se guardan siempre junto al audio, no sólo para el definitivo.
+   La semilla de ElevenLabs es de mejor esfuerzo: dos generaciones iguales dan
+   duraciones iguales pero bytes distintos. Sin el fichero de tiempos al lado,
+   instalar una versión ya escuchada obligaba a regenerarla, y lo que acababa
+   en la portada no era exactamente lo que se había elegido.
+
+   Con esto, elegir una versión y publicarla es copiar dos ficheros:
+     node scripts/generar-muestra-elevenlabs.mjs --instalar ruta/al.wav */
+const GUION_DE = (wav) => wav.replace(/\.wav$/, ".guion.json");
+fs.writeFileSync(GUION_DE(SALIDA), JSON.stringify(guion, null, 2) + "\n");
+
 if (SALIDA === SALIDA_POR_DEFECTO) {
-  fs.writeFileSync(
-    path.join("components", "v3", "muestra-guion.json"),
-    JSON.stringify(guion, null, 2) + "\n"
-  );
-  console.log(`✓ components/v3/muestra-guion.json · ${guion.length} intervenciones`);
+  fs.writeFileSync(DESTINO_GUION, JSON.stringify(guion, null, 2) + "\n");
+  console.log(`✓ ${DESTINO_GUION} · ${guion.length} intervenciones`);
+} else {
+  console.log(`✓ ${GUION_DE(SALIDA)} · ${guion.length} intervenciones`);
 }

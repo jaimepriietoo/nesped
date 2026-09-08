@@ -69,6 +69,21 @@ const GUION = [
  * más estable porque es quien atiende y no conviene que suene teatral; quien
  * llama tiene más libertad porque está explicando algo suyo.
  */
+/**
+ * Una línea de una o dos palabras necesita la mano más firme.
+ *
+ * stability baja da variación de entonación, que es lo que hace humana una
+ * frase larga. Pero en "Marta." esa misma variación se come el nombre: salía
+ * en 0,2 s, la mitad de lo que tarda nadie en decirlo, y justo ahí es donde
+ * la demo tiene que lucirse porque es el dato que captura.
+ */
+function ajustesDe(quien, texto) {
+  const base = AJUSTES[quien];
+  const palabras = texto.trim().split(/\s+/).length;
+  if (palabras > 2) return base;
+  return { ...base, stability: Math.min(0.7, base.stability + 0.25), style: Math.max(0, base.style - 0.15) };
+}
+
 const AJUSTES = {
   agente:  { stability: 0.45, similarity_boost: 0.75, style: 0.30, use_speaker_boost: true },
   cliente: { stability: 0.35, similarity_boost: 0.75, style: 0.45, use_speaker_boost: true },
@@ -287,7 +302,7 @@ for (let i = 0; i < GUION.length; i += 1) {
   const siguiente = GUION.slice(i + 1).find((l) => l.quien === linea.quien);
 
   const bruto = await sintetizar(
-    voz.id, texto, AJUSTES[linea.quien],
+    voz.id, texto, ajustesDe(linea.quien, texto),
     anterior && (anterior.dicho || anterior.texto),
     siguiente && (siguiente.dicho || siguiente.texto),
   );
@@ -303,7 +318,16 @@ for (let i = 0; i < GUION.length; i += 1) {
   console.log(`   ${linea.quien === "agente" ? "AGENTE " : "CLIENTE"} [${seg}s] ${linea.texto}`);
 }
 
-const pcm = Buffer.concat(partes);
+/**
+ * Pasada final de seguridad sobre la mezcla ya montada.
+ *
+ * Recortar cada intervención por separado no basta. El recorte busca el final
+ * del audio hacia atrás, así que si el sintetizador suelta una respiración
+ * al final se queda con todo el silencio que hay ANTES de esa respiración.
+ * Así aparecía un hueco de 570 ms donde el diseño no permite pasar de 380
+ * (300 de relevo más 40 de margen a cada lado).
+ */
+const pcm = acortarPausasInternas(Buffer.concat(partes), FRECUENCIA, 380);
 fs.writeFileSync(SALIDA, envolverWav(pcm, FRECUENCIA));
 
 const m = medirParones(pcm, FRECUENCIA);

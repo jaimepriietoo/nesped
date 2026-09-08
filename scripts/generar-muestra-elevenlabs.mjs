@@ -34,6 +34,11 @@ const API = "https://api.elevenlabs.io/v1";
    se genera una vez, así que cogemos el de más calidad. */
 const MODELO = process.env.MODELO_VOZ || "eleven_multilingual_v2";
 
+/* Con semilla, la misma pareja de voces da siempre el mismo audio. Sin ella
+   cada generación sale un poco distinta, y eso convierte "me quedo con esta"
+   en algo que no se puede cumplir: al regenerar ya no es esa. */
+const SEMILLA = Number(process.env.SEMILLA || 20260908);
+
 /* Se acepta nombre o ID. El nombre se resuelve contra la cuenta, que es lo
    práctico: los IDs no hay quien se los aprenda. */
 const VOCES = {
@@ -134,6 +139,7 @@ async function sintetizar(voiceId, texto, ajustes, anterior, siguiente) {
     model_id: MODELO,
     language_code: "es",
     voice_settings: ajustes,
+    seed: SEMILLA,
     // Contexto para que la entonación enlace entre turnos: sin esto cada
     // frase se genera como si fuera la primera y se nota el corte.
     ...(anterior ? { previous_text: anterior } : {}),

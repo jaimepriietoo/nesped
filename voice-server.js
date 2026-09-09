@@ -6,6 +6,10 @@ const WebSocket = require("ws");
 const crypto = require("crypto");
 const Sentry = require("@sentry/node");
 const { createClient } = require("@supabase/supabase-js");
+const {
+  ETIQUETA_AGENTE,
+  caracteresDelAgente,
+} = require("./lib/server/consumo-voz.cjs");
 
 const SECRET_FIELD_PATTERN =
   /authorization|cookie|set-cookie|token|secret|password|api[_-]?key|dsn|x-nesped-internal-token/i;
@@ -1313,14 +1317,10 @@ wss.on("connection", async (providerWs, req) => {
           p_llamadas: 1,
           p_segundos_voz: durationSeconds,
           /* Lo que factura la voz sintética es el texto que ha dicho el
-             agente, no la duración: un silencio dura y no cuesta.
-          
-             El prefijo es "[AI] ", que es como lo etiqueta addTranscriptLine.
-             Se descuenta del recuento, porque no se sintetiza. */
-          p_caracteres_voz: transcriptParts.reduce((total, linea) => {
-            const texto = String(linea || "");
-            return texto.startsWith("[AI] ") ? total + texto.length - 5 : total;
-          }, 0),
+             agente, no la duración: un silencio dura y no cuesta. El cómo
+             está en lib/server/consumo-voz.cjs, junto a la etiqueta que se
+             usa más abajo al apuntar cada línea. */
+          p_caracteres_voz: caracteresDelAgente(transcriptParts),
         });
       } catch (err) {
         console.error("No se pudo anotar el consumo:", err?.message || err);
@@ -1891,11 +1891,11 @@ Después de saludar, calla y espera.`,
       }
 
       if (event.type === "response.text.delta" && event.delta) {
-        addTranscriptLine(`[AI] ${event.delta}`);
+        addTranscriptLine(`${ETIQUETA_AGENTE}${event.delta}`);
       }
 
       if (event.type === "response.audio_transcript.delta" && event.delta) {
-        addTranscriptLine(`[AI] ${event.delta}`);
+        addTranscriptLine(`${ETIQUETA_AGENTE}${event.delta}`);
       }
 
       if (

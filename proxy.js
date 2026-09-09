@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { leerSesionFirmada } from "@/lib/sesion-edge";
 
 /* =========================================================================
    Cabeceras de seguridad y política de contenido.
@@ -145,10 +146,19 @@ function aplicarCabeceras(response, req, nonce, conNonce) {
   return response;
 }
 
-export function proxy(req) {
+export async function proxy(req) {
   const { pathname } = req.nextUrl;
-  const session = req.cookies.get("nesped_session")?.value;
-  const role = req.cookies.get("nesped_role")?.value;
+  /* Sesión y rol salen del token FIRMADO, no de las cookies sueltas
+     `nesped_session` y `nesped_role`, que van en claro. Antes bastaba con
+     tener CUALQUIER valor en la cookie de sesión para pasar la primera
+     puerta, y con escribir `nesped_role=admin` a mano para pasar la segunda.
+
+     Sigue sin ser la única comprobación: cada API valida por su cuenta y
+     además contra la generación de sesión guardada en la base de datos, que
+     desde aquí no se puede consultar. Esto es la primera puerta. */
+  const sesion = await leerSesionFirmada(req);
+  const session = sesion ? "ok" : null;
+  const role = String(sesion?.role || "").toLowerCase();
 
   // Un nonce distinto por petición. Se pasa a Next en una cabecera de
   // petición: al ver un nonce en la CSP, Next lo pone en sus propios
@@ -188,7 +198,12 @@ export function proxy(req) {
     return aplicarCabeceras(NextResponse.redirect(loginUrl), req, nonce, conNonce);
   }
 
-  if (pathname.startsWith("/admin") && !["admin", "owner", "super_admin"].includes(role || "")) {
+    /* "owner" no entra aquí. En la tabla `users`, cada cliente que da de alta
+     su empresa queda como owner de ELLA, no de Nesped, así que este filtro
+     dejaba pasar al dueño de cualquier empresa cliente a la administración
+     con la lista completa de clientes. Dentro de su empresa su rol sigue
+     siendo owner, pero eso vive en portal_users y no lo decide esto. */
+  if (pathname.startsWith("/admin") && !["admin", "super_admin"].includes(role)) {
     return aplicarCabeceras(
       NextResponse.redirect(new URL("/portal", req.url)),
       req,

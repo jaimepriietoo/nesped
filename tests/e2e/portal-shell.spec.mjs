@@ -1,4 +1,46 @@
 import { expect, test } from "@playwright/test";
+import crypto from "node:crypto";
+import fs from "node:fs";
+
+/**
+ * Una sesión firmada de verdad para las pruebas.
+ *
+ * Antes bastaba con poner `nesped_session=playwright` y `nesped_role=owner`:
+ * el middleware sólo miraba que las cookies existieran. Ahora verifica la
+ * firma, así que las pruebas tienen que firmar como firma el servidor.
+ *
+ * Es más trabajo y está bien que lo sea: una prueba que entra con una cookie
+ * inventada estaba comprobando el portal por una puerta que los usuarios no
+ * tienen, y habría seguido pasando en verde con el control de acceso roto.
+ */
+function secretoDeSesion() {
+  if (process.env.NESPED_SESSION_SECRET) return process.env.NESPED_SESSION_SECRET;
+  try {
+    const env = fs.readFileSync(".env.local", "utf8");
+    for (const clave of ["NESPED_SESSION_SECRET", "SUPABASE_SERVICE_ROLE_KEY"]) {
+      const m = env.match(new RegExp(`^${clave}=(.*)$`, "m"));
+      if (m) return m[1].trim().replace(/^["']|["']$/g, "");
+    }
+  } catch {}
+  return "";
+}
+
+function tokenDeSesion({ email, clientId, role }) {
+  const carga = {
+    email,
+    clientId,
+    role,
+    epoch: 0,
+    issuedAt: Date.now(),
+    expiresAt: Date.now() + 60 * 60 * 1000,
+  };
+  const cuerpo = Buffer.from(JSON.stringify(carga)).toString("base64url");
+  const firma = crypto
+    .createHmac("sha256", secretoDeSesion())
+    .update(cuerpo)
+    .digest("base64url");
+  return `${cuerpo}.${firma}`;
+}
 
 /**
  * Esqueleto del portal con las APIs simuladas.
@@ -34,9 +76,15 @@ const PANEL = {
 
 async function montarPortal(context, page, baseURL, { romper = null, plan = "intelligence" } = {}) {
   const host = new URL(baseURL).hostname;
+  const token = tokenDeSesion({
+    email: "owner@demo.com",
+    clientId: "demo",
+    role: "client",
+  });
+
   await context.addCookies([
-    { name: "nesped_session", value: "playwright", domain: host, path: "/" },
-    { name: "nesped_role", value: "owner", domain: host, path: "/" },
+    { name: "nesped_session", value: token, domain: host, path: "/" },
+    { name: "nesped_role", value: "client", domain: host, path: "/" },
   ]);
 
   await page.route("**/api/**", async (route) => {

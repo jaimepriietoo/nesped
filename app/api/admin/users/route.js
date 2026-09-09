@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { getAdminContext, hashPassword } from "@/lib/server/auth";
+import { getInternalApiHeaders } from "@/lib/server/internal-api";
 
 function getSupabase() {
   return createClient(
@@ -150,13 +151,11 @@ export async function POST(req) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...getInternalApiHeaders(),
         },
-        body: JSON.stringify({
-          email,
-          clientName: clientExists.name,
-          password,
-          loginUrl: `${process.env.NEXT_PUBLIC_APP_URL}/login`,
-        }),
+        /* loginUrl ya no viaja: lo construye la propia ruta. Aceptarlo del
+           cuerpo permitía que el botón del correo apuntara a cualquier sitio. */
+        body: JSON.stringify({ email, clientName: clientExists.name, password }),
       });
     } catch (emailErr) {
       console.error("Error enviando onboarding email:", emailErr);

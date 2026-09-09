@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { getInternalApiHeaders } from "@/lib/server/internal-api";
 import crypto from "crypto";
 import { safeUpsertClientSettings } from "@/lib/client-settings";
 import { getAdminContext, hashPassword } from "@/lib/server/auth";
@@ -239,13 +240,10 @@ export async function POST(req) {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
+                ...getInternalApiHeaders(),
               },
-              body: JSON.stringify({
-                email,
-                clientName: name,
-                password,
-                loginUrl: `${process.env.NEXT_PUBLIC_APP_URL}/login`,
-              }),
+              /* loginUrl ya no viaja: lo construye la propia ruta. */
+              body: JSON.stringify({ email, clientName: name, password }),
             }
           );
         } catch (emailErr) {

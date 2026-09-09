@@ -71,3 +71,43 @@ test("existen robots y sitemap, y el 404 responde 404", async ({ request }) => {
   expect((await request.get("/sitemap.xml")).status()).toBe(200);
   expect((await request.get("/ruta-que-no-existe")).status()).toBe(404);
 });
+
+/**
+ * No se entra a la administración falsificando cookies.
+ *
+ * El middleware decidía el acceso mirando `nesped_session` (le bastaba con
+ * que existiera, cualquier valor servía) y `nesped_role`, ambas en claro y
+ * ambas escribibles desde las herramientas del navegador. Ahora verifica la
+ * firma del token, y esta prueba existe para que no se vuelva a la cookie
+ * suelta buscando comodidad.
+ */
+test("las cookies falsificadas no abren el panel de administración", async ({ request, baseURL }) => {
+  const conCookiesInventadas = {
+    headers: { Cookie: "nesped_session=loquesea; nesped_role=admin; nesped_auth=ok" },
+    maxRedirects: 0,
+  };
+
+  const admin = await request.get(`${baseURL}/admin`, conCookiesInventadas);
+  expect(admin.status()).toBe(307);
+  expect(admin.headers().location).toContain("/login");
+
+  const portal = await request.get(`${baseURL}/portal`, conCookiesInventadas);
+  expect(portal.status()).toBe(307);
+  expect(portal.headers().location).toContain("/login");
+});
+
+/**
+ * El correo de bienvenida no se puede disparar desde fuera.
+ *
+ * Salía desde nuestro dominio y metía en el HTML, sin escapar, lo que le
+ * mandaran. Con eso se podía escribir el correo entero —texto y enlace— y
+ * enviarlo a quien fuera con un remitente legítimo, con SPF y DKIM buenos.
+ * El daño no es el correo: es que se quema el dominio y a partir de ahí los
+ * avisos de verdad acaban en la carpeta de basura de todos los clientes.
+ */
+test("el correo de bienvenida exige credencial interna", async ({ request, baseURL }) => {
+  const res = await request.post(`${baseURL}/api/onboarding-email`, {
+    data: { email: "cualquiera@ejemplo.test", clientName: "<script>alert(1)</script>" },
+  });
+  expect([401, 403]).toContain(res.status());
+});

@@ -66,6 +66,14 @@ const VISTA_DE_ENTRADA = "inteligencia";
 
 /* Motivos de pérdida. Lista corta a propósito: son los que un negocio puede
    hacer algo al respecto, y una lista larga acaba en "otro" siempre. */
+/* Cómo se llama cada acción recomendada en pantalla. */
+const ACCION_NBA = {
+  call: "LLAMAR",
+  whatsapp: "ESCRIBIR POR WHATSAPP",
+  sms: "MANDAR UN SMS",
+  wait: "ESPERAR",
+};
+
 const MOTIVOS_PERDIDA = [
   ["precio", "Precio"],
   ["competencia", "Se fue con otro"],
@@ -114,6 +122,7 @@ const VISTAS = [
   { id: "conversaciones", label: "Conversaciones", ico: "◈", api: "/api/portal/inbox" },
 
   { grupo: "El agente" },
+  { id: "agentes", label: "Automatismos", ico: "⚙", api: "/api/portal/agentes" },
   { id: "voz", label: "Calidad de voz", ico: "◎", api: "/api/portal/voice-center" },
   { id: "playbooks", label: "Guion comercial", ico: "✎", api: "/api/playbooks" },
 
@@ -306,6 +315,7 @@ function FichaLead({ lead, usuarios, onCerrar, onCambiado }) {
   const [cuando, setCuando] = useState("");
   const [sms, setSms] = useState("");
   const [historial, setHistorial] = useState({ notas: [], comentarios: [], recordatorios: [] });
+  const [ficha, setFicha] = useState(null);
 
   // El historial se pide al abrir la ficha, no con la lista: son tres
   // consultas por lead y cargarlas para los 200 de la tabla no tiene sentido.
@@ -316,13 +326,18 @@ function FichaLead({ lead, usuarios, onCerrar, onCambiado }) {
       fetch(`/api/lead-notes${q}`).then((r) => r.json()).catch(() => null),
       fetch(`/api/lead-comments${q}`).then((r) => r.json()).catch(() => null),
       fetch(`/api/lead-reminders${q}`).then((r) => r.json()).catch(() => null),
-    ]).then(([n, c, r]) => {
+      /* Recorrido, historial de compras y siguiente acción vienen juntos en
+         una sola llamada: pedirlos por separado montaba la ficha a trozos
+         delante de quien la abre. */
+      fetch(`/api/portal/contacto?id=${encodeURIComponent(lead.id)}`).then((r) => r.json()).catch(() => null),
+    ]).then(([n, c, r, f]) => {
       if (!vivo) return;
       setHistorial({
         notas: n?.data || [],
         comentarios: c?.data || [],
         recordatorios: r?.data || [],
       });
+      setFicha(f?.success ? f : null);
     });
     return () => { vivo = false; };
   }, [lead.id]);
@@ -345,6 +360,103 @@ function FichaLead({ lead, usuarios, onCerrar, onCambiado }) {
       </div>
 
       {lead.interes ? <p className="pv3-p" style={{ marginTop: 14 }}>{lead.interes}</p> : null}
+
+      {ficha?.siguiente?.disponible && (
+        <>
+          <h4 className="pv3-h4">Qué hacer ahora</h4>
+          <div className="fc-nba" data-p={ficha.siguiente.prioridad}>
+            <div className="fc-nba-acc">{ACCION_NBA[ficha.siguiente.accion] || "REVISAR"}</div>
+            <p className="fc-nba-motivo">{ficha.siguiente.motivo}</p>
+            {ficha.siguiente.mensaje ? (
+              <p className="pv3-p" style={{ marginTop: 10, fontSize: 13, color: "var(--dim)" }}>
+                «{ficha.siguiente.mensaje}»
+              </p>
+            ) : null}
+            <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+              {lead.telefono ? (
+                <a className="pv3-btn" data-v="light" href={`tel:${lead.telefono}`}>Llamar</a>
+              ) : null}
+              {lead.telefono ? (
+                <a
+                  className="pv3-btn"
+                  href={`https://wa.me/${String(lead.telefono).replace(/[^0-9]/g, "")}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  WhatsApp
+                </a>
+              ) : null}
+            </div>
+          </div>
+        </>
+      )}
+
+      {ficha?.perfil?.disponible && (
+        <>
+          <h4 className="pv3-h4">Como cliente</h4>
+          <div className="fc-perfil">
+            <div>
+              <div className="fc-dato-lab">COMPRAS</div>
+              <div className="fc-dato-val">{ficha.perfil.compras}</div>
+            </div>
+            {ficha.perfil.ticket != null && (
+              <div>
+                <div className="fc-dato-lab">TICKET MEDIO</div>
+                <div className="fc-dato-val">{ficha.perfil.ticket} €</div>
+              </div>
+            )}
+            {ficha.perfil.cadaDias != null && (
+              <div>
+                <div className="fc-dato-lab">VUELVE CADA</div>
+                <div className="fc-dato-val">{ficha.perfil.cadaDias} d</div>
+              </div>
+            )}
+            {ficha.perfil.sinComprar != null && (
+              <div>
+                <div className="fc-dato-lab">SIN COMPRAR</div>
+                <div className="fc-dato-val" style={{ color: ficha.perfil.enfriandose ? "var(--warn)" : undefined }}>
+                  {ficha.perfil.sinComprar} d
+                </div>
+              </div>
+            )}
+          </div>
+          {ficha.perfil.enfriandose && (
+            <p className="pv3-p" style={{ marginTop: 10, fontSize: 13, color: "var(--warn)" }}>
+              Lleva más del doble de su tiempo habitual sin comprar.
+            </p>
+          )}
+          {ficha.perfil.sinImportes && (
+            <p className="pv3-p" style={{ marginTop: 10, fontSize: 12.5, color: "var(--muted)" }}>
+              Sus operaciones no tienen importe anotado, así que no hay ticket medio.
+            </p>
+          )}
+        </>
+      )}
+
+      {ficha?.recorrido?.length > 0 && (
+        <>
+          <h4 className="pv3-h4">Por dónde ha pasado</h4>
+          <div className="fc-recorrido">
+            {ficha.recorrido.slice(0, 20).map((h, i) => (
+              <div className="fc-hito" key={`${h.cuando}-${i}`} data-t={h.tipo}>
+                <div className="fc-hito-cab">
+                  <span className="fc-hito-tit">{h.titulo}</span>
+                  <span className="fc-hito-cuando">{fecha(h.cuando)}</span>
+                </div>
+                {h.detalle ? <p className="fc-hito-det">{h.detalle}</p> : null}
+                {(h.duracion || h.sentimiento || h.intencion) && (
+                  <div className="fc-etiquetas">
+                    {h.duracion ? <span>{Math.floor(h.duracion / 60)}m {h.duracion % 60}s</span> : null}
+                    {h.sentimiento ? <span>{h.sentimiento}</span> : null}
+                    {h.intencion ? <span>{h.intencion}</span> : null}
+                    {h.captado ? <span>datos captados</span> : null}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       <h4 className="pv3-h4">Estado</h4>
       <div className="pv3-form">
@@ -611,6 +723,8 @@ function Inteligencia({ datos }) {
         </div>
       )}
 
+      <Copiloto hayDatos={activos.length > 0} />
+
       {activos.length > 0 && (
         <>
           <h2 className="pv3-h2">Lo que sabemos</h2>
@@ -668,6 +782,192 @@ function Inteligencia({ datos }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Qué hace Nesped solo.
+ *
+ * El orden de los modos —avisar, preparar, hacerlo solo— no es decorativo:
+ * describe cómo se gana la confianza. Nada arranca pudiendo ejecutar, y nada
+ * puede llegar a "hacerlo solo" mientras el canal que necesita no exista.
+ *
+ * Se enseña el modo EFECTIVO, no el guardado. Si alguien dejó un agente en
+ * automático y luego se cayó el canal, aquí sale lo que de verdad va a pasar.
+ * Un interruptor que dice "encendido" con la bombilla fundida es peor que uno
+ * apagado.
+ */
+/**
+ * Preguntarle a Nesped.
+ *
+ * Es una caja de preguntar, no un chat, y es deliberado: un hilo invita a
+ * charlar, y esto no conversa —contesta con lo que hay calculado y se calla—.
+ * Sin historial tampoco puede arrastrar un error de una respuesta a la
+ * siguiente.
+ *
+ * Debajo de cada respuesta salen los análisis con los que ha contestado. Una
+ * respuesta que no se puede comprobar no vale más que una opinión, y de
+ * opiniones sobre su propio negocio ya va servido quien lo dirige.
+ */
+function Copiloto({ hayDatos }) {
+  const [pregunta, setPregunta] = useState("");
+  const [pensando, setPensando] = useState(false);
+  const [respuesta, setRespuesta] = useState(null);
+  const [error, setError] = useState("");
+
+  const SUGERENCIAS = [
+    "¿Qué es lo más urgente ahora mismo?",
+    "¿Estamos perdiendo llamadas?",
+    "¿A quién debería llamar hoy?",
+  ];
+
+  async function preguntar(texto) {
+    const q = String(texto || pregunta).trim();
+    if (!q || pensando) return;
+
+    setPensando(true);
+    setError("");
+    setRespuesta(null);
+    try {
+      const res = await fetch("/api/portal/copiloto", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pregunta: q }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        setError(json?.message || "No he podido responder.");
+        return;
+      }
+      setRespuesta(json);
+    } catch {
+      setError("No he podido responder. Revisa la conexión.");
+    } finally {
+      setPensando(false);
+    }
+  }
+
+  return (
+    <div className="iq-copiloto">
+      <div className="iq-modulo-lab">PREGÚNTALE A NESPED</div>
+
+      <form
+        className="iq-pregunta"
+        style={{ marginTop: 12 }}
+        onSubmit={(e) => { e.preventDefault(); preguntar(); }}
+      >
+        <input
+          className="pv3-input"
+          placeholder={hayDatos ? "¿Por qué han bajado los cierres?" : "Todavía no hay datos que consultar"}
+          value={pregunta}
+          onChange={(e) => setPregunta(e.target.value)}
+          disabled={pensando}
+        />
+        <button className="pv3-btn" data-v="light" type="submit" disabled={pensando || !pregunta.trim()}>
+          {pensando ? "Mirando…" : "Preguntar"}
+        </button>
+      </form>
+
+      {hayDatos && !respuesta && !pensando && (
+        <div className="iq-sugerencias">
+          {SUGERENCIAS.map((s) => (
+            <button key={s} type="button" className="iq-sugerencia" onClick={() => { setPregunta(s); preguntar(s); }}>
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {error && <p className="iq-respuesta" style={{ color: "var(--bad)" }}>{error}</p>}
+
+      {respuesta && (
+        <div className="iq-respuesta">
+          {respuesta.respuesta}
+          {respuesta.basadoEn?.length > 0 && (
+            <div className="iq-fuentes">
+              {respuesta.basadoEn.map((b) => (
+                <span key={b.titulo}>{b.titulo}: {b.valor}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Agentes({ datos, onCambiado }) {
+  const [tocando, setTocando] = useState("");
+  const [aviso, setAviso] = useState("");
+
+  if (!datos) return <Vacio>No hemos podido leer los automatismos.</Vacio>;
+
+  const { agentes = [], modos = [] } = datos;
+
+  async function cambiar(agenteId, modo) {
+    setTocando(`${agenteId}:${modo}`);
+    setAviso("");
+    try {
+      const res = await fetch("/api/portal/agentes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agenteId, modo }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        setAviso(json?.message || "No se pudo cambiar.");
+        return;
+      }
+      await onCambiado();
+    } finally {
+      setTocando("");
+    }
+  }
+
+  return (
+    <div className="pv3-view">
+      <div className="ag-lista">
+        {agentes.map((a) => (
+          <div className="ag-tarjeta" key={a.id} data-bloqueado={a.puedeEjecutar ? undefined : "1"}>
+            <div className="ag-fila">
+              <div>
+                <div className="ag-nombre">{a.nombre}</div>
+                <p className="ag-que">{a.queHace}</p>
+                <p className="ag-cuando">{a.cuandoActua}</p>
+              </div>
+
+              <div className="ag-modos">
+                {modos.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    className="ag-modo"
+                    aria-pressed={a.modoEfectivo === m.id}
+                    title={m.descripcion}
+                    disabled={
+                      (m.id === "solo" && !a.puedeEjecutar) ||
+                      tocando === `${a.id}:${m.id}`
+                    }
+                    onClick={() => cambiar(a.id, m.id)}
+                  >
+                    {m.nombre}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {a.motivoBloqueo && <p className="ag-bloqueo">{a.motivoBloqueo}</p>}
+          </div>
+        ))}
+      </div>
+
+      {aviso && <p className="pv3-p" style={{ marginTop: 14, color: "var(--bad)" }}>{aviso}</p>}
+
+      <p className="pv3-p" style={{ marginTop: 20, fontSize: 13, color: "var(--muted)", maxWidth: "70ch" }}>
+        Todo lo que haga un agente queda registrado con su hora en el historial
+        de la cuenta, hagas lo que hagas con estos interruptores.
+      </p>
     </div>
   );
 }
@@ -2159,6 +2459,7 @@ class Aislante extends React.Component {
 /** Encabezado de cada vista: antetítulo, título y una línea que la explica. */
 const META = {
   inteligencia: ["INTELIGENCIA", "Qué está pasando", "Lo que Nesped puede afirmar hoy sobre tu negocio, y con qué fundamento."],
+  agentes: ["AUTOMATISMOS", "Qué hace Nesped solo", "Qué vigila, cuándo salta y cuánta libertad le das."],
   resumen: ["PANEL", "Resumen", "Lo que ha pasado y lo que hay abierto ahora mismo."],
   leads: ["CAPTACIÓN", "Leads", "Todo lo que la voz ha capturado, en lista o por fases."],
   llamadas: ["REGISTRO", "Llamadas", "Cada conversación, con grabación y transcripción."],
@@ -2366,6 +2667,7 @@ export default function PortalV3() {
 
     switch (vista) {
       case "inteligencia": return <Inteligencia datos={datosVista} />;
+      case "agentes": return <Agentes datos={datosVista} onCambiado={() => recargarSeccion("agentes")} />;
       case "resumen": return <Resumen datos={datos} />;
       case "leads": return <Leads datos={datos} onRecargar={recargar} />;
       case "llamadas": return <Llamadas datos={datos} />;

@@ -74,16 +74,16 @@ test("el portal carga con la marca y el menú completo", async ({ context, page,
   await montarPortal(context, page, baseURL);
 
   /*
-   * Diez pantallas más "Cerrar sesión". El número está fijado a propósito:
+   * Once pantallas más "Cerrar sesión". El número está fijado a propósito:
    * el portal llegó a tener treinta y una, casi todas de consejos generados,
    * y esta prueba salta si vuelven a colarse pantallas de relleno. Subió de
-   * nueve a diez al entrar "Inteligencia", que sustituye a Resumen como
-   * pantalla de entrada.
+   * nueve a once al entrar "Inteligencia" —que sustituye a Resumen como
+   * pantalla de entrada— y "Automatismos".
    */
   const entradas = page.locator(".pv3-nav");
-  expect(await entradas.count()).toBe(11);
+  expect(await entradas.count()).toBe(12);
 
-  for (const etiqueta of ["Inteligencia", "Resumen", "Contactos", "Llamadas", "Conversaciones", "Calidad de voz", "Guion comercial", "Equipo", "Ajustes", "Estado"]) {
+  for (const etiqueta of ["Inteligencia", "Resumen", "Contactos", "Llamadas", "Conversaciones", "Automatismos", "Calidad de voz", "Guion comercial", "Equipo", "Ajustes", "Estado"]) {
     await expect(page.getByRole("button", { name: new RegExp(etiqueta) })).toBeVisible();
   }
 });
@@ -194,4 +194,32 @@ test("la ficha no puede cambiar de empresa un contacto", async ({ request, baseU
   /* Sin sesión da 401; con ella daría 400 por no quedar ningún campo
      editable. Lo que no puede pasar nunca es un 200. */
   expect([400, 401, 403]).toContain(res.status());
+});
+
+/**
+ * Un agente no se puede poner en automático sin el canal que necesita.
+ *
+ * Es la única regla del módulo de automatismos que protege a alguien de
+ * verdad: dejar un agente en "hacerlo solo" cuando no puede ejecutar hace
+ * creer que algo está funcionando cuando no puede estarlo, y eso se descubre
+ * cuando un cliente se queja de que nadie le llamó.
+ */
+test("un agente sin canal no se puede poner en automático", async ({ request, baseURL }) => {
+  const res = await request.patch(`${baseURL}/api/portal/agentes`, {
+    headers: { Origin: baseURL },
+    data: { agenteId: "rescate", modo: "solo" },
+  });
+
+  /* Sin sesión, 401. Con ella y sin número, 409. Nunca 200. */
+  expect([401, 403, 409]).toContain(res.status());
+});
+
+/**
+ * La ficha de un contacto no se sirve a otra empresa.
+ */
+test("no se puede leer la ficha de un contacto ajeno", async ({ request, baseURL }) => {
+  const res = await request.get(
+    `${baseURL}/api/portal/contacto?id=00000000-0000-0000-0000-000000000000`
+  );
+  expect([401, 403, 404]).toContain(res.status());
 });

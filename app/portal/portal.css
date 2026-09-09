@@ -694,3 +694,130 @@
 @media (prefers-reduced-motion: reduce) {
   .iq-aviso, .iq-barra i { transition: none; }
 }
+
+/* ── Copiloto ─────────────────────────────────────────────────────────
+   Una caja de preguntar, no un chat. A propósito: un hilo de conversación
+   invita a charlar, y esto no conversa —contesta con lo que hay calculado y
+   se calla—. Sin historial tampoco hay forma de que arrastre un error de una
+   respuesta anterior a la siguiente. */
+.iq-copiloto {
+  margin-top: 14px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.iq-pregunta { display: flex; gap: 8px; flex-wrap: wrap; }
+.iq-pregunta input { flex: 1 1 260px; }
+
+.iq-sugerencias { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.iq-sugerencia {
+  padding: 5px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+.iq-sugerencia:hover { color: var(--text); border-color: rgba(255, 255, 255, 0.28); }
+
+.iq-respuesta {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  font-size: 14.5px;
+  line-height: 1.65;
+  animation: iqEntra 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.iq-fuentes { margin-top: 12px; display: flex; gap: 6px; flex-wrap: wrap; }
+.iq-fuentes span {
+  font-family: var(--font-display);
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+@keyframes iqEntra { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ── Agentes ──────────────────────────────────────────────────────── */
+
+.ag-lista { display: grid; gap: 12px; margin-top: 14px; }
+
+.ag-tarjeta {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.ag-tarjeta[data-bloqueado="1"] { background: transparent; border-style: dashed; }
+
+.ag-fila { display: flex; justify-content: space-between; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
+.ag-nombre { font-size: 15px; font-weight: 500; }
+.ag-que { margin: 6px 0 0; font-size: 13px; line-height: 1.55; color: var(--dim); max-width: 62ch; }
+.ag-cuando { margin: 6px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); max-width: 62ch; }
+
+.ag-modos { display: flex; gap: 4px; flex-shrink: 0; }
+.ag-modo {
+  padding: 7px 13px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+.ag-modo:hover:not(:disabled) { color: var(--text); border-color: rgba(255, 255, 255, 0.28); }
+.ag-modo[aria-pressed="true"] { background: #fff; color: #000; border-color: #fff; }
+.ag-modo:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.ag-bloqueo {
+  margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line);
+  font-size: 12.5px; color: var(--warn);
+}
+
+/* ── Ficha: recorrido y perfil ────────────────────────────────────── */
+
+.fc-perfil { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 14px; margin-top: 12px; }
+.fc-dato-lab { font-family: var(--font-display); font-size: 10.5px; letter-spacing: 0.06em; color: var(--muted); }
+.fc-dato-val { font-family: var(--font-display); font-size: 21px; margin-top: 5px; }
+
+.fc-nba {
+  margin-top: 12px; padding: 16px;
+  border: 1px solid var(--line); border-radius: 9px;
+  border-left: 3px solid var(--warn);
+  background: var(--panel);
+}
+.fc-nba[data-p="high"] { border-left-color: var(--bad); }
+.fc-nba[data-p="low"] { border-left-color: var(--muted); }
+.fc-nba-acc { font-family: var(--font-display); font-size: 13px; letter-spacing: 0.06em; }
+.fc-nba-motivo { margin: 8px 0 0; font-size: 13.5px; line-height: 1.55; }
+
+/* El recorrido. Línea vertical y un punto por hito: se lee de arriba abajo
+   sin tener que interpretar iconos. */
+.fc-recorrido { margin-top: 12px; border-left: 1px solid var(--line); padding-left: 18px; }
+.fc-hito { position: relative; padding: 12px 0; }
+.fc-hito::before {
+  content: ""; position: absolute; left: -23px; top: 17px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--muted); outline: 3px solid var(--bg);
+}
+.fc-hito[data-t="llamada"]::before { background: var(--ok); }
+.fc-hito[data-t="alta"]::before { background: #fff; }
+.fc-hito-cab { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.fc-hito-tit { font-size: 13.5px; font-weight: 500; }
+.fc-hito-cuando { font-family: var(--font-display); font-size: 10.5px; color: var(--muted); }
+.fc-hito-det { margin: 5px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--dim); }
+.fc-etiquetas { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 7px; }
+.fc-etiquetas span {
+  font-size: 11px; padding: 2px 7px; border-radius: 4px;
+  border: 1px solid var(--line); color: var(--muted);
+}

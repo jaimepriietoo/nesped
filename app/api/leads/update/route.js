@@ -14,8 +14,30 @@ export async function PATCH(req) {
     if (!hasRole(ctx.role, ["owner","admin","manager","agent"])) return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
  
     const body = await req.json();
-    const { leadId, ...updates } = body;
+    const { leadId } = body;
     if (!leadId) return Response.json({ success: false, message: "Falta leadId" }, { status: 400 });
+
+    /* Sólo estos campos se pueden tocar desde la ficha.
+   
+       Antes se hacía `const { leadId, ...updates } = body` y ese resto entero
+       iba al UPDATE. El filtro por client_id protegía QUÉ fila se actualiza,
+       pero no QUÉ columnas: bastaba con mandar client_id en el cuerpo para
+       mover un contacto a otra empresa, y con él su teléfono y su historial.
+       También se podían pisar campos que calcula el sistema, como el score. */
+    const CAMPOS_EDITABLES = new Set([
+      "status", "owner", "valor_estimado", "lost_reason",
+      "nombre", "telefono", "email", "ciudad", "necesidad",
+      "notes", "interes", "next_action", "next_action_priority",
+      "proxima_accion", "ultima_accion", "tags",
+    ]);
+
+    const updates = Object.fromEntries(
+      Object.entries(body).filter(([k]) => CAMPOS_EDITABLES.has(k))
+    );
+
+    if (!Object.keys(updates).length) {
+      return Response.json({ success: false, message: "Nada que actualizar" }, { status: 400 });
+    }
  
     const { data: lead, error } = await ctx.supabase
       .from("leads")

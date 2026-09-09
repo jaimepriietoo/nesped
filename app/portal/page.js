@@ -64,6 +64,18 @@ const PLAN_POR_DEFECTO = "starter";
    es lo que alguien viene a saber antes de ir a buscar nada. */
 const VISTA_DE_ENTRADA = "inteligencia";
 
+/* Motivos de pérdida. Lista corta a propósito: son los que un negocio puede
+   hacer algo al respecto, y una lista larga acaba en "otro" siempre. */
+const MOTIVOS_PERDIDA = [
+  ["precio", "Precio"],
+  ["competencia", "Se fue con otro"],
+  ["seguimiento", "Se enfrió por falta de seguimiento"],
+  ["tiempo", "Plazos"],
+  ["no_encaja", "No encajaba"],
+  ["sin_respuesta", "Dejó de contestar"],
+  ["otro", "Otro"],
+];
+
 function planDe(cliente) {
   const bruto = String(cliente?.plan || "").toLowerCase().trim();
   return PLANES[bruto] ? bruto : PLAN_POR_DEFECTO;
@@ -287,6 +299,7 @@ function FichaLead({ lead, usuarios, onCerrar, onCambiado }) {
   const [estado, setEstado] = useState(lead.status || "new");
   const [owner, setOwner] = useState(lead.owner || "");
   const [valor, setValor] = useState(lead.valor_estimado ?? "");
+  const [motivoPerdida, setMotivoPerdida] = useState(lead.lost_reason || "");
   const [nota, setNota] = useState("");
   const [comentario, setComentario] = useState("");
   const [recordatorio, setRecordatorio] = useState("");
@@ -362,6 +375,25 @@ function FichaLead({ lead, usuarios, onCerrar, onCambiado }) {
             onChange={(e) => setValor(e.target.value)}
           />
         </Campo>
+
+        {/* Sólo al marcarla como perdida. Es la única pregunta que convierte
+            una pérdida en algo que se puede aprender, y va con lista cerrada
+            en vez de texto libre porque veinte redacciones distintas de
+            "caro" no se pueden sumar después. */}
+        {estado === "lost" && (
+          <Campo label="¿Por qué se perdió?">
+            <select
+              className="pv3-input"
+              value={motivoPerdida}
+              onChange={(e) => setMotivoPerdida(e.target.value)}
+            >
+              <option value="">Sin especificar</option>
+              {MOTIVOS_PERDIDA.map(([clave, texto]) => (
+                <option key={clave} value={clave}>{texto}</option>
+              ))}
+            </select>
+          </Campo>
+        )}
       </div>
 
       <Accion
@@ -372,6 +404,9 @@ function FichaLead({ lead, usuarios, onCerrar, onCambiado }) {
             status: estado,
             owner: owner || null,
             valor_estimado: valor === "" ? null : Number(valor),
+            /* Se manda vacío si deja de estar perdida: un motivo de pérdida
+               colgando de una operación ganada descuadraría el análisis. */
+            lost_reason: estado === "lost" ? (motivoPerdida || null) : null,
           });
           onCambiado();
         }}
@@ -526,7 +561,7 @@ function Inteligencia({ datos }) {
      de que la llamada falle y no llegue nada. */
   if (!datos) return <Vacio>No hemos podido leer el estado de tus datos.</Vacio>;
 
-  const { fuentes = [], cobertura = {}, modulos = [], pendientes = [], titulares = [] } = datos;
+  const { fuentes = [], cobertura = {}, modulos = [], titulares = [] } = datos;
   const activos = modulos.filter((m) => m.disponible);
   const dormidos = modulos.filter((m) => !m.disponible);
   const total = cobertura.modulosTotales || 1;
@@ -601,14 +636,14 @@ function Inteligencia({ datos }) {
         {activos.length ? "Lo que falta para saber más" : "Lo que hace falta para empezar"}
       </h2>
       <div className="iq-rejilla">
-        {[...dormidos, ...pendientes].map((m) => (
+        {dormidos.map((m) => (
           <div className="iq-modulo" data-off="1" key={m.titulo}>
             <div className="iq-modulo-lab">{m.titulo.toUpperCase()}</div>
             <p className="iq-modulo-falta" style={{ marginTop: 14 }}>
               {m.falta}
             </p>
             <p className="iq-modulo-falta" style={{ marginTop: "auto", color: "var(--dim)" }}>
-              {m.porQue || m.comoSeDesbloquea}
+              {m.porQue}
             </p>
           </div>
         ))}

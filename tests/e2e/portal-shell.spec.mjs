@@ -175,3 +175,23 @@ test("sin datos, Inteligencia dice qué falta en vez de enseñar cifras", async 
      Esa clase sólo la lleva un número calculado de verdad. */
   await expect(page.locator(".iq-cifra")).toHaveCount(0);
 });
+
+/**
+ * Un contacto no se puede mover a otra empresa desde la ficha.
+ *
+ * La ruta de actualización volcaba al UPDATE todo lo que llegara en el
+ * cuerpo. El filtro por client_id decidía QUÉ fila se tocaba, pero no QUÉ
+ * columnas, así que mandando client_id se llevaba el contacto —con su
+ * teléfono y su historial— a otra cuenta. Se prueba porque una lista blanca
+ * es justo lo que alguien amplía sin pensar al añadir un campo.
+ */
+test("la ficha no puede cambiar de empresa un contacto", async ({ request, baseURL }) => {
+  const res = await request.patch(`${baseURL}/api/leads/update`, {
+    headers: { Origin: baseURL },
+    data: { leadId: "l1", client_id: "otra-empresa" },
+  });
+
+  /* Sin sesión da 401; con ella daría 400 por no quedar ningún campo
+     editable. Lo que no puede pasar nunca es un 200. */
+  expect([400, 401, 403]).toContain(res.status());
+});

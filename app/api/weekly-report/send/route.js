@@ -1,6 +1,7 @@
 import { getResend } from "@/lib/resend";
 import { getPortalContext } from "@/lib/portal-auth";
 import { getPaidLeadRows } from "@/lib/server/payments";
+import { remitenteNesped } from "@/lib/server/remitente.mjs";
  
 export async function POST() {
   try {
@@ -15,7 +16,7 @@ export async function POST() {
  
     const resend = getResend();
     await resend.emails.send({
-      from: "reports@nesped.com",
+      from: remitenteNesped(),
       to: client?.owner_email || ctx.userEmail,
       subject: `📈 Informe semanal — ${new Date().toLocaleDateString("es-ES")}`,
       html: `

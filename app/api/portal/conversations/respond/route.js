@@ -2,6 +2,7 @@ import { getResend } from "@/lib/resend";
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
 import { requireSameOrigin } from "@/lib/server/security";
 import { sendTelnyxSms, sendTelnyxWhatsApp } from "@/lib/server/telnyx";
+import { remitenteNesped } from "@/lib/server/remitente.mjs";
 
 function normalizePhone(value = "") {
   return String(value || "").replace(/\s+/g, "").trim();
@@ -95,7 +96,7 @@ export async function POST(req) {
 
       const resend = getResend();
       const result = await resend.emails.send({
-        from: process.env.RESEND_FROM || "NESPED <onboarding@updates.nesped.com>",
+        from: remitenteNesped(),
         to: [lead.email],
         subject: subject || "Seguimos con tu solicitud",
         text: message,

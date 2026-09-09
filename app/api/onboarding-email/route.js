@@ -1,5 +1,6 @@
 import { getResend } from "@/lib/resend";
 import { requireInternalRequest } from "@/lib/server/internal-api";
+import { remitenteNesped } from "@/lib/server/remitente.mjs";
 
 /**
  * Correo de bienvenida a un usuario recién creado.
@@ -54,7 +55,7 @@ export async function POST(req) {
     const correo = escaparHtml(email);
 
     const { error } = await resend.emails.send({
-      from: "Nesped <onboarding@updates.nesped.com>",
+      from: remitenteNesped(),
       to: [email],
       subject: `Tu acceso a ${clientName}`,
       html: `

@@ -17,9 +17,12 @@ const BASE = process.env.BASE || "http://localhost:3100";
 let fallos = 0;
 const resultados = [];
 
+/* El detalle explica POR QUÉ ha fallado algo, así que sólo se enseña cuando
+   falla. Enseñándolo siempre, una comprobación superada salía acompañada del
+   motivo por el que no lo estaba, que se lee justo al revés de lo que pasa. */
 function comprobar(titulo, ok, detalle = "") {
   if (!ok) fallos += 1;
-  resultados.push(`${ok ? "✓" : "✗"} ${titulo}${detalle ? `\n    → ${detalle}` : ""}`);
+  resultados.push(`${ok ? "✓" : "✗"} ${titulo}${!ok && detalle ? `\n    → ${detalle}` : ""}`);
 }
 
 /* ── Cabeceras ─────────────────────────────────────────────────────── */
@@ -137,8 +140,20 @@ if (fs.existsSync(".env.local")) {
   const anon = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (url && anon) {
-    // La clave anónima viaja en el navegador de cualquier visitante: lo que
-    // ella pueda leer, lo puede leer todo el mundo.
+    /* La clave anónima viaja en el navegador de cualquier visitante: lo que
+       ella pueda tocar, lo puede tocar todo el mundo.
+
+       Se exige "permiso denegado", no "cero filas". Devolver cero filas
+       significa que la petición se aceptó y RLS la filtró, y eso deja el
+       acceso sujeto por un solo hilo: basta una política permisiva —el panel
+       de Supabase la ofrece a un clic— para que la misma petición empiece a
+       devolver todo. Denegado por permisos es una capa más abajo. */
+    const denegado = (cuerpo) =>
+      cuerpo && !Array.isArray(cuerpo) &&
+      /permission denied|does not exist|not find|PGRST(202|205|301)/i.test(
+        `${cuerpo.code || ""} ${cuerpo.message || ""} ${cuerpo.details || ""}`
+      );
+
     for (const objeto of [
       "clients", "leads", "calls", "users", "portal_users",
       "audit_logs", "weekly_reports", "client_dashboard_summary",
@@ -148,8 +163,33 @@ if (fs.existsSync(".env.local")) {
       });
       const cuerpo = await r.json().catch(() => null);
       const filas = Array.isArray(cuerpo) ? cuerpo.length : 0;
-      comprobar(`${objeto} no es legible con la clave pública`, filas === 0,
-        filas > 0 ? `¡devolvió ${filas} fila(s)!` : "");
+      comprobar(
+        `${objeto}: la clave pública no tiene ni permiso`,
+        denegado(cuerpo),
+        filas > 0 ? `¡devolvió ${filas} fila(s)!` : "la petición se acepta y sólo la filtra RLS"
+      );
+    }
+
+    // Escritura: es la que hace daño de verdad.
+    const alta = await fetch(`${url}/rest/v1/clients`, {
+      method: "POST",
+      headers: { apikey: anon, Authorization: `Bearer ${anon}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ id: `revision-${Date.now()}`, name: "revisión" }),
+    });
+    comprobar("la clave pública no puede dar de alta clientes", alta.status >= 400,
+      `devolvió ${alta.status}`);
+
+    /* Las funciones nacen con EXECUTE para PUBLIC, que incluye a anon.
+       Revocárselo a anon no hace nada, y es fácil creer que sí. */
+    for (const fn of ["calculate_lead_score", "create_lead_event"]) {
+      const r = await fetch(`${url}/rest/v1/rpc/${fn}`, {
+        method: "POST",
+        headers: { apikey: anon, Authorization: `Bearer ${anon}`, "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const cuerpo = await r.json().catch(() => null);
+      comprobar(`${fn}() no se puede llamar desde fuera`, denegado(cuerpo),
+        `devolvió ${r.status}`);
     }
   }
 }

@@ -1,6 +1,5 @@
-import { getResend } from "@/lib/resend";
+import { enviarCorreo } from "@/lib/server/correo";
 import { requireInternalRequest } from "@/lib/server/internal-api";
-import { remitenteNesped } from "@/lib/server/remitente.mjs";
 
 /**
  * Correo de bienvenida a un usuario recién creado.
@@ -39,7 +38,6 @@ export async function POST(req) {
     const errorInterno = requireInternalRequest(req);
     if (errorInterno) return errorInterno;
 
-    const resend = getResend();
     const { email, clientName, password } = await req.json().catch(() => ({}));
 
     if (!email || !clientName) {
@@ -54,8 +52,10 @@ export async function POST(req) {
     const nombre = escaparHtml(clientName);
     const correo = escaparHtml(email);
 
-    const { error } = await resend.emails.send({
-      from: remitenteNesped(),
+    /* Se manda al dar de alta a alguien: hay una persona esperando a que la
+       pantalla diga que ha salido. */
+    await enviarCorreo({
+      quienEspera: "persona",
       to: [email],
       subject: `Tu acceso a ${clientName}`,
       html: `
@@ -78,10 +78,9 @@ export async function POST(req) {
       `,
     });
 
-    if (error) {
-      return Response.json({ success: false, message: error.message }, { status: 500 });
-    }
-
+    /* El fallo del proveedor ya no se devuelve aquí: lo recoge el catch, que
+       contesta sin decir qué proveedor falla ni por qué. Eso era información
+       gratis para quien estuviera probando la ruta. */
     return Response.json({ success: true });
   } catch (error) {
     console.error("POST /api/onboarding-email error:", error);

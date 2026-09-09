@@ -1,8 +1,7 @@
-import { getResend } from "@/lib/resend";
+import { enviarCorreo } from "@/lib/server/correo";
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
 import { requireSameOrigin } from "@/lib/server/security";
 import { sendTelnyxSms, sendTelnyxWhatsApp } from "@/lib/server/telnyx";
-import { remitenteNesped } from "@/lib/server/remitente.mjs";
 
 function normalizePhone(value = "") {
   return String(value || "").replace(/\s+/g, "").trim();
@@ -94,19 +93,16 @@ export async function POST(req) {
         );
       }
 
-      const resend = getResend();
-      const result = await resend.emails.send({
-        from: remitenteNesped(),
+      /* Hay alguien pulsando el botón y esperando a ver si sale. Se intenta
+         aunque el circuito de Resend esté abierto. */
+      const id = await enviarCorreo({
+        quienEspera: "persona",
         to: [lead.email],
         subject: subject || "Seguimos con tu solicitud",
         text: message,
       });
 
-      if (result?.error) {
-        throw new Error(result.error.message || "No se pudo enviar el email");
-      }
-
-      delivery = { id: result?.data?.id || "", channel: "email", to: lead.email };
+      delivery = { id, channel: "email", to: lead.email };
     } else {
       return Response.json(
         { success: false, message: "Canal no soportado" },

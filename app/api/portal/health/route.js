@@ -88,30 +88,30 @@ async function handleGet() {
     const envReport = buildEnvReadinessReport();
     const aiEnv = getFeatureReport(envReport, "ai");
     const billingEnv = getFeatureReport(envReport, "billing");
-    const hasTelnyxVoice = Boolean(
-      process.env.TELNYX_API_KEY &&
-        process.env.TELNYX_PHONE_NUMBER &&
-        (process.env.TELNYX_TEXML_APPLICATION_ID ||
-          process.env.TELNYX_APPLICATION_SID)
-    );
-    const hasTelnyxWhatsApp = Boolean(
-      process.env.TELNYX_API_KEY &&
-        (process.env.TELNYX_WHATSAPP_NUMBER || process.env.TELNYX_PHONE_NUMBER)
-    );
-    const hasVoiceBackend = Boolean(process.env.BASE_URL);
-    const hasClientVoiceNumber = Boolean(client?.twilio_number);
-    const hasElevenLabsHybrid = Boolean(
+    const hayVozConfigurada = Boolean(
+    /* La voz la lleva ElevenLabs sobre un número de Twilio importado en su
+       panel. Hacen falta las tres: sin el id del número no hay línea. */
+    process.env.ELEVENLABS_API_KEY &&
       process.env.ELEVENLABS_AGENT_ID &&
-        process.env.INTERNAL_API_TOKEN &&
-        process.env.TELNYX_PHONE_NUMBER &&
-        hasVoiceBackend &&
-        hasClientVoiceNumber
+      process.env.ELEVENLABS_PHONE_NUMBER_ID
+  );
+    const hayWhatsApp = Boolean(
+      process.env.TWILIO_ACCOUNT_SID &&
+        process.env.TWILIO_AUTH_TOKEN &&
+        (process.env.TWILIO_WHATSAPP_NUMBER || process.env.TWILIO_PHONE_NUMBER)
     );
-    const hasLegacyRealtimeVoice = Boolean(
-      hasVoiceBackend &&
-        hasTelnyxVoice &&
-        hasClientVoiceNumber &&
-        process.env.OPENAI_API_KEY
+    const hasClientVoiceNumber = Boolean(client?.twilio_number);
+
+    /* Ya no hay dos modos de telefonía que comparar. Antes había el camino
+       viejo —Telnyx pasando audio a OpenAI en tiempo real— y el híbrido con
+       ElevenLabs. El viejo se ha retirado: la conversación la lleva ElevenLabs
+       sobre un número de Twilio, y punto. */
+    const hayTelefonia = Boolean(
+      process.env.ELEVENLABS_API_KEY &&
+        process.env.ELEVENLABS_AGENT_ID &&
+        process.env.ELEVENLABS_PHONE_NUMBER_ID &&
+        process.env.INTERNAL_API_TOKEN &&
+        hasClientVoiceNumber
     );
 
     const services = {
@@ -128,23 +128,20 @@ async function handleGet() {
           : "Falta OPENAI_API_KEY.",
       },
       telephony: {
-        ready: Boolean(hasLegacyRealtimeVoice || hasElevenLabsHybrid),
-        level:
-          hasLegacyRealtimeVoice || hasElevenLabsHybrid ? "healthy" : "warning",
-        detail:
-          hasElevenLabsHybrid
-            ? "Telefonia preparada en modo hibrido: Telnyx + ElevenLabs + Nesped."
-            : hasLegacyRealtimeVoice
-              ? "Telefonia preparada con Telnyx + OpenAI realtime."
-              : "Falta numero de voz del cliente, BASE_URL o configuracion base de Telnyx / ElevenLabs.",
+        ready: hayTelefonia,
+        level: hayTelefonia ? "healthy" : "warning",
+        detail: hayTelefonia
+          ? "Telefonía lista: ElevenLabs atiende las llamadas sobre Twilio."
+          : !hasClientVoiceNumber
+            ? "Falta el número de voz de la empresa."
+            : "Falta conectar el número de Twilio al agente de ElevenLabs.",
       },
       whatsapp: {
-        ready: hasTelnyxWhatsApp,
-        level: hasTelnyxWhatsApp ? "healthy" : "warning",
-        detail:
-          hasTelnyxWhatsApp
-            ? "Canal WhatsApp listo a nivel de credenciales Telnyx."
-            : "Faltan credenciales base para WhatsApp/Telnyx.",
+        ready: hayWhatsApp,
+        level: hayWhatsApp ? "healthy" : "warning",
+        detail: hayWhatsApp
+          ? "Canal de WhatsApp listo con las credenciales de Twilio."
+          : "Faltan credenciales de Twilio para WhatsApp.",
       },
       billing: {
         ready: Boolean(client?.stripe_customer_id || billingRes),

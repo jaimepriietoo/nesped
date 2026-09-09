@@ -6,9 +6,9 @@ import {
   updateLeadDirect,
 } from "@/lib/server/automation-service";
 import {
-  parseTelnyxMessagingWebhook,
-  verifyTelnyxWebhook,
-} from "@/lib/server/telnyx";
+  leerWebhookDeMensajeria,
+  verificarWebhookTwilio,
+} from "@/lib/server/twilio";
 import { toE164 } from "@/lib/server/phone";
 
 let openai = null;
@@ -81,24 +81,25 @@ const PAYMENT_URL = process.env.PAYMENT_URL || "";
 // enrutado de voz.
 const normalizePhone = toE164;
 
-function isValidTelnyxWebhook(req, rawPayload = "") {
-  const sharedSecret = String(process.env.TELNYX_WEBHOOK_SECRET || "").trim();
-  const providedSecret =
-    String(new URL(req.url).searchParams.get("secret") || "").trim() ||
-    String(req.headers.get("x-nesped-provider-secret") || "").trim();
+/**
+ * ¿Viene este webhook de Twilio de verdad?
+ *
+ * Twilio firma con HMAC-SHA1 sobre la URL completa más los campos del cuerpo
+ * ordenados. Para que la firma cuadre, la URL tiene que ser EXACTAMENTE la que
+ * Twilio tiene configurada, incluidos el esquema y el dominio: detrás de un
+ * proxy, `req.url` puede decir http donde el mundo ve https, y entonces no
+ * cuadra nunca. Por eso se reconstruye desde las cabeceras de reenvío.
+ */
+function esWebhookDeTwilio(req, campos = {}) {
+  const firma = req.headers.get("x-twilio-signature") || "";
+  if (!firma) return false;
 
-  if (sharedSecret && providedSecret && sharedSecret === providedSecret) {
-    return true;
-  }
+  const url = new URL(req.url);
+  const host = req.headers.get("x-forwarded-host") || url.host;
+  const esquema = req.headers.get("x-forwarded-proto") || url.protocol.replace(":", "");
+  const urlPublica = `${esquema}://${host}${url.pathname}${url.search}`;
 
-  const signature = req.headers.get("telnyx-signature-ed25519") || "";
-  const timestamp = req.headers.get("telnyx-timestamp") || "";
-
-  return verifyTelnyxWebhook({
-    payload: rawPayload,
-    signature,
-    timestamp,
-  });
+  return verificarWebhookTwilio({ url: urlPublica, params: campos, signature: firma });
 }
 
 function safeJsonParse(text, fallback) {
@@ -641,24 +642,25 @@ function selectProductTierFromAnalysis(lead, analysis) {
 
 export async function POST(req) {
   try {
+    /* Twilio manda un formulario, no JSON, y el mensaje ES el webhook: no hay
+       un `event_type` que mirar como en Telnyx. Lo que sí hay son avisos de
+       estado de mensajes que hemos enviado nosotros, y esos llegan por la
+       misma puerta con `Body` vacío. */
     const rawPayload = await req.text();
-    if (!isValidTelnyxWebhook(req, rawPayload)) {
+    const campos = Object.fromEntries(new URLSearchParams(rawPayload));
+
+    if (!esWebhookDeTwilio(req, campos)) {
       return NextResponse.json(
         { success: false, message: "Firma de webhook inválida" },
         { status: 403 }
       );
     }
 
-    const event = safeJsonParse(rawPayload, null);
-    if (!event?.data) {
-      return NextResponse.json(
-        { success: false, message: "Payload de webhook inválido" },
-        { status: 400 }
-      );
-    }
+    const parsed = leerWebhookDeMensajeria(campos);
 
-    const parsed = parseTelnyxMessagingWebhook(event);
-    if (parsed.eventType !== "message.received") {
+    /* Sin texto es un aviso de estado, no un mensaje de nadie. Se contesta
+       bien para que Twilio no lo reintente. */
+    if (!String(parsed.text || "").trim()) {
       return NextResponse.json({ success: true, ignored: true });
     }
 

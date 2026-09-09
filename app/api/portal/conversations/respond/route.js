@@ -1,7 +1,7 @@
 import { enviarCorreo } from "@/lib/server/correo";
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
 import { requireSameOrigin } from "@/lib/server/security";
-import { sendTelnyxSms, sendTelnyxWhatsApp } from "@/lib/server/telnyx";
+import { enviarSms, enviarWhatsApp } from "@/lib/server/twilio";
 
 function normalizePhone(value = "") {
   return String(value || "").replace(/\s+/g, "").trim();
@@ -61,7 +61,7 @@ export async function POST(req) {
     let delivery = null;
 
     if (channel === "sms") {
-      const sms = await sendTelnyxSms({
+      const sms = await enviarSms({
         text: message,
         to: normalizePhone(lead.telefono),
       });
@@ -69,11 +69,11 @@ export async function POST(req) {
         sid: sms?.id || sms?.message_id || "",
         messageId: sms?.id || sms?.message_id || "",
         channel: "sms",
-        provider: "telnyx",
+        provider: "twilio",
         to: normalizePhone(lead.telefono),
       };
     } else if (channel === "whatsapp") {
-      const wa = await sendTelnyxWhatsApp({
+      const wa = await enviarWhatsApp({
         text: message,
         to: normalizePhone(lead.telefono),
         webhookUrl: "/api/whatsapp/webhook",
@@ -82,7 +82,7 @@ export async function POST(req) {
         sid: wa?.id || wa?.message_id || "",
         messageId: wa?.id || wa?.message_id || "",
         channel: "whatsapp",
-        provider: "telnyx",
+        provider: "twilio",
         to: normalizePhone(lead.telefono),
       };
     } else if (channel === "email") {

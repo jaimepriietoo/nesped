@@ -1,8 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import consumoVoz from "@/lib/server/consumo-voz.cjs";
-
-const { caracteresDelAgente, ETIQUETA_AGENTE } = consumoVoz;
+import { caracteresDelAgente, ETIQUETA_AGENTE } from "@/lib/server/consumo-voz";
 
 /**
  * El contador de caracteres de voz sintética.

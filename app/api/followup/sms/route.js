@@ -1,5 +1,5 @@
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
-import { sendTelnyxSms } from "@/lib/server/telnyx";
+import { enviarSms } from "@/lib/server/twilio";
 
 function normalizePhone(value) {
   if (!value) return "";
@@ -60,7 +60,7 @@ export async function POST(req) {
       );
     }
 
-    const sms = await sendTelnyxSms({
+    const sms = await enviarSms({
       to: cleanTo,
       text: String(message).trim(),
     });
@@ -103,7 +103,7 @@ export async function POST(req) {
         to: cleanTo,
         template_id: templateId,
         sent_by: ctx.currentUser?.full_name || ctx.userEmail || "portal_user",
-        provider: "telnyx",
+        provider: "twilio",
       },
     });
 
@@ -119,7 +119,7 @@ export async function POST(req) {
         message_id: messageId,
         template_id: templateId,
         preview: String(message).slice(0, 160),
-        provider: "telnyx",
+        provider: "twilio",
       },
     });
 

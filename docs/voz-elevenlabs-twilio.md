@@ -1,15 +1,40 @@
-# ElevenLabs Hybrid Setup
+# La voz de Nesped: ElevenLabs sobre Twilio
 
-Objetivo: que `Telnyx` lleve el numero, `ElevenLabs` lleve la voz y `Nesped` siga guardando contexto, leads y llamadas.
+Quién hace qué: **Twilio** pone el número, **ElevenLabs Agents** lleva la
+conversación entera, y **Nesped** guarda contexto, contactos y llamadas.
 
-## Arquitectura
+## Qué se retiró, y por qué importa
 
-- `Telnyx` recibe la llamada del numero real.
-- `ElevenLabs Agents` atiende la conversacion por SIP trunk.
-- `Nesped` expone herramientas HTTP para:
-  - cargar contexto de cliente y lead
-  - crear o actualizar el lead durante la llamada
-  - persistir transcript, resumen y resultado al final
+Hasta ahora la conversación la hacíamos nosotros: Telnyx recibía la llamada,
+mandaba el audio por un WebSocket al servidor de voz de Nesped, ese servidor lo
+pasaba a OpenAI Realtime y devolvía la voz. Eran unas mil ochocientas líneas
+puenteando audio en tiempo real, que era la parte más frágil del producto.
+
+Eso ya no existe. ElevenLabs tiene integración nativa con Twilio: se le importa
+el número y se encarga del audio de punta a punta. `voice-server.js` pasó de
+2.109 líneas a unas 300, y lo único que le queda es empujar la cola de trabajos
+—que hace falta porque los cron de Vercel en plan Hobby corren una vez al día—.
+
+Telnyx desapareció del proyecto. También llevaba los SMS y los WhatsApp, y esos
+pasaron a Twilio (`lib/server/twilio.js`).
+
+## Lo que falta para que suene el teléfono
+
+**No hay ningún número.** Comprobado el 2026-09-09: la cuenta de Twilio está
+activa y es de pago pero tiene cero líneas, y la de Telnyx también cero. El
+agente `Nesped · Recepción` existe en ElevenLabs y no tiene número asignado.
+
+Hasta que eso se resuelva, no entra ni sale ninguna llamada. Los pasos:
+
+1. Comprar un número en Twilio con capacidad de voz. Para España, uno `+34`.
+2. En ElevenLabs, **Phone Numbers → Import from Twilio**, con el SID y el token
+   de la cuenta. ElevenLabs devuelve un `phone_number_id`.
+3. Asignar ese número al agente `Nesped · Recepción`.
+4. Poner `ELEVENLABS_PHONE_NUMBER_ID` en Vercel con ese id. Sin él, la llamada
+   de demostración contesta 503 y el panel de salud marca la telefonía en
+   amarillo, que es lo correcto: no está lista.
+5. Actualizar `voiceNumber` en `lib/clients.js` y el `twilio_number` de cada
+   empresa, que hoy apuntan a un `+34983460825` que ya no es de nadie.
 
 ## Variables de entorno
 
@@ -17,29 +42,36 @@ En `Vercel`:
 
 ```env
 INTERNAL_API_TOKEN=...
-ELEVENLABS_AGENT_ID=...
-ELEVENLABS_WEBHOOK_SECRET=...
 ELEVENLABS_API_KEY=...
-TELNYX_PHONE_NUMBER=+34983460825
-BASE_URL=https://nesped-production.up.railway.app
+ELEVENLABS_AGENT_ID=...
+ELEVENLABS_PHONE_NUMBER_ID=...      # sale al importar el número
+ELEVENLABS_WEBHOOK_SECRET=...
+TWILIO_ACCOUNT_SID=...
+TWILIO_AUTH_TOKEN=...
+TWILIO_PHONE_NUMBER=+34...
+TWILIO_WHATSAPP_NUMBER=+34...       # sólo si se usa WhatsApp
 NEXT_PUBLIC_APP_URL=https://nesped.com
 ```
 
-En `Railway`:
+En `Railway` (el servicio de fondo, que ya no atiende llamadas):
 
 ```env
 INTERNAL_API_TOKEN=...
-ELEVENLABS_WEBHOOK_SECRET=...
-TELNYX_PHONE_NUMBER=+34983460825
-BASE_URL=https://nesped-production.up.railway.app
+NEXT_PUBLIC_APP_URL=https://nesped.com
+SUPABASE_URL=...
+SUPABASE_SERVICE_ROLE_KEY=...
 ```
 
-Recuerda tambien:
+## Webhook de WhatsApp
 
-- `TELNYX_ACCOUNT_SID`
-- `TELNYX_TEXML_APPLICATION_ID`
+En la consola de Twilio, el número de WhatsApp apunta a:
 
-Siguen siendo utiles si quieres mantener la llamada demo saliente actual por TeXML.
+`https://nesped.com/api/whatsapp/webhook`
+
+Nesped comprueba la firma `X-Twilio-Signature` con HMAC-SHA1 sobre la URL
+completa y los campos del cuerpo. Si el número está detrás de un proxy que
+cambia el esquema, la firma no cuadrará: la ruta reconstruye la URL pública
+desde `x-forwarded-proto` y `x-forwarded-host` precisamente por eso.
 
 ## Endpoints nuevos de Nesped
 
@@ -118,7 +150,7 @@ Respuesta util:
 Uso:
 
 - configurar en `Workspace Settings > Webhooks > post_call_transcription`
-- el payload final guarda la llamada en `calls`
+- el payload final guarda la llamada en `calls` y anota el consumo de la empresa
 - y deja evento de lead + audit log
 
 ## Configuracion en ElevenLabs
@@ -219,28 +251,33 @@ https://nesped.com/api/voice/elevenlabs/post-call?secret=TU_ELEVENLABS_WEBHOOK_S
 
 Usa el mismo secreto que guardes como `ELEVENLABS_WEBHOOK_SECRET` en tus entornos.
 
-## Configuracion en Telnyx
+## Conectar el número de Twilio
 
-No uses TeXML para la llamada entrante si quieres el hibrido completo.
+ElevenLabs importa números de Twilio de forma nativa: no hace falta SIP
+trunking ni configurar TeXML ni webhooks de voz en Twilio. ElevenLabs se queda
+con el número y atiende la llamada.
 
-Sigue la guia oficial de SIP trunking de ElevenLabs para Telnyx:
+En ElevenLabs: **Phone Numbers → Import from Twilio**, con el SID de la cuenta
+y el auth token. Después se asigna el número al agente `Nesped · Recepción`.
 
-- crea una `SIP Connection` en Telnyx
-- tipo `FQDN`
-- FQDN destino: `sip.rtc.elevenlabs.io`
-- `Destination Number Format`: `+E.164`
-- `SIP Transport Protocol`: `TCP`
-- asigna el numero `+34983460825` a esa SIP connection
+Guía oficial:
 
-Guia oficial:
+- `https://elevenlabs.io/docs/agents-platform/phone-numbers/twilio-integration`
 
-- `https://elevenlabs.io/docs/eleven-agents/phone-numbers/telephony/telnyx`
+Lo que devuelve la importación es un `phone_number_id`. Ese id es el que va en
+`ELEVENLABS_PHONE_NUMBER_ID`, y es lo que usa `/api/demo-call` para lanzar la
+llamada de prueba desde la portada.
 
-## Flujo recomendado
+## El recorrido completo de una llamada
 
-1. El numero se activa en Telnyx.
-2. Conectas Telnyx a ElevenLabs por SIP.
-3. El agente de ElevenLabs llama a `load_call_context`.
-4. Si detecta oportunidad, llama a `upsert_call_lead`.
-5. Al final, ElevenLabs manda `post_call_transcription`.
-6. Nesped guarda la llamada y el portal la muestra en `Voice Center`.
+1. Alguien marca el número de Twilio.
+2. ElevenLabs coge la llamada; Twilio sólo pone la línea.
+3. El agente llama a `load_call_context` y sabe de qué empresa es y si quien
+   llama ya era un contacto.
+4. Si aparece una oportunidad, llama a `upsert_call_lead` y el contacto se crea
+   o se actualiza mientras se habla.
+5. Al colgar, ElevenLabs manda `post_call_transcription`.
+6. Nesped guarda la llamada, apunta el consumo de la empresa y el portal la
+   enseña en Calidad de voz.
+
+Nesped no toca el audio en ningún momento del recorrido.

@@ -2,10 +2,7 @@ import { getSupabase } from "@/lib/supabase";
 import { ensureDemoWorkspace, isDemoClientId } from "@/lib/clients";
 import { logEvent, observeRoute } from "@/lib/server/observability.mjs";
 import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
-import {
-  getTelnyxVoiceConfig,
-  hasTelnyxVoiceConfig,
-} from "@/lib/server/telnyx";
+import { conCortacircuitos, noEsDelProveedor } from "@/lib/server/cortacircuitos";
 
 function normalizePhone(value = "") {
   return String(value || "").replace(/[^\d+]/g, "").trim();
@@ -16,75 +13,87 @@ function isValidPhone(value = "") {
   return normalized.length >= 9 && normalized.length <= 16;
 }
 
-async function startTelnyxDemoCall({
-  telefono,
-  clientId,
-  leadId,
-  cleanBaseUrl,
-}) {
-  const cfg = getTelnyxVoiceConfig();
-  const secretPart = cfg.webhookSecret
-    ? `&secret=${encodeURIComponent(cfg.webhookSecret)}`
-    : "";
-  const recordingCallback = `${cleanBaseUrl}/recording-status?provider=telnyx&client_id=${encodeURIComponent(
-    clientId
-  )}${leadId ? `&lead_id=${encodeURIComponent(leadId)}` : ""}${secretPart}`;
-  const voiceUrl = `${cleanBaseUrl}/telnyx/voice?client_id=${encodeURIComponent(
-    clientId
-  )}${secretPart}`;
-
-  const response = await fetch(
-    `https://api.telnyx.com/v2/texml/Accounts/${encodeURIComponent(
-      cfg.accountSid
-    )}/Calls`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${cfg.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        ApplicationSid: cfg.applicationId,
-        To: telefono,
-        From: cfg.phoneNumber,
-        Url: voiceUrl,
-        UrlMethod: "POST",
-        Record: true,
-        RecordingChannels: "mono",
-        RecordingStatusCallback: recordingCallback,
-        RecordingStatusCallbackMethod: "POST",
-        RecordingStatusCallbackEvent: "completed",
-        SendRecordingUrl: true,
-        TimeLimit: 600,
-        Timeout: 30,
-        StatusCallback: recordingCallback,
-        StatusCallbackMethod: "POST",
-        StatusCallbackEvent: "answered completed",
-      }),
-    }
-  );
-
-  const payload = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    const message =
-      payload?.errors?.[0]?.detail ||
-      payload?.message ||
-      "Error iniciando llamada Telnyx";
-    throw new Error(message);
-  }
-
+/**
+ * Configuración de la llamada saliente de demostración.
+ *
+ * Antes esto lo hacía Telnyx con TeXML: Nesped lanzaba la llamada, Telnyx
+ * pedía instrucciones a nuestro servidor de voz y ese servidor puenteaba el
+ * audio contra OpenAI en tiempo real.
+ *
+ * Ahora la llamada la lanza ElevenLabs sobre el número de Twilio que tenga
+ * conectado, y la conversación entera es suya. Nesped sólo dice a quién llamar.
+ */
+function configuracionDeVoz() {
+  const limpio = (v) => String(v || "").trim();
   return {
-    provider: "telnyx",
-    callSid:
-      payload?.call_sid ||
-      payload?.CallSid ||
-      payload?.sid ||
-      payload?.data?.call_control_id ||
-      payload?.data?.call_session_id ||
-      "",
-    raw: payload,
+    apiKey: limpio(process.env.ELEVENLABS_API_KEY),
+    agentId: limpio(process.env.ELEVENLABS_AGENT_ID),
+    /* El identificador que ElevenLabs da al número importado de Twilio. No es
+       el número: es su id dentro de ElevenLabs, y sale al conectarlo. */
+    phoneNumberId: limpio(process.env.ELEVENLABS_PHONE_NUMBER_ID),
   };
+}
+
+function hayVozConfigurada() {
+  const c = configuracionDeVoz();
+  return Boolean(c.apiKey && c.agentId && c.phoneNumberId);
+}
+
+async function lanzarLlamadaDeDemostracion({ telefono, clientId, leadId }) {
+  const cfg = configuracionDeVoz();
+
+  return conCortacircuitos({ proveedor: "elevenlabs", quienEspera: "persona" }, async () => {
+    const respuesta = await fetch(
+      "https://api.elevenlabs.io/v1/convai/twilio/outbound-call",
+      {
+        method: "POST",
+        headers: {
+          "xi-api-key": cfg.apiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          agent_id: cfg.agentId,
+          agent_phone_number_id: cfg.phoneNumberId,
+          to_number: telefono,
+          /* Estas variables las lee el prompt del agente. Es lo que hace que
+             la llamada de demostración suene a la empresa correcta y no a una
+             genérica. */
+          conversation_initiation_client_data: {
+            dynamic_variables: {
+              client_id: clientId,
+              lead_id: leadId || "",
+              es_demostracion: "true",
+            },
+          },
+        }),
+        signal: AbortSignal.timeout(30_000),
+      }
+    );
+
+    const payload = await respuesta.json().catch(() => ({}));
+
+    if (respuesta.ok) {
+      return {
+        provider: "elevenlabs",
+        callSid: payload?.conversation_id || payload?.callSid || "",
+        raw: payload,
+      };
+    }
+
+    const error = new Error(
+      payload?.detail?.message || payload?.detail || payload?.message ||
+        `ElevenLabs devolvió ${respuesta.status}`
+    );
+    error.estado = respuesta.status;
+
+    /* Un número mal escrito o un agente que no existe son culpa nuestra, no
+       una caída de ElevenLabs. Contarlo abriría el circuito por datos malos. */
+    if (respuesta.status >= 400 && respuesta.status < 500 && respuesta.status !== 429) {
+      throw noEsDelProveedor(error);
+    }
+
+    throw error;
+  });
 }
 
 async function handlePost(req) {
@@ -132,18 +141,6 @@ async function handlePost(req) {
     });
     if (phoneRateLimitError) return phoneRateLimitError;
 
-    const cleanBaseUrl = (process.env.BASE_URL || "").replace(/\/+$/, "");
-
-    if (!cleanBaseUrl) {
-      return Response.json(
-        {
-          success: false,
-          message: "La infraestructura de voz no está configurada correctamente",
-        },
-        { status: 500 }
-      );
-    }
-
     const supabase = getSupabase();
 
     if (isDemoClientId(clientId)) {
@@ -163,23 +160,20 @@ async function handlePost(req) {
       }
     }
 
-    if (!hasTelnyxVoiceConfig()) {
+    if (!hayVozConfigurada()) {
+      /* Falta el número. Se dice claro y sin detalles de proveedor: quien
+         pulsa el botón en la web no tiene por qué enterarse de con quién
+         trabajamos ni de qué variable falta. */
       return Response.json(
         {
           success: false,
-          message:
-            "Telnyx no está configurado correctamente para lanzar la llamada",
+          message: "Las llamadas de prueba todavía no están disponibles.",
         },
-        { status: 500 }
+        { status: 503 }
       );
     }
 
-    const result = await startTelnyxDemoCall({
-      telefono,
-      clientId,
-      leadId,
-      cleanBaseUrl,
-    });
+    const result = await lanzarLlamadaDeDemostracion({ telefono, clientId, leadId });
 
     return Response.json({
       success: true,

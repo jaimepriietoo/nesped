@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requirePortalRoleOrInternal } from "@/lib/server/security";
+import { requireInternalRequest } from "@/lib/server/internal-api";
 
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 
@@ -144,9 +144,21 @@ async function patchLead(leadId, changes) {
   return await res.json();
 }
 
+/*
+ * Tarea de sistema: sólo se lanza desde dentro, con el token interno.
+ *
+ * Antes valía también una sesión de portal con rol owner, admin o manager, y
+ * eso era un problema serio: estas tareas recorren los contactos de TODAS las
+ * empresas —getAllLeadsForAutomation() no filtra por cliente— y desde ahí
+ * mandan mensajes, hacen llamadas y escriben en sus fichas.
+ *
+ * O sea que cualquier cliente podía disparar mensajería saliente a los
+ * contactos de todos los demás. No hay ninguna pantalla que las llame: son
+ * trabajos programados, y como tales se cierran.
+ */
 export async function POST(req) {
-  const access = await requirePortalRoleOrInternal(req);
-  if (!access.ok) return access.response;
+  const errorInterno = requireInternalRequest(req);
+  if (errorInterno) return errorInterno;
 
   try {
     const overview = await getOverview();

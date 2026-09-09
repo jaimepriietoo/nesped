@@ -8,14 +8,11 @@ import {
   getObservabilityStatus,
   observeRoute,
 } from "@/lib/server/observability.mjs";
-import { requirePortalRoleOrInternal } from "@/lib/server/security";
+import { requireInternalRequest } from "@/lib/server/internal-api";
 
 async function handleGet(req) {
-  const access = await requirePortalRoleOrInternal(req, ["owner", "admin"]);
-  if (!access.ok) {
-    return access.response;
-  }
-
+  const errorInterno = requireInternalRequest(req);
+  if (errorInterno) return errorInterno;
   const envReport = buildEnvReadinessReport();
 
   return Response.json({

@@ -111,3 +111,50 @@ test("el correo de bienvenida exige credencial interna", async ({ request, baseU
   });
   expect([401, 403]).toContain(res.status());
 });
+
+/**
+ * Un cliente no puede leer ni tocar los contactos de otro.
+ *
+ * Cuatro rutas —eventos, notas, comentarios y recordatorios— filtraban por el
+ * lead_id de la URL y por nada más. Pedían sesión, sí, pero no comprobaban de
+ * quién era ese contacto: con una cuenta recién creada se leía el historial
+ * de cualquier otra empresa. Comprobado en su día, no supuesto.
+ *
+ * Se prueba sin sesión porque lo que vigila esta prueba es que la comprobación
+ * exista; la de pertenencia con sesión válida vive en las pruebas del portal.
+ */
+test("las rutas de un contacto no responden sin sesión", async ({ request, baseURL }) => {
+  const ajeno = "00000000-0000-0000-0000-000000000000";
+
+  for (const ruta of ["lead-events", "lead-notes", "lead-comments", "lead-reminders"]) {
+    const res = await request.get(`${baseURL}/api/${ruta}?lead_id=${ajeno}`);
+    expect([401, 403, 404]).toContain(res.status());
+  }
+});
+
+/**
+ * Las tareas de sistema no las lanza un cliente.
+ *
+ * Recorren los contactos de TODAS las empresas y desde ahí mandan mensajes,
+ * hacen llamadas y escriben en sus fichas. Aceptaban una sesión de portal con
+ * rol owner, así que cualquier cliente podía disparar mensajería saliente a
+ * los contactos de todos los demás.
+ */
+test("los automatismos solo se lanzan desde dentro", async ({ request, baseURL }) => {
+  const rutas = [
+    "automation/run-nba",
+    "automation/run-voice-calls",
+    "automation/run-funnel",
+    "automation/reactivate-cold-leads",
+    "nightly",
+  ];
+
+  for (const ruta of rutas) {
+    const res = await request.post(`${baseURL}/api/${ruta}`, { headers: { Origin: baseURL } });
+    expect([401, 403]).toContain(res.status());
+  }
+
+  // El informe de estado dibuja el mapa de la configuración de seguridad.
+  const readiness = await request.get(`${baseURL}/api/ops/readiness`);
+  expect([401, 403]).toContain(readiness.status());
+});

@@ -3,15 +3,12 @@ import {
   captureServerException,
   flushServerSentry,
 } from "@/lib/server/sentry.mjs";
-import { requirePortalRoleOrInternal } from "@/lib/server/security";
+import { requireInternalRequest } from "@/lib/server/internal-api";
 
 async function handlePost(req) {
-  const access = await requirePortalRoleOrInternal(req, ["owner", "admin"]);
-  if (!access.ok) {
-    return access.response;
-  }
-
-  const actor = access.user?.email || "internal";
+  const errorInterno = requireInternalRequest(req);
+  if (errorInterno) return errorInterno;
+  const actor = "internal";
   const error = new Error("Manual ops incident test");
 
   await captureServerException(error, {

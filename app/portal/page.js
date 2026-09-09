@@ -1257,6 +1257,19 @@ function Ajustes({ datos, onRecargar }) {
     ["Estado", c.is_active === false ? "Inactivo" : "Activo"],
   ];
 
+  /* Qué se enseña de la suscripción. La columna la escribe el webhook de
+     Stripe; hasta que no hay un cobro no dice nada, y en ese caso vale más
+     un guion que inventarse un "activo". */
+  const ESTADO_COBRO = {
+    activo: ["Al corriente", "#7ee3bd"],
+    pendiente: ["Pendiente de pago", "#ffcf8b"],
+    moroso: ["Con un recibo devuelto", "#ffcf8b"],
+    cancelado: ["Cancelada", "#ff9b9b"],
+    active: ["Al corriente", "#7ee3bd"],
+  };
+  const claveCobro = String(c.billing_status || "").toLowerCase().trim();
+  const [textoCobro, colorCobro] = ESTADO_COBRO[claveCobro] || ["Sin suscripción registrada", "var(--muted)"];
+
   return (
     <div className="pv3-view">
       <div className="pv3-grid" data-c="2">
@@ -1273,6 +1286,36 @@ function Ajustes({ datos, onRecargar }) {
         </div>
 
         <div className="pv3-card">
+          <div className="pv3-lab">SUSCRIPCIÓN</div>
+          <div style={{ marginTop: 14, display: "grid", gap: 11 }}>
+            <div className="pv3-row">
+              <span className="pv3-small">Plan</span>
+              <span className="pv3-strong" style={{ fontSize: 13 }}>
+                {PLANES[planDe(c)]?.nombre || "—"}
+              </span>
+            </div>
+            <div className="pv3-row">
+              <span className="pv3-small">Estado</span>
+              <span className="pv3-strong" style={{ fontSize: 13, color: colorCobro }}>{textoCobro}</span>
+            </div>
+          </div>
+          <p className="pv3-p" style={{ marginTop: 14, fontSize: 13, color: "var(--muted)" }}>
+            Desde facturación puedes cambiar la tarjeta, descargarte las facturas
+            o darte de baja. Sin permanencia.
+          </p>
+          <button
+            type="button"
+            className="pv3-btn"
+            data-v="light"
+            style={{ marginTop: 12 }}
+            onClick={abrirFacturacion}
+            disabled={ocupado}
+          >
+            {ocupado ? "Abriendo…" : "Facturación y facturas"}
+          </button>
+        </div>
+
+        <div className="pv3-card">
           <div className="pv3-lab">OBJETIVOS</div>
           <div style={{ marginTop: 14, display: "grid", gap: 11 }}>
             <div className="pv3-row"><span className="pv3-small">Leads al mes</span><span className="pv3-strong">{num(s.monthly_target_leads)}</span></div>
@@ -1281,7 +1324,7 @@ function Ajustes({ datos, onRecargar }) {
             <div className="pv3-row"><span className="pv3-small">Refresco en tiempo real</span><span className="pv3-strong">{num(s.realtime_refresh_seconds)} s</span></div>
           </div>
           <p className="pv3-p" style={{ marginTop: 16, color: "var(--muted)" }}>
-            Para cambiar objetivos, marca o plantillas, usa el panel completo en <a href="/portal" style={{ textDecoration: "underline" }}>/portal</a>.
+            Los cambias más abajo, en esta misma pantalla.
           </p>
         </div>
       </div>

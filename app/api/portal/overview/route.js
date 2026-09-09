@@ -1,4 +1,5 @@
 import { getPortalContext } from "@/lib/portal-auth";
+import { evaluarConsumo } from "@/lib/server/cuotas";
 
 function predictCloseProbability(lead) {
   const score = Number(lead.score || 0);
@@ -181,6 +182,7 @@ export async function GET() {
       benchmarkRes,
       auditRes,
       resumenRes,
+      consumoRes,
     ] = await Promise.all([
       ctx.supabase.from("clients").select("*").eq("id", ctx.clientId).single(),
       ctx.supabase
@@ -241,6 +243,7 @@ export async function GET() {
         .order("created_at", { ascending: false })
         .limit(30),
       ctx.supabase.rpc("resumen_portal", { p_client_id: ctx.clientId }),
+      ctx.supabase.rpc("consumo_del_mes", { p_client_id: ctx.clientId }),
     ]);
 
     const errors = [
@@ -455,6 +458,26 @@ export async function GET() {
       /* Para que el panel pueda decir que una cifra es aproximada en vez de
          darla por buena. */
       cifrasExactas,
+
+      /* Consumo del mes contra el límite del plan. Se enseña siempre, no sólo
+         al pasarse: quien ve subir el contador puede llamar antes de que le
+         llegue una factura rara. */
+      consumo: (() => {
+        const estado = evaluarConsumo({
+          consumo: consumoRes?.error ? null : consumoRes?.data,
+          plan: client?.plan,
+        });
+        if (!estado.medido) return null;
+        return {
+          llamadas: estado.consumo.llamadas,
+          minutos: estado.consumo.minutos,
+          limiteLlamadas: estado.limites.llamadasMes,
+          limiteMinutos: estado.limites.minutosMes,
+          proporcion: estado.proporcion,
+          cerca: estado.cerca,
+          dentro: estado.dentro,
+        };
+      })(),
 
       metrics: {
         totalCalls,

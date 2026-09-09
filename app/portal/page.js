@@ -1671,6 +1671,47 @@ function Equipo({ datos, onRecargar, acceso }) {
  * Estos códigos no dependen de ningún proveedor. Se enseñan UNA vez: sólo se
  * guarda su hash, así que ni nosotros podemos volver a verlos.
  */
+/**
+ * Consumo del mes contra el límite del plan.
+ *
+ * Se enseña siempre, no sólo al pasarse. Quien ve subir el contador puede
+ * llamar antes de que le llegue una factura rara; enterarse cuando ya está
+ * fuera no sirve para decidir nada.
+ *
+ * Pasarse no corta el servicio, y el texto lo dice: nadie tiene que temer que
+ * dejen de cogerle el teléfono por un número de este panel.
+ */
+function ConsumoDelMes({ consumo }) {
+  if (!consumo) return null;
+
+  /* El umbral de aviso lo decide el servidor, en lib/server/cuotas.js. Aquí
+     solo se pinta: si esta pantalla volviera a comparar contra 80 por su
+     cuenta, habría dos definiciones de "va justo" y una se quedaría vieja. */
+  const pct = Math.min(100, Math.round((consumo.proporcion || 0) * 100));
+  const color = !consumo.dentro ? "var(--bad)" : consumo.cerca ? "var(--warn)" : "var(--ok)";
+
+  return (
+    <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
+      <div className="pv3-row">
+        <span className="pv3-small">Este mes</span>
+        <span className="pv3-strong" style={{ fontSize: 13 }}>
+          {consumo.llamadas} llamadas · {consumo.minutos} min
+        </span>
+      </div>
+
+      <div style={{ height: 4, background: "rgba(255,255,255,.12)", marginTop: 10, borderRadius: 2 }}>
+        <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 2 }} />
+      </div>
+
+      <p className="pv3-p" style={{ marginTop: 8, fontSize: 12, color: "var(--muted)" }}>
+        {!consumo.dentro
+          ? "Has superado lo previsto en tu plan. No cortamos nada: te escribimos para ajustarlo."
+          : `${pct}% de lo previsto en tu plan (${consumo.limiteLlamadas} llamadas al mes).`}
+      </p>
+    </div>
+  );
+}
+
 function CodigosRecuperacion() {
   const [disponibles, setDisponibles] = useState(null);
   const [codigos, setCodigos] = useState(null);
@@ -1856,6 +1897,8 @@ function Ajustes({ datos, onRecargar }) {
               <span className="pv3-strong" style={{ fontSize: 13, color: colorCobro }}>{textoCobro}</span>
             </div>
           </div>
+          <ConsumoDelMes consumo={datos?.consumo} />
+
           <p className="pv3-p" style={{ marginTop: 14, fontSize: 13, color: "var(--muted)" }}>
             Desde facturación puedes cambiar la tarjeta, descargarte las facturas
             o darte de baja. Sin permanencia.

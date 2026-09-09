@@ -1,12 +1,42 @@
 import { createClient } from "@supabase/supabase-js";
 import { getAdminContext } from "@/lib/server/auth";
 
+/**
+ * Las cifras globales de Nesped y las últimas llamadas.
+ *
+ * Antes esto pedía TODAS las llamadas y TODOS los contactos de TODAS las
+ * empresas para sacar seis números y enseñar doce llamadas. Y una llamada
+ * incluye su transcripción entera, que es la columna más grande que hay: la
+ * conversación completa de cada cliente de cada empresa viajaba por la red
+ * para terminar en un `.length`.
+ *
+ * Ahora las cifras las cuenta Postgres y de las llamadas se piden doce, con
+ * las columnas que se pintan.
+ */
+
 function getSupabase() {
   return createClient(
     process.env.SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY
   );
 }
+
+/** Cuántas llamadas recientes se enseñan. Lo que cabe en la pantalla. */
+const RECIENTES = 12;
+
+/* La transcripción no está: es lo más pesado de la tabla y esta pantalla no
+   la pinta. Quien quiera leerla abre la llamada. */
+const COLUMNAS_RECIENTES = [
+  "id",
+  "client_id",
+  "created_at",
+  "status",
+  "summary",
+  "lead_captured",
+  "duration_seconds",
+  "call_outcome",
+  "detected_intent",
+].join(",");
 
 export async function GET() {
   try {
@@ -20,76 +50,27 @@ export async function GET() {
 
     const supabase = getSupabase();
 
-    const [{ data: calls, error: callsError }, { data: leads, error: leadsError }] =
-      await Promise.all([
-        supabase.from("calls").select("*").order("created_at", { ascending: false }),
-        supabase.from("leads").select("*").order("created_at", { ascending: false }),
-      ]);
+    const [resumenRes, recientesRes] = await Promise.all([
+      supabase.rpc("resumen_global"),
+      supabase
+        .from("calls")
+        .select(COLUMNAS_RECIENTES)
+        .order("created_at", { ascending: false })
+        .limit(RECIENTES),
+    ]);
 
-    if (callsError) {
+    const error = resumenRes.error || recientesRes.error;
+    if (error) {
       return Response.json(
-        { success: false, message: callsError.message },
+        { success: false, message: error.message || "Error cargando dashboard" },
         { status: 500 }
       );
     }
-
-    if (leadsError) {
-      return Response.json(
-        { success: false, message: leadsError.message },
-        { status: 500 }
-      );
-    }
-
-    const totalCalls = calls?.length || 0;
-    const totalLeads = leads?.length || 0;
-
-    const avgDuration =
-      totalCalls > 0
-        ? Math.round(
-            (calls || []).reduce(
-              (acc, call) => acc + Number(call.duration_seconds || 0),
-              0
-            ) / totalCalls
-          )
-        : 0;
-
-    const conversionRate =
-      totalCalls > 0 ? Number(((totalLeads / totalCalls) * 100).toFixed(1)) : 0;
-
-    const avgLeadScore =
-      totalLeads > 0
-        ? Math.round(
-            (leads || []).reduce((acc, lead) => acc + Number(lead.score || 0), 0) /
-              totalLeads
-          )
-        : 0;
-
-    const hotLeads = (leads || []).filter((l) => Number(l.score || 0) >= 80).length;
-
-    const recentCalls = (calls || []).slice(0, 12).map((call) => ({
-      id: call.id,
-      created_at: call.created_at,
-      status: call.status,
-      summary: call.summary,
-      summary_long: call.summary_long,
-      lead_captured: call.lead_captured,
-      duration_seconds: call.duration_seconds,
-      transcript: call.transcript,
-      call_outcome: call.call_outcome,
-      detected_intent: call.detected_intent,
-    }));
 
     return Response.json({
       success: true,
-      metrics: {
-        totalCalls,
-        totalLeads,
-        conversionRate,
-        avgDuration,
-        avgLeadScore,
-        hotLeads,
-      },
-      recentCalls,
+      metrics: resumenRes.data || {},
+      recentCalls: recientesRes.data || [],
     });
   } catch (error) {
     return Response.json(

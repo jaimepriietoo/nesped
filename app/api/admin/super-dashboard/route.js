@@ -1,6 +1,22 @@
 import { createClient } from "@supabase/supabase-js";
 import { getAdminContext } from "@/lib/server/auth";
 
+/**
+ * El panel que ve todas las empresas de golpe.
+ *
+ * Antes esto pedía TODAS las llamadas, TODOS los contactos y TODOS los
+ * usuarios de TODAS las empresas, y después, por cada empresa, recorría los
+ * tres arrays enteros buscando los suyos. Con seis empresas y veintinueve
+ * llamadas era instantáneo; con doscientas empresas y cien mil llamadas son
+ * veinte millones de comparaciones y la base de datos entera en la memoria de
+ * una función que tiene 1 GB.
+ *
+ * Ahora cuenta Postgres, que para eso está, y devuelve las empresas de cien
+ * en cien. El cursor es el id de la última: no se salta ni repite filas
+ * aunque se cree una empresa mientras se pagina, que es lo que pasa con
+ * `offset`.
+ */
+
 function getSupabase() {
   return createClient(
     process.env.SUPABASE_URL,
@@ -8,7 +24,10 @@ function getSupabase() {
   );
 }
 
-export async function GET() {
+/** Cuántas empresas por página. Se puede pedir menos, no más. */
+const POR_PAGINA = 100;
+
+export async function GET(req) {
   try {
     const admin = await getAdminContext();
     if (!admin.ok) {
@@ -18,58 +37,34 @@ export async function GET() {
       );
     }
 
-    const supabase = getSupabase();
+    const url = new URL(req.url);
+    const pedido = Number(url.searchParams.get("limite"));
+    const limite = Number.isFinite(pedido) && pedido > 0
+      ? Math.min(pedido, POR_PAGINA)
+      : POR_PAGINA;
 
-    const [clientsRes, callsRes, leadsRes, usersRes] = await Promise.all([
-      supabase.from("clients").select("*"),
-      supabase.from("calls").select("*"),
-      supabase.from("leads").select("*"),
-      supabase.from("portal_users").select("*"),
-    ]);
+    /* El cursor viene de la respuesta anterior. Se pasa tal cual: es un id de
+       empresa, y la función solo lo usa para comparar. */
+    const desde = url.searchParams.get("desde") || null;
 
-    if (clientsRes.error || callsRes.error || leadsRes.error || usersRes.error) {
-      const message =
-        clientsRes.error?.message ||
-        callsRes.error?.message ||
-        leadsRes.error?.message ||
-        usersRes.error?.message ||
-        "Error cargando super dashboard";
-
-      return Response.json({ success: false, message }, { status: 500 });
-    }
-
-    const clients = clientsRes.data || [];
-    const calls = callsRes.data || [];
-    const leads = leadsRes.data || [];
-    const users = usersRes.data || [];
-
-    const byClient = clients.map((client) => {
-      const clientCalls = calls.filter((c) => c.client_id === client.id);
-      const clientLeads = leads.filter((l) => l.client_id === client.id);
-      const clientUsers = users.filter((u) => u.client_id === client.id);
-
-      return {
-        client_id: client.id,
-        client_name: client.name,
-        total_calls: clientCalls.length,
-        total_leads: clientLeads.length,
-        conversion:
-          clientCalls.length > 0
-            ? Number(((clientLeads.length / clientCalls.length) * 100).toFixed(1))
-            : 0,
-        users: clientUsers.length,
-      };
+    const { data, error } = await getSupabase().rpc("resumen_de_empresas", {
+      p_limite: limite,
+      p_desde: desde,
     });
+
+    if (error) {
+      return Response.json(
+        { success: false, message: error.message || "Error cargando super dashboard" },
+        { status: 500 }
+      );
+    }
 
     return Response.json({
       success: true,
-      metrics: {
-        totalClients: clients.length,
-        totalCalls: calls.length,
-        totalLeads: leads.length,
-        totalUsers: users.length,
-      },
-      clients: byClient,
+      metrics: data?.metrics || {},
+      clients: data?.clients || [],
+      /* Null cuando ya no quedan más. El panel deja de pedir cuando lo ve. */
+      cursor: data?.cursor || null,
     });
   } catch (error) {
     return Response.json(

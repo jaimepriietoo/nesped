@@ -1,6 +1,7 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { evaluarInteligencia } from "@/lib/server/inteligencia";
 import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
+import { limpiarItems, limpiarTextoAjeno } from "@/lib/server/texto-ajeno";
 
 /**
  * Preguntarle a Nesped.
@@ -21,44 +22,6 @@ import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security"
  */
 
 const MODELO = process.env.OPENAI_COPILOTO_MODEL || "gpt-5-mini";
-
-/**
- * Recorta y limpia un texto que ha escrito un desconocido.
- *
- * Los nombres y las necesidades de los contactos salen de lo que alguien dice
- * por teléfono: el agente apunta lo que le dictan. O sea que ese texto entra
- * en el prompt del modelo y es entrada de un tercero, exactamente igual que
- * si viniera de un formulario público.
- *
- * Se recorta porque un nombre no ocupa doscientos caracteres, y quien intenta
- * secuestrar un modelo necesita sitio para escribir sus instrucciones. Y se
- * quitan los saltos de línea, que es como se falsifica el final de una
- * sección para que lo siguiente parezca del sistema.
- */
-function limpiarTextoAjeno(valor, maximo = 120) {
-  return String(valor ?? "")
-    .replace(/[\r\n\t]+/g, " ")
-    /* Las marcas que delimitan el bloque de datos no pueden aparecer DENTRO
-       del bloque: escribiéndolas se falsifica el final de la sección y lo que
-       viene después parece del sistema. El modelo aguantó el intento, pero no
-       hay que dejarle siquiera la ocasión de decidir. */
-    .replace(/<{2,}|>{2,}/g, "·")
-    .replace(/\s{2,}/g, " ")
-    .trim()
-    .slice(0, maximo);
-}
-
-function limpiarItems(items = []) {
-  return items.slice(0, 10).map((item) => {
-    if (item == null || typeof item !== "object") return limpiarTextoAjeno(item);
-    return Object.fromEntries(
-      Object.entries(item).map(([clave, valor]) => [
-        clave,
-        typeof valor === "string" ? limpiarTextoAjeno(valor) : valor,
-      ])
-    );
-  });
-}
 
 function describirParaElModelo(estado) {
   const activos = estado.modulos.filter((m) => m.disponible);

@@ -1,0 +1,29 @@
+-- Fase 0 de la auditoría: lo imprescindible antes de crecer.
+-- Aplicado en producción el 2026-09-09. Se guarda aquí para que el esquema no
+-- viva sólo dentro de Supabase.
+--
+-- Cuatro cosas: índices compuestos, resumen agregado del portal, facturación
+-- en Postgres y medición de consumo por empresa. El detalle y el porqué de
+-- cada una está en el comentario de su bloque en las migraciones aplicadas:
+--   indices_compuestos_por_empresa
+--   resumen_del_portal_agregado
+--   facturacion_a_postgres
+--   consumo_por_empresa
+--
+-- Resumen de por qué importaban:
+--
+-- ÍNDICES. Todos eran de una sola columna y todas las consultas del portal son
+-- (client_id, created_at). Se crean ahora porque las tablas están vacías: con
+-- cien millones de filas hay que hacerlo CONCURRENTLY y con mucho más cuidado.
+--
+-- RESUMEN. /api/portal/overview pedía TODOS los contactos y TODAS las llamadas
+-- sin límite en cada carga, y contaba en JavaScript. Poner un LIMIT a secas
+-- habría sido peor: los totales habrían pasado a contar "hasta N" sin dar
+-- ningún error. Contar es trabajo de la base de datos.
+--
+-- FACTURACIÓN. Vivía en Prisma con datasource sqlite contra un fichero que
+-- está en .gitignore. Comprobado: las tablas no existían en Postgres. No es
+-- que se perdieran los datos al desplegar, es que no llegaban a escribirse.
+--
+-- CONSUMO. No había forma de saber cuánto gasta cada empresa. Con un cliente
+-- se ve en la factura del proveedor; con mil, no.

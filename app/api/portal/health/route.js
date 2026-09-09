@@ -70,15 +70,14 @@ async function handleGet() {
         .eq("client_id", ctx.clientId)
         .order("created_at", { ascending: false })
         .limit(10),
-      prisma.subscription.findFirst({
-        where: {
-          client_id: ctx.clientId,
-          status: {
-            in: ["trialing", "active", "past_due", "unpaid", "incomplete"],
-          },
-        },
-        orderBy: { created_at: "desc" },
-      }),
+      ctx.supabase
+        .from("subscriptions")
+        .select("*")
+        .eq("client_id", ctx.clientId)
+        .in("status", ["trialing", "active", "past_due", "unpaid", "incomplete"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
 
     const client = clientRes.data || null;

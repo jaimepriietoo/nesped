@@ -1249,6 +1249,36 @@ wss.on("connection", async (providerWs, req) => {
         pendingRecordings.delete(callSid);
       }
 
+      /* Consumo de la empresa.
+      
+         Es lo que permite saber si un cliente de 499 € al mes está gastando
+         2.000 € en minutos. Con un cliente eso se ve en la factura del
+         proveedor; con mil, no, y para entonces ya se ha perdido dinero
+         durante meses sin enterarse.
+      
+         Va aparte del insert de la llamada y con su propio try: si la
+         contabilidad falla, la llamada tiene que quedar guardada igual. Es
+         preferible perder una anotación de consumo que perder el registro de
+         una conversación con un cliente. */
+      try {
+        await supabase.rpc("anotar_consumo", {
+          p_client_id: clientId,
+          p_llamadas: 1,
+          p_segundos_voz: durationSeconds,
+          /* Lo que factura la voz sintética es el texto que ha dicho el
+             agente, no la duración: un silencio dura y no cuesta.
+          
+             El prefijo es "[AI] ", que es como lo etiqueta addTranscriptLine.
+             Se descuenta del recuento, porque no se sintetiza. */
+          p_caracteres_voz: transcriptParts.reduce((total, linea) => {
+            const texto = String(linea || "");
+            return texto.startsWith("[AI] ") ? total + texto.length - 5 : total;
+          }, 0),
+        });
+      } catch (err) {
+        console.error("No se pudo anotar el consumo:", err?.message || err);
+      }
+
       console.log("📞 Llamada guardada en Supabase");
     } catch (err) {
       reportVoiceError(err, "voice.call.persist_failed", {

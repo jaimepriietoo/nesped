@@ -152,6 +152,14 @@ function buildQuickActions() {
   ];
 }
 
+/* Cuánto se manda al navegador.
+ 
+   No es un tope de negocio, es un tope de transporte: el panel enseña un
+   listado y un embudo, y nadie mira dos mil filas seguidas. Los totales van
+   aparte y son exactos. */
+const MAXIMO_CONTACTOS = 500;
+const MAXIMO_LLAMADAS = 300;
+
 export async function GET() {
   try {
     const ctx = await getPortalContext();
@@ -172,6 +180,7 @@ export async function GET() {
       insightsRes,
       benchmarkRes,
       auditRes,
+      resumenRes,
     ] = await Promise.all([
       ctx.supabase.from("clients").select("*").eq("id", ctx.clientId).single(),
       ctx.supabase
@@ -184,16 +193,29 @@ export async function GET() {
         .select("*")
         .eq("client_id", ctx.clientId)
         .order("created_at", { ascending: true }),
+      /* Las listas se acotan; las CIFRAS no salen de ellas.
+      
+         Antes esto pedía todos los contactos y todas las llamadas de la
+         empresa, sin límite, en cada carga del portal. Con dos y veintinueve
+         filas es gratis; con cincuenta mil contactos es una respuesta de
+         megabytes en la ruta más visitada del producto.
+      
+         Poner un límite a secas habría sido peor que dejarlo así: los totales
+         se calculaban contando el array (`totalCalls = calls.length`), y con
+         un LIMIT habrían pasado a contar "hasta N" sin dar ningún error. Los
+         totales los cuenta ahora la base de datos, en resumen_portal(). */
       ctx.supabase
         .from("leads")
         .select("*")
         .eq("client_id", ctx.clientId)
-        .order("created_at", { ascending: false }),
+        .order("created_at", { ascending: false })
+        .limit(MAXIMO_CONTACTOS),
       ctx.supabase
         .from("calls")
         .select("*")
         .eq("client_id", ctx.clientId)
-        .order("created_at", { ascending: false }),
+        .order("created_at", { ascending: false })
+        .limit(MAXIMO_LLAMADAS),
       ctx.supabase
         .from("alerts")
         .select("*")
@@ -218,6 +240,7 @@ export async function GET() {
         .eq("client_id", ctx.clientId)
         .order("created_at", { ascending: false })
         .limit(30),
+      ctx.supabase.rpc("resumen_portal", { p_client_id: ctx.clientId }),
     ]);
 
     const errors = [
@@ -254,42 +277,80 @@ export async function GET() {
       predicted_close_probability: predictCloseProbability(lead),
     }));
 
-    const totalCalls = calls.length;
-    const totalLeads = leads.length;
+    /* Las cifras salen del agregado de la base de datos, NO de las listas de
+       arriba, que están acotadas. Si el agregado falla se cae a contar lo que
+       hay cargado: menos exacto, pero mejor que un panel en blanco, y queda
+       marcado para que nadie tome ese número por bueno. */
+    const resumen = resumenRes?.data || null;
+    const cifrasExactas = Boolean(resumen);
+
+    /* Que la alternativa exista no significa que dé igual usarla: si el
+       agregado falla, las cifras dejan de ser exactas y hay que enterarse. */
+    if (!cifrasExactas) {
+      console.error(
+        "overview: el resumen agregado falló, cifras aproximadas sobre lo cargado",
+        resumenRes?.error?.message || "sin detalle"
+      );
+    }
+
+    const llamadas = resumen?.llamadas || {};
+    const contactos = resumen?.contactos || {};
+    const porFase = contactos.porFase || {};
+
+    const totalCalls = cifrasExactas ? Number(llamadas.total || 0) : calls.length;
+    const totalLeads = cifrasExactas ? Number(contactos.total || 0) : leads.length;
+
     const conversionRate =
       totalCalls > 0 ? Number(((totalLeads / totalCalls) * 100).toFixed(1)) : 0;
 
     const avgDuration =
       totalCalls > 0
         ? Math.round(
-            calls.reduce(
-              (acc, c) => acc + Number(c.duration_seconds || 0),
-              0
-            ) / totalCalls
+            (cifrasExactas
+              ? Number(llamadas.duracionTotal || 0)
+              : calls.reduce((acc, c) => acc + Number(c.duration_seconds || 0), 0)) /
+              totalCalls
           )
         : 0;
 
     const avgLeadScore =
       totalLeads > 0
         ? Math.round(
-            leads.reduce((acc, lead) => acc + Number(lead.score || 0), 0) /
+            (cifrasExactas
+              ? Number(contactos.sumaScore || 0)
+              : leads.reduce((acc, lead) => acc + Number(lead.score || 0), 0)) /
               totalLeads
           )
         : 0;
 
-    const hotLeads = leads.filter((l) => Number(l.score || 0) >= 80).length;
-    const contactedLeads = leads.filter((l) => l.status === "contacted").length;
-    const qualifiedLeads = leads.filter((l) => l.status === "qualified").length;
-    const wonLeads = leads.filter((l) => l.status === "won").length;
-    const lostLeads = leads.filter((l) => l.status === "lost").length;
-    const unassignedLeads = leads.filter((l) => !l.owner).length;
-    const smsSentCount = leads.filter((l) => l.followup_sms_sent).length;
+    const deFase = (fase) =>
+      cifrasExactas
+        ? Number(porFase[fase] || 0)
+        : leads.filter((l) => (l.status || "new") === fase).length;
 
-    const totalPotentialRevenue = leads.reduce(
-      (acc, lead) =>
-        acc + Number(lead.valor_estimado || settings?.default_deal_value || 0),
-      0
-    );
+    const hotLeads = cifrasExactas
+      ? Number(contactos.calientes || 0)
+      : leads.filter((l) => Number(l.score || 0) >= 80).length;
+    const contactedLeads = deFase("contacted");
+    const qualifiedLeads = deFase("qualified");
+    const wonLeads = deFase("won");
+    const lostLeads = deFase("lost");
+    const unassignedLeads = cifrasExactas
+      ? Number(contactos.sinResponsable || 0)
+      : leads.filter((l) => !l.owner).length;
+    const smsSentCount = cifrasExactas
+      ? Number(contactos.smsEnviado || 0)
+      : leads.filter((l) => l.followup_sms_sent).length;
+
+    /* Sólo cuenta lo abierto: sumar las ganadas y las perdidas al "valor
+       potencial" infla la cifra con dinero que ya está decidido. */
+    const totalPotentialRevenue = cifrasExactas
+      ? Number(contactos.valorPotencial || 0)
+      : leads.reduce(
+          (acc, lead) =>
+            acc + Number(lead.valor_estimado || settings?.default_deal_value || 0),
+          0
+        );
 
     const byDay = {};
     const byHour = {};
@@ -390,6 +451,10 @@ export async function GET() {
       smsTemplates,
       whatsappTemplates,
       quickActions,
+
+      /* Para que el panel pueda decir que una cifra es aproximada en vez de
+         darla por buena. */
+      cifrasExactas,
 
       metrics: {
         totalCalls,

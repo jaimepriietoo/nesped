@@ -14,24 +14,18 @@ export async function GET() {
     }
 
     const [subscriptions, invoices, rows] = await Promise.all([
-      prisma.subscription.findMany({
-        where: {
-          client_id: ctx.clientId,
-        },
-        orderBy: {
-          created_at: "desc",
-        },
-        take: 20,
-      }),
-      prisma.invoice.findMany({
-        where: {
-          client_id: ctx.clientId,
-        },
-        orderBy: {
-          created_at: "desc",
-        },
-        take: 50,
-      }),
+      ctx.supabase
+        .from("subscriptions")
+        .select("*")
+        .eq("client_id", ctx.clientId)
+        .order("created_at", { ascending: false })
+        .limit(20),
+      ctx.supabase
+        .from("invoices")
+        .select("*")
+        .eq("client_id", ctx.clientId)
+        .order("created_at", { ascending: false })
+        .limit(50),
       getPaidLeadRows(500),
     ]);
 

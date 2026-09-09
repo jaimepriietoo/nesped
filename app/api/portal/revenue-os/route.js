@@ -42,16 +42,20 @@ export async function GET() {
           where: { active: true },
           orderBy: { price: "asc" },
         }),
-        prisma.subscription.findMany({
-          where: { client_id: ctx.clientId },
-          orderBy: { created_at: "desc" },
-          take: 12,
-        }),
-        prisma.invoice.findMany({
-          where: { client_id: ctx.clientId },
-          orderBy: { created_at: "desc" },
-          take: 24,
-        }),
+        /* Facturación desde Postgres. Antes salía de Prisma contra un SQLite
+           que no se despliega, así que aquí no llegaba nunca nada. */
+        ctx.supabase
+          .from("subscriptions")
+          .select("*")
+          .eq("client_id", ctx.clientId)
+          .order("created_at", { ascending: false })
+          .limit(12),
+        ctx.supabase
+          .from("invoices")
+          .select("*")
+          .eq("client_id", ctx.clientId)
+          .order("created_at", { ascending: false })
+          .limit(24),
       ]);
 
     const errors = [clientRes.error, settingsRes.error, leadsRes.error, usersRes.error].filter(Boolean);

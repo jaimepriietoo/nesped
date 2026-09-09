@@ -44,7 +44,7 @@ import "./portal.css";
 const PLANES = {
   starter: {
     nombre: "Starter",
-    incluye: ["resumen", "leads", "llamadas", "equipo", "ajustes", "estado"],
+    incluye: ["inteligencia", "resumen", "leads", "llamadas", "equipo", "ajustes", "estado"],
     siguiente: "pro",
   },
   pro: {
@@ -59,6 +59,10 @@ const PLANES = {
 
 /** Qué se le da a alguien cuyo plan no reconocemos: lo mínimo, nunca todo. */
 const PLAN_POR_DEFECTO = "starter";
+
+/* Con qué pantalla se entra al portal. Es la que contesta "qué pasa", que
+   es lo que alguien viene a saber antes de ir a buscar nada. */
+const VISTA_DE_ENTRADA = "inteligencia";
 
 function planDe(cliente) {
   const bruto = String(cliente?.plan || "").toLowerCase().trim();
@@ -91,8 +95,9 @@ function vistaIncluida(idVista, plan) {
 
 const VISTAS = [
   { grupo: "Operación" },
-  { id: "resumen", label: "Resumen", ico: "◆" },
-  { id: "leads", label: "Leads", ico: "◇" },
+  { id: "inteligencia", label: "Inteligencia", ico: "◆", api: "/api/portal/inteligencia" },
+  { id: "resumen", label: "Resumen", ico: "◇" },
+  { id: "leads", label: "Contactos", ico: "◈" },
   { id: "llamadas", label: "Llamadas", ico: "◉" },
   { id: "conversaciones", label: "Conversaciones", ico: "◈", api: "/api/portal/inbox" },
 
@@ -502,6 +507,135 @@ function Historial({ items, campo, vacio }) {
 }
 
 /* ── vistas ──────────────────────────────────────────────────────────── */
+
+/**
+ * Qué está pasando.
+ *
+ * Es la primera pantalla del portal, y se diseñó al revés de lo habitual:
+ * partiendo del caso vacío. Todo cliente nuevo entra aquí sin una sola
+ * llamada, y va a pasar así sus primeras semanas. Un panel que sólo funciona
+ * lleno es un panel que nadie ve funcionar el primer mes.
+ *
+ * La regla que ordena todo lo de abajo: no se enseña ni una cifra que no se
+ * pueda sostener. Cada número lleva su método al lado, plegado pero a mano.
+ * Un número que no se puede discutir no se usa para decidir, y el objetivo
+ * aquí es que alguien decida a quién llama esta tarde.
+ */
+function Inteligencia({ datos }) {
+  /* El armazón ya enseña su esqueleto mientras carga; esto sólo cubre el caso
+     de que la llamada falle y no llegue nada. */
+  if (!datos) return <Vacio>No hemos podido leer el estado de tus datos.</Vacio>;
+
+  const { fuentes = [], cobertura = {}, modulos = [], pendientes = [], titulares = [] } = datos;
+  const activos = modulos.filter((m) => m.disponible);
+  const dormidos = modulos.filter((m) => !m.disponible);
+  const total = cobertura.modulosTotales || 1;
+
+  return (
+    <div className="pv3-view">
+      <div className="iq-cabecera">
+        <div>
+          <h1 className="iq-titular">
+            {activos.length === 0
+              ? <>Todavía no hay nada<br />que contarte.</>
+              : titulares.length === 0
+                ? <>Nada exige tu atención<br />ahora mismo.</>
+                : <>{titulares.length === 1 ? "Una cosa pide" : `${titulares.length} cosas piden`}<br />tu atención.</>}
+          </h1>
+          <p className="iq-sub">
+            {activos.length === 0
+              ? "Nesped no inventa datos. En cuanto entren llamadas, esta pantalla empieza a decirte qué mirar."
+              : "Todo lo de aquí sale de tus datos. Cada cifra lleva debajo cómo se ha calculado."}
+          </p>
+        </div>
+
+        <div className="iq-cobertura">
+          <div>
+            <div className="iq-cobertura-cifra">{activos.length}<small style={{ opacity: 0.4 }}>/{total}</small></div>
+            <div className="iq-barra" aria-hidden="true">
+              {Array.from({ length: total }, (_, i) => (
+                <i key={i} data-on={i < activos.length ? "1" : "0"} />
+              ))}
+            </div>
+          </div>
+          <p className="iq-cobertura-txt">análisis con datos suficientes</p>
+        </div>
+      </div>
+
+      {titulares.length > 0 && (
+        <div className="iq-titulares">
+          {titulares.map((t) => (
+            <div className="iq-aviso" key={t.titulo} data-sev={t.severidad}>
+              <div>
+                <div className="iq-aviso-txt">{t.texto}</div>
+                <p className="iq-aviso-como">{t.metodo}</p>
+              </div>
+              <span className="iq-fuente-est">{t.severidad === "alta" ? "ATENCIÓN" : "REVISAR"}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {activos.length > 0 && (
+        <>
+          <h2 className="pv3-h2">Lo que sabemos</h2>
+          <div className="iq-rejilla">
+            {activos.map((m) => (
+              <div className="iq-modulo" key={m.titulo}>
+                <div className="iq-modulo-lab">{m.titulo.toUpperCase()}</div>
+                <div className="iq-cifra" data-sev={m.severidad}>
+                  {m.valor}{m.unidad ? <small data-palabra={/^[a-záéíóúñ]/i.test(m.unidad) && m.unidad.length > 2 ? "1" : undefined}>{m.unidad}</small> : null}
+                </div>
+                <p className="iq-modulo-txt">{m.resumen}</p>
+                <details className="iq-metodo">
+                  <summary>Cómo se calcula</summary>
+                  <p>{m.metodo}</p>
+                </details>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      <h2 className="pv3-h2">
+        {activos.length ? "Lo que falta para saber más" : "Lo que hace falta para empezar"}
+      </h2>
+      <div className="iq-rejilla">
+        {[...dormidos, ...pendientes].map((m) => (
+          <div className="iq-modulo" data-off="1" key={m.titulo}>
+            <div className="iq-modulo-lab">{m.titulo.toUpperCase()}</div>
+            <p className="iq-modulo-falta" style={{ marginTop: 14 }}>
+              {m.falta}
+            </p>
+            <p className="iq-modulo-falta" style={{ marginTop: "auto", color: "var(--dim)" }}>
+              {m.porQue || m.comoSeDesbloquea}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <h2 className="pv3-h2">De dónde salen los datos</h2>
+      <div className="pv3-card">
+        {fuentes.map((f) => (
+          <div className="iq-fuente" key={f.id}>
+            <span className="iq-punto" data-e={f.estado} />
+            <div>
+              <div className="iq-fuente-nom">{f.nombre}</div>
+              <p className="iq-fuente-por">
+                {f.estado === "conectado" ? f.porQue : f.comoActivar}
+              </p>
+            </div>
+            <span className="iq-fuente-est">
+              {f.estado === "conectado" ? (f.detalle || "ACTIVA")
+                : f.estado === "parcial" ? "PARCIAL"
+                : f.bloqueada ? "NO DISPONIBLE" : "SIN CONECTAR"}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function Resumen({ datos }) {
   const m = datos.metrics || {};
@@ -1989,6 +2123,7 @@ class Aislante extends React.Component {
 
 /** Encabezado de cada vista: antetítulo, título y una línea que la explica. */
 const META = {
+  inteligencia: ["INTELIGENCIA", "Qué está pasando", "Lo que Nesped puede afirmar hoy sobre tu negocio, y con qué fundamento."],
   resumen: ["PANEL", "Resumen", "Lo que ha pasado y lo que hay abierto ahora mismo."],
   leads: ["CAPTACIÓN", "Leads", "Todo lo que la voz ha capturado, en lista o por fases."],
   llamadas: ["REGISTRO", "Llamadas", "Cada conversación, con grabación y transcripción."],
@@ -2002,7 +2137,7 @@ const META = {
 
 
 export default function PortalV3() {
-  const [vista, setVista] = useState("resumen");
+  const [vista, setVista] = useState(VISTA_DE_ENTRADA);
   const [datos, setDatos] = useState(null);
   const [error, setError] = useState("");
 
@@ -2022,7 +2157,32 @@ export default function PortalV3() {
   useEffect(() => {
     let vivo = true;
     pedir("/api/portal/overview")
-      .then((json) => { if (vivo && json) setDatos(json); })
+      .then((json) => {
+        if (!vivo || !json) return;
+        setDatos(json);
+
+        /* Y de paso, los datos de la pantalla con la que se entra.
+           Antes sólo se pedía /overview y cada sección se cargaba al
+           pulsarla. Funcionaba mientras la pantalla de entrada no tuviera
+           endpoint propio; en cuanto lo tuvo, entrar al portal dejaba el
+           esqueleto puesto para siempre, porque nadie llegaba a pulsar nada.
+
+           Se mira el plan que viene en la respuesta, no el del render: pedir
+           los datos de una sección que el plan no incluye es una llamada que
+           la API va a rechazar. */
+        const planInicial = planDe(json.client);
+        const inicial = VISTA_DE_ENTRADA;
+        if (vistaIncluida(inicial, planInicial)) {
+          const destino = VISTAS.find((v) => v.id === inicial);
+          if (destino?.api) {
+            setCargando((c) => ({ ...c, [inicial]: true }));
+            pedir(destino.api)
+              .then((r) => { if (vivo && r) setExtra((p2) => ({ ...p2, [inicial]: r.data ?? r })); })
+              .catch(() => { if (vivo) setExtra((p2) => ({ ...p2, [inicial]: null })); })
+              .finally(() => { if (vivo) setCargando((c) => ({ ...c, [inicial]: false })); });
+          }
+        }
+      })
       .catch((e) => { if (vivo) setError(e.message); });
     return () => { vivo = false; };
   }, []);
@@ -2122,6 +2282,7 @@ export default function PortalV3() {
      puede descartar un render a medias, y un ref escrito en uno descartado
      deja el valor adelantado respecto a lo que se está pintando. */
   useEffect(() => { planActual.current = plan; }, [plan]);
+
   const [subiendoPlan, setSubiendoPlan] = useState(false);
 
   /* Al pago por la ruta con cuenta: lleva el client_id dentro de la sesión de
@@ -2169,6 +2330,7 @@ export default function PortalV3() {
     }
 
     switch (vista) {
+      case "inteligencia": return <Inteligencia datos={datosVista} />;
       case "resumen": return <Resumen datos={datos} />;
       case "leads": return <Leads datos={datos} onRecargar={recargar} />;
       case "llamadas": return <Llamadas datos={datos} />;

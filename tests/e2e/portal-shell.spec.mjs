@@ -74,14 +74,16 @@ test("el portal carga con la marca y el menú completo", async ({ context, page,
   await montarPortal(context, page, baseURL);
 
   /*
-   * Nueve pantallas más "Cerrar sesión". El número está fijado a propósito:
+   * Diez pantallas más "Cerrar sesión". El número está fijado a propósito:
    * el portal llegó a tener treinta y una, casi todas de consejos generados,
-   * y esta prueba salta si vuelven a colarse pantallas de relleno.
+   * y esta prueba salta si vuelven a colarse pantallas de relleno. Subió de
+   * nueve a diez al entrar "Inteligencia", que sustituye a Resumen como
+   * pantalla de entrada.
    */
   const entradas = page.locator(".pv3-nav");
-  expect(await entradas.count()).toBe(10);
+  expect(await entradas.count()).toBe(11);
 
-  for (const etiqueta of ["Resumen", "Leads", "Llamadas", "Conversaciones", "Calidad de voz", "Guion comercial", "Equipo", "Ajustes", "Estado"]) {
+  for (const etiqueta of ["Inteligencia", "Resumen", "Contactos", "Llamadas", "Conversaciones", "Calidad de voz", "Guion comercial", "Equipo", "Ajustes", "Estado"]) {
     await expect(page.getByRole("button", { name: new RegExp(etiqueta) })).toBeVisible();
   }
 });
@@ -89,10 +91,14 @@ test("el portal carga con la marca y el menú completo", async ({ context, page,
 test("las secciones piden sus datos y los pintan", async ({ context, page, baseURL }) => {
   await montarPortal(context, page, baseURL);
 
-  await expect(page.getByRole("heading", { name: "Resumen" })).toBeVisible();
-  await expect(page.getByText("Ana Ruiz")).toHaveCount(0); // aún no estamos en Leads
+  // Se entra por Inteligencia, no por Resumen.
+  await expect(page.getByRole("heading", { name: /Qué está pasando/ })).toBeVisible();
+  await expect(page.getByText("Ana Ruiz")).toHaveCount(0); // aún no estamos en Contactos
 
-  await page.getByRole("button", { name: /Leads/ }).click();
+  await page.getByRole("button", { name: /Resumen/ }).click();
+  await expect(page.getByRole("heading", { name: "Resumen" })).toBeVisible();
+
+  await page.getByRole("button", { name: /Contactos/ }).click();
   await expect(page.getByRole("heading", { name: "Leads" })).toBeVisible();
   await expect(page.getByText("Ana Ruiz")).toBeVisible();
 
@@ -106,7 +112,7 @@ test("las secciones piden sus datos y los pintan", async ({ context, page, baseU
 test("la ficha de un lead se abre al pulsar su fila", async ({ context, page, baseURL }) => {
   await montarPortal(context, page, baseURL);
 
-  await page.getByRole("button", { name: /Leads/ }).click();
+  await page.getByRole("button", { name: /Contactos/ }).click();
   await page.getByRole("button", { name: /Abrir ficha de Ana Ruiz/i }).click();
 
   await expect(page.getByRole("complementary", { name: /Ficha de Ana Ruiz/i })).toBeVisible();
@@ -121,6 +127,51 @@ test("una sección rota no tumba el portal", async ({ context, page, baseURL }) 
   await expect(page.getByText(/no se ha podido pintar/i)).toBeVisible();
 
   // Lo que importa: el menú sigue vivo y se puede seguir trabajando.
-  await page.getByRole("button", { name: /Leads/ }).click();
+  await page.getByRole("button", { name: /Contactos/ }).click();
   await expect(page.getByText("Ana Ruiz")).toBeVisible();
+});
+
+/**
+ * La promesa de la pantalla de Inteligencia: no enseñar ni una cifra que no
+ * se pueda sostener.
+ *
+ * Se prueba porque es lo más fácil de romper sin darse cuenta. Cualquiera que
+ * añada un módulo nuevo y se olvide de la compuerta de datos hará que el panel
+ * enseñe un cero o un porcentaje inventado a alguien que acaba de entrar, y
+ * eso no da un error en ninguna parte: simplemente miente.
+ */
+test("sin datos, Inteligencia dice qué falta en vez de enseñar cifras", async ({ context, page, baseURL }) => {
+  await montarPortal(context, page, baseURL);
+
+  await page.route("**/api/portal/inteligencia", (route) =>
+    route.fulfill(
+      json({
+        success: true,
+        fuentes: [
+          {
+            id: "telefono",
+            nombre: "Teléfono",
+            estado: "sin-conectar",
+            porQue: "Es la puerta de entrada.",
+            comoActivar: "Asignamos un número.",
+          },
+        ],
+        cobertura: { modulosActivos: 0, modulosTotales: 4, fuentesConectadas: 0, fuentesTotales: 1 },
+        modulos: [
+          { disponible: false, titulo: "Llamadas sin captar", falta: "Hacen falta 10 llamadas atendidas. Van 0.", porQue: "Con menos es ruido." },
+        ],
+        pendientes: [],
+        titulares: [],
+      })
+    )
+  );
+
+  await page.reload();
+
+  await expect(page.getByRole("heading", { name: /Todavía no hay nada/ })).toBeVisible();
+  await expect(page.getByText(/Hacen falta 10 llamadas atendidas/)).toBeVisible();
+
+  /* Lo que no puede pasar: que un módulo sin datos pinte su tarjeta de cifra.
+     Esa clase sólo la lleva un número calculado de verdad. */
+  await expect(page.locator(".iq-cifra")).toHaveCount(0);
 });

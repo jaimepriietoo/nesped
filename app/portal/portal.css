@@ -535,3 +535,162 @@
   .pv3-btn:hover:not(:disabled),
   .pv3-btn:active:not(:disabled) { transform: none; }
 }
+
+/* =========================================================================
+   Inteligencia
+   =========================================================================
+   La pantalla que contesta a "¿qué está pasando?". Se diseñó al revés de lo
+   normal: primero el estado vacío, porque es donde está todo cliente nuevo y
+   donde va a pasar sus primeras semanas. Un panel que sólo se ve bien lleno
+   es un panel que nadie ve bien el primer mes.
+   ========================================================================= */
+
+.iq-cabecera {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.iq-titular {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(24px, 3vw, 34px);
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.iq-sub { margin: 8px 0 0; font-size: 14px; color: var(--muted); max-width: 56ch; line-height: 1.6; }
+
+/* Cobertura: cuántos módulos pueden calcular algo. No es una barra de
+   progreso de adorno, es una fracción real. */
+.iq-cobertura { display: flex; align-items: center; gap: 12px; }
+.iq-cobertura-cifra { font-family: var(--font-display); font-size: 30px; line-height: 1; }
+.iq-cobertura-txt { font-size: 12px; color: var(--muted); max-width: 15ch; line-height: 1.4; }
+
+.iq-barra { display: flex; gap: 3px; margin-top: 8px; }
+.iq-barra i {
+  width: 12px; height: 4px; border-radius: 2px;
+  background: rgba(255, 255, 255, 0.14);
+  transition: background 0.5s ease;
+}
+.iq-barra i[data-on="1"] { background: var(--ok); }
+
+/* ── Titulares ─────────────────────────────────────────────────────── */
+
+.iq-titulares { display: grid; gap: 10px; margin-top: 26px; }
+
+.iq-aviso {
+  display: grid;
+  grid-template-columns: 3px minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  transition: border-color 0.25s ease, transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.iq-aviso:hover { border-color: rgba(255, 255, 255, 0.22); transform: translateY(-1px); }
+.iq-aviso::before { content: ""; align-self: stretch; border-radius: 2px; background: var(--muted); }
+.iq-aviso[data-sev="alta"]::before { background: var(--bad); }
+.iq-aviso[data-sev="media"]::before { background: var(--warn); }
+.iq-aviso[data-sev="bien"]::before { background: var(--ok); }
+
+.iq-aviso-txt { font-size: 14.5px; line-height: 1.5; }
+.iq-aviso-como {
+  margin: 6px 0 0; font-size: 12px; color: var(--muted); line-height: 1.5;
+  max-width: 70ch;
+}
+
+/* ── Módulos ───────────────────────────────────────────────────────── */
+
+.iq-rejilla {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+.iq-modulo {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  min-height: 148px;
+}
+.iq-modulo[data-off="1"] { background: transparent; border-style: dashed; }
+
+.iq-modulo-lab {
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.iq-cifra {
+  margin-top: auto;
+  font-family: var(--font-display);
+  font-size: 34px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+/* Una unidad en palabra ("contactos") necesita más aire que un símbolo
+   ("%", "ms"), que se lee pegado a la cifra sin estorbar. */
+.iq-cifra small { font-size: 15px; opacity: 0.55; margin-left: 3px; }
+.iq-cifra small[data-palabra="1"] { font-size: 13px; margin-left: 8px; }
+.iq-cifra[data-sev="alta"] { color: var(--bad); }
+.iq-cifra[data-sev="media"] { color: var(--warn); }
+.iq-cifra[data-sev="bien"] { color: var(--ok); }
+
+.iq-modulo-txt { margin: 10px 0 0; font-size: 13px; line-height: 1.5; color: var(--dim); }
+.iq-modulo-falta { margin: 12px 0 0; font-size: 13px; line-height: 1.55; color: var(--muted); }
+
+/* El método, siempre a mano. Un número sin explicación no se puede discutir,
+   y un número que no se puede discutir no se usa para decidir. */
+.iq-metodo {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.iq-metodo summary { cursor: pointer; list-style: none; color: var(--dim); }
+.iq-metodo summary::-webkit-details-marker { display: none; }
+.iq-metodo summary::before { content: "› "; opacity: 0.6; }
+.iq-metodo[open] summary::before { content: "⌄ "; }
+.iq-metodo p { margin: 8px 0 0; }
+
+/* ── Fuentes ───────────────────────────────────────────────────────── */
+
+.iq-fuente {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+  padding: 15px 0;
+  border-bottom: 1px solid var(--line);
+}
+.iq-fuente:last-child { border-bottom: none; }
+
+.iq-punto {
+  width: 8px; height: 8px; border-radius: 50%; margin-top: 6px;
+  background: rgba(255, 255, 255, 0.2);
+}
+.iq-punto[data-e="conectado"] { background: var(--ok); box-shadow: 0 0 12px rgba(126, 227, 189, 0.5); }
+.iq-punto[data-e="parcial"] { background: var(--warn); }
+
+.iq-fuente-nom { font-size: 14px; font-weight: 500; }
+.iq-fuente-por { margin: 5px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--muted); max-width: 62ch; }
+.iq-fuente-est { font-family: var(--font-display); font-size: 11px; letter-spacing: 0.06em; color: var(--muted); white-space: nowrap; }
+
+@media (prefers-reduced-motion: reduce) {
+  .iq-aviso, .iq-barra i { transition: none; }
+}

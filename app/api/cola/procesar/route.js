@@ -1,5 +1,5 @@
 import { requireInternalRequest } from "@/lib/server/internal-api";
-import { tomarTrabajos, terminar, fallar, rescatarColgados } from "@/lib/server/cola";
+import { tomarTrabajos, terminar, fallar, rescatarColgados, SinArreglo } from "@/lib/server/cola";
 import { enviarInforme } from "@/lib/server/informes";
 
 /**
@@ -61,8 +61,8 @@ async function procesar(req) {
       if (!oficio) {
         /* Un tipo que nadie sabe hacer no se reintenta: reintentarlo cinco
            veces no hará que aparezca la función que falta. */
-        await fallar({ ...trabajo, intentos: 99 }, `Tipo desconocido: ${trabajo.tipo}`);
-        fallidos.push({ id: trabajo.id, motivo: "tipo desconocido" });
+        await fallar(trabajo, new SinArreglo(`Tipo desconocido: ${trabajo.tipo}`));
+        fallidos.push({ id: trabajo.id, motivo: "tipo desconocido", reintenta: false });
         continue;
       }
 

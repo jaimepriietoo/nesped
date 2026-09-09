@@ -7,6 +7,7 @@ import {
   setAuthCookies,
   verifyTwoFactorCode,
 } from "@/lib/server/auth";
+import { consumirCodigo } from "@/lib/server/codigos-recuperacion";
 import { logEvent, observeRoute } from "@/lib/server/observability.mjs";
 import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 
@@ -52,16 +53,44 @@ async function handlePost(req) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const code = String(body?.code || "").replace(/\D/g, "");
+  const bruto = String(body?.code || "").trim();
+  const code = bruto.replace(/\D/g, "");
 
-  if (code.length !== 6) {
+  /* Se aceptan dos cosas en el mismo campo: el código de seis cifras que llega
+     por correo, y un código de recuperación.
+  
+     Van juntos a propósito. El día que el correo no sale, quien intenta entrar
+     no está para buscar otra pantalla: escribe en la casilla que tiene delante
+     lo que sea que tenga guardado, y eso tiene que funcionar. */
+  const pareceRecuperacion = /^[A-Za-z0-9-]{10,12}$/.test(bruto) && code.length !== 6;
+
+  if (pareceRecuperacion) {
+    const valido = await consumirCodigo({ email: challenge.email, codigo: bruto });
+
+    if (valido) {
+      logEvent("warn", "auth.2fa_con_codigo_de_recuperacion", {
+        email: challenge.email,
+        role: challenge.role,
+      });
+      await appendAuditLog({
+        clientId: challenge.clientId,
+        actor: challenge.email,
+        action: "2fa_recuperacion_usada",
+        changes: null,
+      });
+    } else {
+      await bumpTwoFactorChallengeAttempts(challenge);
+      return Response.json(
+        { success: false, message: "Ese código de recuperación no vale o ya se ha usado." },
+        { status: 401 }
+      );
+    }
+  } else if (code.length !== 6) {
     return Response.json(
-      { success: false, message: "Introduce un código de 6 dígitos." },
+      { success: false, message: "Introduce el código de 6 dígitos o uno de recuperación." },
       { status: 400 }
     );
-  }
-
-  if (!verifyTwoFactorCode(challenge, code)) {
+  } else if (!verifyTwoFactorCode(challenge, code)) {
     const nextAttempts = Number(challenge.attempts || 0) + 1;
 
     if (nextAttempts >= 5) {

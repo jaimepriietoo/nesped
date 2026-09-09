@@ -1,0 +1,24 @@
+-- Fase 1 de la auditoría: que un fallo aislado no lo pare todo.
+-- Aplicado en producción el 2026-09-09.
+--
+-- Migraciones aplicadas:
+--   grabaciones_pendientes_y_webhooks_procesados
+--   codigos_de_recuperacion
+--
+-- GRABACIONES PENDIENTES. El aviso de grabación y el final de la llamada
+-- llegan en cualquier orden. Cuando la grabación llegaba primero se guardaba
+-- en un Map de la RAM del servidor de voz, y ese Map era el único motivo por
+-- el que no podía haber dos instancias: el aviso puede caer en la máquina que
+-- no atendió la llamada, y entonces recording_url quedaba a null SIN error.
+-- Se perdían grabaciones en silencio.
+--
+-- WEBHOOKS PROCESADOS. La idempotencia de Stripe se resolvía recorriendo los
+-- 200 eventos más recientes. Con volumen deja de funcionar: un reintento
+-- tardío cae fuera de la ventana y el cobro se registra dos veces. Y había
+-- una carrera: dos reintentos simultáneos no se veían el uno al otro. Una
+-- clave primaria compuesta no tiene ventana ni carrera.
+--
+-- CÓDIGOS DE RECUPERACIÓN. El segundo factor va por correo, y si el correo no
+-- sale nadie entra al portal. Había un respaldo por SMS que, comprobado en
+-- producción, no puede dispararse: cero de seis usuarios tiene móvil y no hay
+-- número desde el que enviar. Existía en el código y no en la realidad.

@@ -242,8 +242,16 @@ const supabase = hasSupabase
     )
   : null;
 
-const pendingRecordings = new Map();
-const PENDING_RECORDING_TTL_MS = 24 * 60 * 60 * 1000;
+/* Las grabaciones que llegan antes que su llamada viven en la base de datos,
+   no en la RAM de esta instancia.
+ 
+   Estaban en un Map, y ese Map era el único motivo por el que este servidor
+   no podía tener dos instancias: el aviso de grabación puede caer en la
+   máquina que no atendió la llamada, y entonces recording_url se guardaba
+   como null SIN ningún error. Se perdían grabaciones en silencio.
+ 
+   Con una tabla, cualquier instancia atiende cualquier aviso. */
+const HORAS_GRABACION_PENDIENTE = 24;
 const RECORDING_RETENTION_DAYS = Math.max(
   1,
   Number(process.env.RECORDING_RETENTION_DAYS || 30)
@@ -419,7 +427,6 @@ app.get("/healthz", async (req, res) => {
       recordingRetentionDays: RECORDING_RETENTION_DAYS,
       transcriptRetentionDays: TRANSCRIPT_RETENTION_DAYS,
     },
-    pendingRecordings: pendingRecordings.size,
     now: new Date().toISOString(),
   });
 });
@@ -555,14 +562,55 @@ function getRecordingMediaUrl(recordingUrl = "") {
     : `${recordingUrl}.mp3`;
 }
 
-function cleanupPendingRecordings() {
-  const now = Date.now();
+/**
+ * Guarda una grabación que ha llegado antes que su llamada.
+ *
+ * Se sobrescribe si ya había una para el mismo call_sid: Twilio reintenta los
+ * avisos, y el último siempre es el bueno.
+ */
+async function guardarGrabacionPendiente({ callSid, clientId, recordingUrl }) {
+  if (!supabase || !callSid || !recordingUrl) return;
 
-  for (const [callSid, entry] of pendingRecordings.entries()) {
-    if (!entry?.updatedAt || now - entry.updatedAt > PENDING_RECORDING_TTL_MS) {
-      pendingRecordings.delete(callSid);
-    }
+  const { error } = await supabase
+    .from("grabaciones_pendientes")
+    .upsert(
+      { call_sid: callSid, client_id: clientId, recording_url: recordingUrl },
+      { onConflict: "call_sid" }
+    );
+
+  if (error) {
+    reportVoiceError(error, "voice.recording.pending_save_failed", { callSid, clientId });
   }
+}
+
+/** Recoge y consume la grabación pendiente de una llamada, si la hay. */
+async function tomarGrabacionPendiente(callSid) {
+  if (!supabase || !callSid) return null;
+
+  const { data } = await supabase
+    .from("grabaciones_pendientes")
+    .select("recording_url")
+    .eq("call_sid", callSid)
+    .maybeSingle();
+
+  if (!data?.recording_url) return null;
+
+  await supabase.from("grabaciones_pendientes").delete().eq("call_sid", callSid);
+  return data.recording_url;
+}
+
+/**
+ * Borra las que se quedaron huérfanas.
+ *
+ * Una grabación cuya llamada nunca llegó a guardarse no sirve de nada pasado
+ * un día. Antes esto era un recorrido del Map; ahora es un DELETE, y lo puede
+ * ejecutar cualquier instancia sin pisarse con las demás.
+ */
+async function limpiarGrabacionesPendientes() {
+  if (!supabase) return;
+
+  const limite = new Date(Date.now() - HORAS_GRABACION_PENDIENTE * 3600e3).toISOString();
+  await supabase.from("grabaciones_pendientes").delete().lt("created_at", limite);
 }
 
 /* =========================================================================
@@ -986,8 +1034,6 @@ app.post("/recording-status", async (req, res) => {
   }
 
   try {
-    cleanupPendingRecordings();
-
     const recordingUrl = req.body?.RecordingUrl || "";
     const callSid = req.body?.CallSid || "";
     const recordingStatus = req.body?.RecordingStatus || "";
@@ -1000,19 +1046,12 @@ app.post("/recording-status", async (req, res) => {
       recordingStatus,
     });
 
-    if (callSid && normalizedRecordingUrl) {
-      pendingRecordings.set(callSid, {
-        recordingUrl: normalizedRecordingUrl,
-        updatedAt: Date.now(),
-      });
-    }
-
     if (supabase && callSid && normalizedRecordingUrl) {
+      /* Primero se intenta pegar a la llamada. Si ya está guardada, esto
+         acierta y no hace falta nada más. */
       const { data, error } = await supabase
         .from("calls")
-        .update({
-          recording_url: normalizedRecordingUrl,
-        })
+        .update({ recording_url: normalizedRecordingUrl })
         .eq("call_sid", callSid)
         .eq("client_id", clientId)
         .select("call_sid");
@@ -1024,8 +1063,21 @@ app.post("/recording-status", async (req, res) => {
         });
       } else if (Array.isArray(data) && data.length > 0) {
         console.log("✅ recording_url guardada en calls");
-        pendingRecordings.delete(callSid);
+      } else {
+        /* La llamada todavía no existe: el aviso ha llegado antes. Se deja
+           anotado para que la recoja quien la guarde, que puede ser esta
+           instancia u otra. */
+        await guardarGrabacionPendiente({
+          callSid,
+          clientId,
+          recordingUrl: normalizedRecordingUrl,
+        });
+        console.log("🕗 Grabación anotada: la llamada aún no está guardada");
       }
+
+      /* Barrido oportunista de las que quedaron huérfanas. Aquí y no en un
+         temporizador: así no depende de que esta instancia siga viva. */
+      await limpiarGrabacionesPendientes();
     }
 
     res.status(200).send("ok");
@@ -1214,7 +1266,6 @@ wss.on("connection", async (providerWs, req) => {
     }
 
     try {
-      cleanupPendingRecordings();
 
       const durationSeconds = Math.max(
         1,
@@ -1222,7 +1273,7 @@ wss.on("connection", async (providerWs, req) => {
       );
 
       const transcript = transcriptParts.join("\n").trim();
-      const pendingRecording = callSid ? pendingRecordings.get(callSid) : null;
+      const grabacionPendiente = await tomarGrabacionPendiente(callSid);
 
       await supabase.from("calls").insert({
         client_id: clientId,
@@ -1242,12 +1293,8 @@ wss.on("connection", async (providerWs, req) => {
         summary_long: transcript
           ? `Resumen automático: ${callSummary}. Transcripción disponible para análisis.`
           : callSummary,
-        recording_url: pendingRecording?.recordingUrl || null,
+        recording_url: grabacionPendiente || null,
       });
-
-      if (callSid && pendingRecording) {
-        pendingRecordings.delete(callSid);
-      }
 
       /* Consumo de la empresa.
       

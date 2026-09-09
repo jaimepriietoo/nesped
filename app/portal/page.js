@@ -1661,6 +1661,105 @@ function Equipo({ datos, onRecargar, acceso }) {
   );
 }
 
+/**
+ * Códigos de recuperación.
+ *
+ * El segundo factor llega por correo. Si el correo no sale —el proveedor
+ * caído, el dominio sin verificar— nadie entra al portal, y eso incluye a
+ * quien tendría que arreglarlo.
+ *
+ * Estos códigos no dependen de ningún proveedor. Se enseñan UNA vez: sólo se
+ * guarda su hash, así que ni nosotros podemos volver a verlos.
+ */
+function CodigosRecuperacion() {
+  const [disponibles, setDisponibles] = useState(null);
+  const [codigos, setCodigos] = useState(null);
+  const [ocupado, setOcupado] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let vivo = true;
+    fetch("/api/portal/codigos-recuperacion")
+      .then((r) => r.json())
+      .then((j) => { if (vivo && j?.success) setDisponibles(j.disponibles); })
+      .catch(() => {});
+    return () => { vivo = false; };
+  }, []);
+
+  async function generar() {
+    setOcupado(true);
+    setError("");
+    try {
+      const res = await fetch("/api/portal/codigos-recuperacion", { method: "POST" });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        setError(json?.message || "No se pudieron generar.");
+        return;
+      }
+      setCodigos(json.codigos);
+      setDisponibles(json.codigos.length);
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 14 }}>
+      <p className="pv3-p" style={{ fontSize: 13.5, color: "var(--dim)" }}>
+        Sirven para entrar si el código por correo no te llega. Cada uno vale
+        una vez.
+      </p>
+
+      {codigos ? (
+        <>
+          <div
+            style={{
+              marginTop: 14, padding: 14,
+              border: "1px solid var(--line)", borderRadius: 8,
+              fontFamily: "var(--font-display)", fontSize: 14, lineHeight: 2,
+              columnCount: 2, columnGap: 18,
+            }}
+          >
+            {codigos.map((c) => <div key={c}>{c}</div>)}
+          </div>
+          <p className="pv3-p" style={{ marginTop: 12, fontSize: 13, color: "var(--warn)" }}>
+            Guárdalos ahora. No se pueden volver a ver: sólo queda su huella.
+          </p>
+        </>
+      ) : (
+        <p className="pv3-p" style={{ marginTop: 10, fontSize: 13 }}>
+          {disponibles === null
+            ? "\u00a0"
+            : disponibles > 0
+              ? `Te quedan ${disponibles} sin usar.`
+              : "No tienes ninguno. Si el correo falla, no podrás entrar."}
+        </p>
+      )}
+
+      <button
+        type="button"
+        className="pv3-btn"
+        data-v={disponibles === 0 ? "light" : undefined}
+        style={{ marginTop: 12 }}
+        onClick={generar}
+        disabled={ocupado}
+      >
+        {ocupado ? "Generando…" : disponibles ? "Generar otros" : "Generar códigos"}
+      </button>
+
+      {disponibles > 0 && !codigos ? (
+        <p className="pv3-p" style={{ marginTop: 8, fontSize: 12.5, color: "var(--muted)" }}>
+          Generar otros anula los que ya tengas.
+        </p>
+      ) : null}
+
+      {error ? (
+        <p className="pv3-p" style={{ marginTop: 10, fontSize: 13, color: "var(--bad)" }}>{error}</p>
+      ) : null}
+    </div>
+  );
+}
+
 function Ajustes({ datos, onRecargar }) {
   const c = datos.client || {};
   const s = datos.settings || {};
@@ -1771,6 +1870,11 @@ function Ajustes({ datos, onRecargar }) {
           >
             {ocupado ? "Abriendo…" : "Facturación y facturas"}
           </button>
+        </div>
+
+        <div className="pv3-card">
+          <div className="pv3-lab">ACCESO</div>
+          <CodigosRecuperacion />
         </div>
 
         <div className="pv3-card">

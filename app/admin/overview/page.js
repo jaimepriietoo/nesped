@@ -37,7 +37,9 @@ export default function AdminOverview() {
         return;
       }
 
-      setMetrics(json.metrics || {});
+      /* Sólo si vienen. La segunda página los manda a null porque no cambian,
+         y machacarlos con {} dejaría las tarjetas a cero al pulsar "ver más". */
+      if (json.metrics) setMetrics(json.metrics);
       setClients((previas) => (desde ? [...previas, ...json.clients] : json.clients));
       setCursor(json.cursor || null);
     } catch (err) {

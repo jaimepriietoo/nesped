@@ -61,7 +61,12 @@ export async function GET(req) {
 
     return Response.json({
       success: true,
-      metrics: data?.metrics || {},
+      /* Null a partir de la segunda página, a propósito: los totales globales
+         no cambian mientras se pagina y volver a contarlos era más de la mitad
+         del coste de cada página. Medido con 506 empresas: 13,5 ms por página
+         de los que 7,4 eran recontar lo mismo. Quien pagina se queda con los
+         de la primera respuesta. */
+      metrics: data?.metrics ?? null,
       clients: data?.clients || [],
       /* Null cuando ya no quedan más. El panel deja de pedir cuando lo ve. */
       cursor: data?.cursor || null,

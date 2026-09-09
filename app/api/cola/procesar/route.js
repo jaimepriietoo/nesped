@@ -1,6 +1,7 @@
 import { requireInternalRequest } from "@/lib/server/internal-api";
-import { tomarTrabajos, terminar, fallar, rescatarColgados, SinArreglo } from "@/lib/server/cola";
+import { encolar, tomarTrabajos, terminar, fallar, rescatarColgados, SinArreglo } from "@/lib/server/cola";
 import { enviarInforme } from "@/lib/server/informes";
+import { pasadaDeMantenimiento } from "@/lib/server/mantenimiento";
 
 /**
  * El que ejecuta la cola.
@@ -36,7 +37,34 @@ const OFICIOS = {
       clientId: t.client_id,
       paraSiNoHay: t.datos?.paraSiNoHay || null,
     }),
+
+  /**
+   * Mover lo viejo al archivo y pasar la retención.
+   *
+   * Se corta solo a los veinte segundos y, si queda trabajo, se vuelve a
+   * encolar. Así una primera limpieza de millones de filas no depende de que
+   * una función aguante diez minutos: son muchas pasadas cortas, y entre
+   * ellas caben los trabajos que sí tiene alguien esperando.
+   *
+   * La continuación va SIN clave a propósito. Con clave chocaría contra el
+   * trabajo que la está encolando, que en ese momento sigue en curso, y la
+   * cadena se cortaría en silencio en la primera vuelta.
+   */
+  mantenimiento: async () => {
+    const { quedaTrabajo } = await pasadaDeMantenimiento();
+    if (quedaTrabajo) await encolar({ tipo: "mantenimiento" });
+  },
 };
+
+/** El mantenimiento se pide una vez al día, y se pide solo. */
+async function pedirMantenimientoDelDia() {
+  const hoy = new Date().toISOString().slice(0, 10);
+  await encolar({
+    tipo: "mantenimiento",
+    clave: `mantenimiento:${hoy}`,
+    unaSolaVez: true,
+  });
+}
 
 async function procesar(req) {
   const errorInterno = requireInternalRequest(req);
@@ -46,6 +74,11 @@ async function procesar(req) {
     /* Antes de repartir, se recogen los que se quedaron con un trabajador
        muerto. Si no, se quedarían en 'en_curso' para siempre. */
     const rescatados = await rescatarColgados();
+
+    /* El mantenimiento no necesita su propio cron: se apunta él mismo, y la
+       clave con la fecha hace que sólo entre uno al día por mucho que esta
+       ruta se llame cada cinco minutos. */
+    await pedirMantenimientoDelDia();
 
     const trabajos = await tomarTrabajos({
       cuantos: POR_PASADA,

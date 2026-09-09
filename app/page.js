@@ -38,7 +38,9 @@ const NAV = [
  * qué infraestructura corre. Es lo que un comprador técnico quiere saber, y
  * decirlo de frente transmite más seriedad que un logo prestado.
  */
-const INFRAESTRUCTURA = ["OpenAI Realtime", "Telnyx", "Stripe"];
+/* Lo que hay debajo de verdad. Se cambia aquí cuando cambie la pila: decir
+   una cosa y usar otra en la página de un producto de voz es feo. */
+const INFRAESTRUCTURA = ["ElevenLabs", "Twilio", "Stripe"];
 
 /**
  * El mecanismo, paso a paso.
@@ -369,6 +371,10 @@ export default function Home() {
 
   return (
     <div className={`v3 ${inter.className}`}>
+      {/* Progreso de lectura. Puramente decorativo: lo mueve el navegador
+          con animación de desplazamiento, sin JavaScript. */}
+      <div className="v3-progreso" aria-hidden="true" />
+
       <Header activo={seccion} />
 
       {/* ── Hero ─────────────────────────────────────────────────────── */}

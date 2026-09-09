@@ -65,7 +65,7 @@ export default async function Pricing() {
       price: real?.precio || "Consultar",
       billing: real?.periodo || "según alcance",
       href: real
-        ? `/api/stripe/public-checkout?plan=${p.plan}`
+        ? `/registro?plan=${p.plan}`
         : `mailto:ventas@nesped.com?subject=${encodeURIComponent(`Plan ${p.name} de Nesped`)}`,
       cta: real ? `Contratar ${p.name}` : "Hablar con ventas",
     };

@@ -65,6 +65,25 @@ function planDe(cliente) {
   return PLANES[bruto] ? bruto : PLAN_POR_DEFECTO;
 }
 
+/**
+ * ¿Está la suscripción al corriente?
+ *
+ * Desde que la cuenta se crea ANTES de pagar, existir no basta para entrar:
+ * hay cuentas reales sin un solo cobro. Quien decide es billing_status, que
+ * escribe el webhook de Stripe.
+ *
+ * Sin estado se deja pasar a propósito. Las cuentas anteriores a este cambio
+ * tienen la columna vacía y son clientes de verdad; cerrarles el portal por
+ * un dato que nunca se rellenó sería echar a quien ya paga.
+ */
+const ESTADOS_SIN_ACCESO = new Set(["pendiente", "cancelado"]);
+
+function suscripcionAlCorriente(cliente) {
+  const estado = String(cliente?.billing_status || "").toLowerCase().trim();
+  if (!estado) return true;
+  return !ESTADOS_SIN_ACCESO.has(estado);
+}
+
 function vistaIncluida(idVista, plan) {
   const def = PLANES[plan] || PLANES[PLAN_POR_DEFECTO];
   return def.incluye === null || def.incluye.includes(idVista);
@@ -1786,6 +1805,41 @@ function Playbooks({ playbooks, cargando, onRecargar }) {
  * "actualiza tu plan". Alguien que ve para qué sirve lo que no tiene decide;
  * alguien que ve un candado sin explicación, se va.
  */
+/**
+ * Cuenta creada pero sin pagar.
+ *
+ * Se enseña en lugar del portal entero, no como un aviso encima: dejar ver
+ * secciones vacías a quien no ha pagado no informa de nada y hace pensar que
+ * el producto no funciona.
+ */
+function PagoPendiente({ plan, onPagar, ocupado }) {
+  return (
+    <div className="pv3-view">
+      <div className="pv3-card pv3-bloqueo">
+        <span className="pv3-lab">TE FALTA UN PASO</span>
+        <h2 className="pv3-bloqueo-titulo">
+          Tu cuenta está creada.<br />Falta activar el plan.
+        </h2>
+        <p className="pv3-p" style={{ marginTop: 12, fontSize: 15, maxWidth: "62ch" }}>
+          Ya tienes tu acceso y tus datos guardados. En cuanto completes el pago del
+          plan {plan} se abre el portal entero y tu agente empieza a coger llamadas.
+        </p>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 22 }}>
+          <button className="pv3-btn" onClick={onPagar} disabled={ocupado}>
+            {ocupado ? "Abriendo el pago…" : `Activar el plan ${plan}`}
+          </button>
+          <a className="pv3-btn" href="mailto:ventas@nesped.com?subject=Activar%20mi%20plan">
+            Hablar con nosotros antes
+          </a>
+        </div>
+        <p className="pv3-p" style={{ marginTop: 18, fontSize: 13, opacity: 0.7 }}>
+          Sin permanencia. Puedes darte de baja desde el portal cuando quieras.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function FueraDePlan({ vista, plan, onContratar, ocupado }) {
   const QUE_APORTA = {
     conversaciones: {
@@ -2020,27 +2074,20 @@ export default function PortalV3() {
   const meta = META[vista] || ["PORTAL", "Nesped", ""];
   const marca = datos?.client?.brand_name || datos?.client?.name || "Nesped";
   const plan = planDe(datos?.client);
-  planActual.current = plan;
+  /* El plan se copia a un ref para que `abrir` lo lea sin volver a crearse en
+     cada render. Escribirlo aquí y no en el cuerpo del render importa: React
+     puede descartar un render a medias, y un ref escrito en uno descartado
+     deja el valor adelantado respecto a lo que se está pintando. */
+  useEffect(() => { planActual.current = plan; }, [plan]);
   const [subiendoPlan, setSubiendoPlan] = useState(false);
 
-  /** Lleva al checkout de Pro desde la pantalla de sección bloqueada. */
-  const contratarPro = useCallback(async () => {
+  /* Al pago por la ruta con cuenta: lleva el client_id dentro de la sesión de
+     Stripe, que es lo que permite activar el plan al volver el webhook. */
+  const irAPagar = useCallback((planDestino) => {
     setSubiendoPlan(true);
-    try {
-      const res = await fetch("/api/stripe/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan: "pro" }),
-      });
-      const json = await res.json().catch(() => null);
-      if (json?.url) { window.location.href = json.url; return; }
-      alert(json?.message || "No se pudo abrir el pago. Escríbenos a ventas@nesped.com.");
-    } catch (e) {
-      alert(e?.message || "No se pudo abrir el pago.");
-    } finally {
-      setSubiendoPlan(false);
-    }
+    window.location.assign(`/api/suscripcion/iniciar?plan=${encodeURIComponent(planDestino)}`);
   }, []);
+  const contratarPro = useCallback(() => irAPagar("pro"), [irAPagar]);
   const alertasAbiertas = (datos?.alerts || []).length;
   const cargandoVista = Boolean(cargando[vista]);
 
@@ -2053,6 +2100,19 @@ export default function PortalV3() {
   const datosVista = extra[vista];
 
   function contenido() {
+    /* Primero el pago, después el plan. Sin suscripción al corriente no hay
+       sección que valga: enseñar el plan bloqueado a quien todavía no ha
+       pagado nada confunde las dos cosas. */
+    if (!suscripcionAlCorriente(datos?.client)) {
+      return (
+        <PagoPendiente
+          plan={PLANES[plan]?.nombre || plan}
+          onPagar={() => irAPagar(plan)}
+          ocupado={subiendoPlan}
+        />
+      );
+    }
+
     // Puerta única: nada de comprobar el plan en cada rama y olvidarse en una.
     if (!vistaIncluida(vista, plan)) {
       return (

@@ -1249,3 +1249,27 @@ html[data-rev="1"] .v3-rev.is-in { opacity: 1; transform: none; }
   .v3 .v3-pregunta-mas,
   .v3 .v3-pregunta-mas::after { transition: none; }
 }
+
+/* ── Alta de cuenta ───────────────────────────────────────────────────
+   Reutiliza la tarjeta de /login. Sólo añade lo que el alta necesita y
+   la pantalla de acceso no tiene: la pista de la contraseña y los pies. */
+.v3-hint {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.v3-auth-pie,
+.v3-auth-legal {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+}
+.v3-auth-legal { font-size: 12px; line-height: 1.55; }
+.v3-enlace {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(255, 255, 255, 0.35);
+}
+.v3-enlace:hover { text-decoration-color: var(--text); }

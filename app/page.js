@@ -621,7 +621,7 @@ export default function Home() {
                     className={`v3-btn ${p.hi ? "v3-btn--white" : "v3-btn--dark"}`}
                     href={
                       contratable
-                        ? `/api/stripe/public-checkout?plan=${p.plan}`
+                        ? `/registro?plan=${p.plan}`
                         : `mailto:ventas@nesped.com?subject=${encodeURIComponent(`Plan ${p.name} de Nesped`)}`
                     }
                   >

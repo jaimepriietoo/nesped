@@ -71,7 +71,7 @@ export async function GET() {
       ctx.supabase
         .from("calls")
         .select(
-          "id,call_sid,from_number,to_number,status,summary,summary_long,transcript,grabacion_propia,duration_seconds,lead_captured,detected_intent,created_at"
+          "id,call_sid,from_number,to_number,status,summary,summary_long,transcript,recording_url,grabacion_propia,duration_seconds,lead_captured,detected_intent,created_at"
         )
         .eq("client_id", ctx.clientId)
         .order("created_at", { ascending: false })
@@ -124,7 +124,14 @@ export async function GET() {
         `${call.summary || ""} ${call.summary_long || ""} ${transcript}`
       );
       const memory = memoryByLead.get(String(lead?.id || "")) || null;
-      const complianceScore = call.grabacion_propia
+      /* Aquí "hay grabación" quiere decir que EXISTE, no que ya esté copiada
+         a nuestro depósito. Entre que termina una llamada y que la cola trae
+         el audio pasan segundos o minutos, y durante esa ventana esta
+         pantalla diría que la llamada no se grabó. La dirección del proveedor
+         se mira pero no sale de aquí. */
+      const hayGrabacion = Boolean(call.grabacion_propia || call.recording_url);
+
+      const complianceScore = hayGrabacion
         ? disclosureDetected
           ? 100
           : 52
@@ -145,7 +152,10 @@ export async function GET() {
         /* Antes iba aquí la dirección del proveedor, que se abre sin
            credenciales. Ahora sólo se dice si la hay; para escucharla está
            /api/portal/grabacion, que comprueba la empresa y firma. */
-        tiene_grabacion: Boolean(call.grabacion_propia),
+        tiene_grabacion: hayGrabacion,
+        /* Y aparte, si ya está en nuestro depósito: es lo único que se puede
+           reproducir. Las dos cosas no son la misma. */
+        se_puede_escuchar: Boolean(call.grabacion_propia),
         duration_seconds: Number(call.duration_seconds || 0),
         lead_captured: Boolean(call.lead_captured),
         detected_intent: call.detected_intent || "",

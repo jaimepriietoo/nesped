@@ -57,3 +57,20 @@ test("el lote y el presupuesto son de tamaño humano", () => {
   assert.ok(LOTE > 0 && LOTE <= 10_000);
   assert.ok(PRESUPUESTO_MS >= 5_000 && PRESUPUESTO_MS <= 45_000);
 });
+
+test("la cola se limpia sola, pero no tan pronto como para romper su propia clave", () => {
+  /* El mantenimiento del día se pide con una clave que lleva la fecha, y esa
+     clave sólo evita repetirlo mientras la fila siga existiendo. Si la purga
+     borrara los trabajos del mismo día, el mantenimiento volvería a pedirse
+     cada treinta segundos. */
+  const p = plazos();
+  assert.ok(p.trabajos >= 2, "borrar el trabajo de hoy o el de ayer rompería la clave del día");
+  assert.ok(p.trabajos <= 90, "guardar la cola un año no le sirve a nadie");
+});
+
+test("el plazo de la cola es mucho menor que el del archivo", () => {
+  /* La cola es fontanería y el archivo es historial. Guardar la fontanería
+     tanto como el historial sería confundir las dos cosas. */
+  const p = plazos();
+  assert.ok(p.trabajos < p.auditoria);
+});

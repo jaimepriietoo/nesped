@@ -158,3 +158,30 @@ test("los automatismos solo se lanzan desde dentro", async ({ request, baseURL }
   const readiness = await request.get(`${baseURL}/api/ops/readiness`);
   expect([401, 403]).toContain(readiness.status());
 });
+
+/**
+ * La prueba de webhooks no se puede usar para mirar dentro de casa.
+ *
+ * Hacía `fetch` a la dirección que le mandaras y devolvía 1.200 caracteres de
+ * la respuesta. Desde una cuenta de cliente se podía apuntar a localhost, a
+ * 169.254.169.254 o a la red privada y leer lo que hubiera: la petición sale
+ * desde nuestro servidor, así que llega donde el atacante no llega.
+ */
+test("la prueba de webhooks rechaza direcciones internas", async ({ request, baseURL }) => {
+  const internas = [
+    "http://localhost:3000/api/portal/overview",
+    "https://127.0.0.1/",
+    "https://169.254.169.254/latest/meta-data/",
+    "https://10.0.0.5/",
+  ];
+
+  for (const url of internas) {
+    const res = await request.post(`${baseURL}/api/portal/webhook/test`, {
+      headers: { Origin: baseURL },
+      data: { url },
+    });
+    /* Sin sesión son 401; con ella, 400 por dirección interna. Lo que no
+       puede pasar nunca es que se llegue a hacer la petición. */
+    expect([400, 401, 403]).toContain(res.status());
+  }
+});

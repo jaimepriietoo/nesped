@@ -1,6 +1,7 @@
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
 import { logEvent, observeRoute } from "@/lib/server/observability.mjs";
 import { requireSameOrigin } from "@/lib/server/security";
+import { comprobarUrlExterna } from "@/lib/server/url-segura";
 
 async function handlePost(req) {
   try {
@@ -39,6 +40,22 @@ async function handlePost(req) {
     }
 
     const targetUrl = providedUrl || String(client.webhook || "").trim();
+
+    /* La dirección la elige quien llama, y esta petición sale desde nuestro
+       servidor: sin comprobarla, apuntando a localhost o a 169.254.169.254 se
+       leían endpoints internos y metadatos del proveedor, porque abajo se
+       devuelven 1.200 caracteres de la respuesta.
+
+       Se comprueba también la del cliente guardada en la base de datos, no
+       sólo la que llega en la petición: pudo guardarse antes de que esto
+       existiera. */
+    if (targetUrl) {
+      const revision = await comprobarUrlExterna(targetUrl);
+      if (!revision.ok) {
+        return Response.json({ success: false, message: revision.motivo }, { status: 400 });
+      }
+    }
+
     if (!targetUrl) {
       return Response.json(
         { success: false, message: "No hay webhook configurado" },

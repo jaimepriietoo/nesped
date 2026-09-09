@@ -13,12 +13,12 @@ import { urlDeSitio } from "@/lib/server/sitio";
  * Se conserva como redirección al alta, conservando el plan que se pedía.
  */
 
-const PLANES_PUBLICOS = new Set(["starter", "pro"]);
+const PLANES_PUBLICOS = new Set(["growth", "intelligence"]);
 
 export async function GET(req) {
   const BASE_URL = urlDeSitio(req);
   const { searchParams } = new URL(req.url);
-  const plan = String(searchParams.get("plan") || "starter").toLowerCase();
+  const plan = String(searchParams.get("plan") || "growth").toLowerCase();
   const destino = PLANES_PUBLICOS.has(plan) ? `/registro?plan=${plan}` : "/pricing";
 
   return NextResponse.redirect(`${BASE_URL}${destino}`, 308);

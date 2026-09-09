@@ -15,14 +15,14 @@ import { urlDeSitio } from "@/lib/server/sitio";
  * Sin sesión no se puede pagar: se manda a acceder y se vuelve aquí después.
  */
 
-const PLANES_PUBLICOS = new Set(["starter", "pro"]);
+const PLANES_PUBLICOS = new Set(["growth", "intelligence"]);
 
 export async function GET(req) {
   const BASE_URL = urlDeSitio(req);
 
   try {
     const { searchParams } = new URL(req.url);
-    const plan = String(searchParams.get("plan") || "starter").toLowerCase();
+    const plan = String(searchParams.get("plan") || "growth").toLowerCase();
 
     if (!PLANES_PUBLICOS.has(plan)) {
       return NextResponse.redirect(`${BASE_URL}/pricing`, 303);

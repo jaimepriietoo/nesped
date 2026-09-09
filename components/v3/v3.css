@@ -1435,3 +1435,30 @@ html[data-rev="1"] .v3-rev.is-in { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) {
   .v3-progreso { display: none; }
 }
+
+/* El verbo del plan. Es lo que de verdad lo distingue —ordena, entiende,
+   actúa— así que va grande y antes que la descripción. */
+.v3-plan-verbo {
+  margin: 10px 0 0;
+  font-family: var(--font-display);
+  font-size: clamp(19px, 2.2vw, 25px);
+  letter-spacing: -0.03em;
+  color: hsl(var(--acento));
+}
+.v3-desde { font-size: 0.42em; opacity: 0.55; letter-spacing: 0; }
+
+.v3-plan-para {
+  margin: 14px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--muted);
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.v3-plan-hereda { margin: 12px 0 0; font-size: 13px; color: var(--muted); font-style: italic; }
+
+/* La columna del plan recomendado se separa del resto sin gritar. */
+.v3-tabla-planes th[data-hi="1"],
+.v3-tabla-planes td[data-hi="1"] { background: rgba(255, 255, 255, 0.035); }
+.v3-si { color: hsl(var(--acento)); }
+.v3-no { color: rgba(255, 255, 255, 0.22); }

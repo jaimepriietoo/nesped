@@ -20,7 +20,7 @@ const PANEL = {
   // El plan importa: sin él, el portal cae en Starter y bloquea las
   // secciones de Pro, así que las pruebas que las abren no verían la sección
   // sino la pantalla de "esto es del plan Pro".
-  client: { id: "demo", name: "Marca Demo", brand_name: "Marca Demo", is_active: true, plan: "pro" },
+  client: { id: "demo", name: "Marca Demo", brand_name: "Marca Demo", is_active: true, plan: "intelligence" },
   settings: { monthly_target_leads: 25, monthly_target_conversion: 20, default_deal_value: 250, realtime_refresh_seconds: 15 },
   users: [{ id: "u1", full_name: "Dueño Demo", email: "owner@demo.com", role: "owner", is_active: true, created_at: new Date().toISOString() }],
   leads: [{ id: "l1", nombre: "Ana Ruiz", telefono: "+34600111222", status: "new", score: 90, valor_estimado: 1200, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }],
@@ -32,7 +32,7 @@ const PANEL = {
   pipeline: { new: 1, contacted: 0, qualified: 0, won: 0, lost: 0 },
 };
 
-async function montarPortal(context, page, baseURL, { romper = null } = {}) {
+async function montarPortal(context, page, baseURL, { romper = null, plan = "intelligence" } = {}) {
   const host = new URL(baseURL).hostname;
   await context.addCookies([
     { name: "nesped_session", value: "playwright", domain: host, path: "/" },
@@ -42,7 +42,10 @@ async function montarPortal(context, page, baseURL, { romper = null } = {}) {
   await page.route("**/api/**", async (route) => {
     const ruta = new URL(route.request().url()).pathname;
 
-    if (ruta === "/api/portal/overview") return route.fulfill(json(PANEL));
+    if (ruta === "/api/portal/overview") {
+      // El plan viaja en la respuesta, que es de donde lo lee el portal.
+      return route.fulfill(json({ ...PANEL, client: { ...PANEL.client, plan } }));
+    }
 
     // Devolver una forma imposible permite comprobar que el fallo queda
     // contenido en su panel en vez de tumbar el portal entero.
@@ -61,6 +64,10 @@ async function montarPortal(context, page, baseURL, { romper = null } = {}) {
         freshness: { leads: { level: "healthy", message: "ok" }, calls: { level: "healthy", message: "ok" } },
         env: { summary: "todo listo", features: [] },
       } }));
+    }
+
+    if (ruta === "/api/portal/contacto") {
+      return route.fulfill(json({ success: true, lead: {}, recorrido: [], perfil: { disponible: false, falta: "" }, siguiente: { disponible: false, falta: "" } }));
     }
 
     return route.fulfill(json({ success: true, data: { summary: {}, } }));
@@ -222,4 +229,42 @@ test("no se puede leer la ficha de un contacto ajeno", async ({ request, baseURL
     `${baseURL}/api/portal/contacto?id=00000000-0000-0000-0000-000000000000`
   );
   expect([401, 403, 404]).toContain(res.status());
+});
+
+/**
+ * Las compuertas de plan, comprobadas por la interfaz.
+ *
+ * Es la prueba que más dinero protege del proyecto: si Growth pudiera abrir
+ * Intelligence, el plan de 999 € deja de existir y nadie se entera hasta que
+ * mira la facturación. Y al revés, si Enterprise se encontrara un candado,
+ * un cliente de 1.999 € descubre que le falta lo que ha pagado.
+ *
+ * Se prueba por la pantalla y no importando el módulo de planes a propósito:
+ * lo que puede fallar no es la tabla de funciones, es que una pantalla se
+ * olvide de declarar cuál necesita.
+ */
+test("Growth no entra en Intelligence ni en Enterprise", async ({ context, page, baseURL }) => {
+  await montarPortal(context, page, baseURL, { plan: "growth" });
+
+  // Entra por Resumen: a nadie se le recibe con un candado.
+  await expect(page.getByRole("heading", { name: "Resumen" })).toBeVisible();
+
+  await page.getByRole("button", { name: /Inteligencia/ }).click();
+  await expect(page.getByText(/TU PLAN ES GROWTH/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: /Pasar a Intelligence/i })).toBeVisible();
+
+  await page.getByRole("button", { name: /Automatismos/ }).click();
+  // Enterprise no se contrata con tarjeta: se habla antes.
+  await expect(page.getByRole("link", { name: /Hablar con nosotros/i })).toBeVisible();
+});
+
+test("Enterprise no se encuentra ningún candado", async ({ context, page, baseURL }) => {
+  await montarPortal(context, page, baseURL, { plan: "enterprise" });
+
+  await expect(page.getByRole("heading", { name: /Qué está pasando/ })).toBeVisible();
+  // Ninguna entrada del menú lleva etiqueta de plan superior.
+  await expect(page.locator(".pv3-candado")).toHaveCount(0);
+
+  await page.getByRole("button", { name: /Automatismos/ }).click();
+  await expect(page.getByText(/TU PLAN ES/i)).toHaveCount(0);
 });

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Inter } from "next/font/google";
+import { PLANES } from "@/lib/planes";
 import "@/components/v3/v3.css";
 import { Footer, Header } from "@/components/v3/chrome";
 import { Rev } from "@/components/v3/rev";
@@ -167,27 +168,52 @@ const SENAL = [
  * buenos: la propia web se contradecía. Ahora los pide a /api/precios, que
  * los saca de Stripe. Para cambiar un precio se cambia allí y ya está.
  */
-const PLANES = [
+/*
+ * Los tres planes, descritos por lo que hace Nesped en cada uno.
+ *
+ * La lista de funciones y los precios salen de lib/planes.js y de Stripe: aquí
+ * sólo vive cómo se cuentan. La diferencia entre planes no es cuántas casillas
+ * marcan, es hasta dónde llega el producto —ordena, entiende, actúa— y eso es
+ * lo que tiene que leerse de un vistazo.
+ */
+const PLANES_WEB = [
   {
-    name: "Starter",
-    plan: "starter",
-    sub: "Entrada rápida para validar experiencia y captación.",
-    feats: ["Recepción IA básica", "Captura de leads", "Resumen por llamada", "Panel inicial"],
-    hi: false,
+    plan: "growth",
+    verbo: "Ordena",
+    sub: "Todo lo que entra por teléfono, recogido, ordenado y sin que se pierda nadie.",
+    feats: [
+      "El agente coge las llamadas y capta los datos",
+      "Contactos, fases y actividad en un sitio",
+      "Grabación y transcripción de cada llamada",
+      "Recorrido completo de cada contacto",
+      "Qué hacer con cada uno, y por qué",
+    ],
   },
   {
-    name: "Pro",
-    plan: "pro",
-    sub: "La versión más seria para mostrar valor y cerrar clientes.",
-    feats: ["Voz más natural", "Portal premium", "Métricas y resúmenes", "Soporte prioritario"],
-    hi: true,
+    plan: "intelligence",
+    verbo: "Entiende",
+    sub: "Nesped mira tus datos y te dice dónde está el dinero y qué exige atención hoy.",
+    feats: [
+      "Todo lo de Growth",
+      "Dónde se te está escapando el dinero",
+      "Qué clientes se están enfriando",
+      "Cómo va el mes contra tu objetivo",
+      "Aviso cuando algo se sale de lo normal",
+      "Por qué se pierden las operaciones",
+    ],
   },
   {
-    name: "Enterprise",
     plan: "enterprise",
-    sub: "Despliegues multi-cliente, integraciones y rollouts premium.",
-    feats: ["Branding avanzado", "Automatizaciones custom", "Mayor control operativo", "Onboarding dedicado"],
-    hi: false,
+    verbo: "Actúa",
+    sub: "Nesped deja de recomendar y empieza a hacerlo, con el control que tú le des.",
+    feats: [
+      "Todo lo de Intelligence",
+      "Agentes que hacen el seguimiento solos",
+      "Preguntarle a Nesped sobre tu negocio",
+      "Patrones de tu equipo comercial",
+      "Simulación de escenarios",
+      "Conectar más fuentes de datos",
+    ],
   },
 ];
 
@@ -591,47 +617,54 @@ export default function Home() {
             <span className="v3-eyebrow">Planes</span>
             <h2 className="v3-h2">Listos para vender, cobrar y escalar.</h2>
             <p className="v3-lede">
-              Pensados para que puedas activar desde la web pública o desde el
-              portal sin romper el flujo comercial.
+              La diferencia no es cuántas cosas marca cada uno. Es hasta dónde
+              llega Nesped: ordena, entiende, o trabaja por ti.
             </p>
           </Rev>
 
           <div className="v3-grid" data-c="3">
-            {PLANES.map((p, i) => {
+            {PLANES_WEB.map((p, i) => {
+              const def = PLANES[p.plan];
               const real = precios?.[p.plan];
-              // Mientras llegan los precios se deja el hueco en blanco en vez
-              // de enseñar una cifra provisional que luego cambia sola.
-              const importe = precios === null ? "" : real?.precio || "Consultar";
-              const contratable = Boolean(real);
+              /* El precio se pide a Stripe, no se escribe aquí. Tenerlo en dos
+                 sitios fue lo que hizo que la web anunciara una cifra y se
+                 cobrara otra. Mientras llega se deja el hueco en blanco en vez
+                 de enseñar una provisional que luego cambia sola. */
+              const importe = precios === null ? "" : real?.precio || `${def.precio} €`;
+              const porVentas = def.hablarConVentas;
 
               return (
                 <Rev
                   as="article"
-                  key={p.name}
+                  key={p.plan}
                   d={i * 0.09}
-                  className={`v3-card v3-plan ${p.hi ? "v3-plan--hi" : ""}`}
+                  className={`v3-card v3-plan ${def.recomendado ? "v3-plan--hi" : ""}`}
                 >
-                  <span className="v3-card-meta">{p.hi ? "Recomendado" : "Plan"}</span>
-                  <h3 className="v3-h3">{p.name}</h3>
+                  <span className="v3-card-meta">
+                    {def.recomendado ? "El que recomendamos" : "Plan"}
+                  </span>
+                  <h3 className="v3-h3">{def.nombre}</h3>
+                  <p className="v3-plan-verbo">{p.verbo}</p>
                   <p className="v3-p">{p.sub}</p>
                   <div className="v3-price" aria-busy={precios === null}>
+                    {def.desde && importe ? <span className="v3-desde">desde </span> : null}
                     {importe || "\u00a0"}
                   </div>
-                  <div className="v3-billing">{real?.periodo || "según alcance"}</div>
+                  <div className="v3-billing">{real?.periodo || "al mes"}</div>
                   <ul className="v3-feats">
                     {p.feats.map((f) => (
                       <li key={f}><span className="v3-tick">/</span>{f}</li>
                     ))}
                   </ul>
                   <a
-                    className={`v3-btn ${p.hi ? "v3-btn--white" : "v3-btn--dark"}`}
+                    className={`v3-btn ${def.recomendado ? "v3-btn--white" : "v3-btn--dark"}`}
                     href={
-                      contratable
-                        ? `/registro?plan=${p.plan}`
-                        : `mailto:ventas@nesped.com?subject=${encodeURIComponent(`Plan ${p.name} de Nesped`)}`
+                      porVentas
+                        ? `mailto:ventas@nesped.com?subject=${encodeURIComponent("Nesped Enterprise")}`
+                        : `/registro?plan=${p.plan}`
                     }
                   >
-                    {contratable ? `Contratar ${p.name}` : "Hablar con ventas"}
+                    {porVentas ? "Hablar con nosotros" : `Empezar con ${def.nombre}`}
                   </a>
                 </Rev>
               );

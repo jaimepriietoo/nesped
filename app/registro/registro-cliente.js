@@ -6,16 +6,14 @@ import { Inter } from "next/font/google";
 import "@/components/v3/v3.css";
 import { Logo } from "@/components/v3/chrome";
 import { LONGITUD_MINIMA_PASSWORD } from "@/lib/server/passwords";
+import { PLANES } from "@/lib/planes";
 
 const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600"], display: "swap" });
 
 const VIDEO_SRC =
   "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260809_012548_ef22562c-c0ae-4816-ad9d-f8922af4e6a7.mp4";
 
-const PLANES = {
-  starter: "Starter",
-  pro: "Pro",
-};
+
 
 /**
  * Alta de cuenta antes del pago.
@@ -27,8 +25,8 @@ const PLANES = {
  */
 export default function Registro() {
   const searchParams = useSearchParams();
-  const planPedido = String(searchParams?.get("plan") || "starter").toLowerCase();
-  const plan = PLANES[planPedido] ? planPedido : "starter";
+  const planPedido = String(searchParams?.get("plan") || "growth").toLowerCase();
+  const plan = PLANES[planPedido] && !PLANES[planPedido].hablarConVentas ? planPedido : "growth";
 
   const [empresa, setEmpresa] = useState("");
   const [email, setEmail] = useState("");
@@ -92,7 +90,7 @@ export default function Registro() {
 
         <h1 className="v3-auth-title">Crea tu cuenta</h1>
         <p className="v3-auth-sub">
-          Plan <strong>{PLANES[plan]}</strong>. Creas la cuenta ahora y pagas en el
+          Plan <strong>{PLANES[plan].nombre}</strong>, {PLANES[plan].precio} € al mes. Creas la cuenta ahora y pagas en el
           siguiente paso, con Stripe.
         </p>
 

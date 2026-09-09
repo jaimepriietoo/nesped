@@ -29,7 +29,7 @@ test("pricing enseña precios reales y lleva al checkout", async ({ page }) => {
   await page.goto("/pricing");
 
   await expect(
-    page.getByRole("heading", { name: /Planes listos para vender/i })
+    page.getByRole("heading", { name: /Ordena\. Entiende\./i })
   ).toBeVisible();
 
   const precios = page.locator(".v3-price");
@@ -45,10 +45,13 @@ test("pricing enseña precios reales y lleva al checkout", async ({ page }) => {
   const conImporte = textos.filter((t) => /\d/.test(t));
   expect(conImporte.length).toBeGreaterThan(0);
 
-  // Todo plan con precio tiene que poder contratarse; el que no, va a ventas.
-  const checkout = page.locator('a[href*="/api/stripe/public-checkout"]');
+  /* Los tres planes tienen salida: los dos contratables llevan al alta, y
+     Enterprise a ventas. Que uno se quede sin botón es un fallo que no da
+     error en ninguna parte, sólo pierde la venta. */
+  const alta = page.locator('a[href^="/registro?plan="]');
   const ventas = page.locator('a[href^="mailto:"]');
-  expect((await checkout.count()) + (await ventas.count())).toBeGreaterThanOrEqual(3);
+  expect(await alta.count()).toBeGreaterThanOrEqual(2);
+  expect(await ventas.count()).toBeGreaterThanOrEqual(1);
 });
 
 test("las páginas internas no se sirven sin sesión", async ({ request }) => {

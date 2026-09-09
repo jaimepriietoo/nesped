@@ -20,6 +20,10 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  PLANES, PLAN_POR_DEFECTO, planDe, planSiguiente,
+  tieneFuncion, planQueIncluye, VALOR_BLOQUEADO,
+} from "@/lib/planes";
 import "./portal.css";
 
 /* ── utilidades ──────────────────────────────────────────────────────── */
@@ -37,32 +41,21 @@ import "./portal.css";
    `calls_limit` estaban en la base desde el principio y nadie las leía.
 
    Lo que no entra en el plan no se esconde: se enseña bloqueado. Un cliente
-   de Starter viendo qué le daría Pro es la mejor palanca de subida que hay,
-   y esconderlo sólo consigue que no sepa que existe.
+   de Growth viendo qué le daría Intelligence es la mejor palanca de subida
+   que hay, y esconderlo sólo consigue que no sepa que existe.
    ========================================================================= */
 
-const PLANES = {
-  starter: {
-    nombre: "Starter",
-    incluye: ["inteligencia", "resumen", "leads", "llamadas", "equipo", "ajustes", "estado"],
-    siguiente: "pro",
-  },
-  pro: {
-    nombre: "Pro",
-    // Pro lo abre todo.
-    incluye: null,
-    siguiente: null,
-  },
-  premium: { nombre: "Premium", incluye: null, siguiente: null },
-  enterprise: { nombre: "Enterprise", incluye: null, siguiente: null },
-};
-
-/** Qué se le da a alguien cuyo plan no reconocemos: lo mínimo, nunca todo. */
-const PLAN_POR_DEFECTO = "starter";
-
-/* Con qué pantalla se entra al portal. Es la que contesta "qué pasa", que
-   es lo que alguien viene a saber antes de ir a buscar nada. */
-const VISTA_DE_ENTRADA = "inteligencia";
+/*
+ * Con qué pantalla se entra al portal.
+ *
+ * Inteligencia contesta "qué pasa", que es lo que alguien viene a saber antes
+ * de ir a buscar nada. Pero quien no la tenga en su plan entra por Resumen:
+ * recibir a alguien con un candado en la cara es la peor primera pantalla
+ * posible, y además le esconde lo que sí ha pagado.
+ */
+function vistaDeEntrada(plan) {
+  return tieneFuncion(plan, "inteligencia") ? "inteligencia" : "resumen";
+}
 
 /* Motivos de pérdida. Lista corta a propósito: son los que un negocio puede
    hacer algo al respecto, y una lista larga acaba en "otro" siempre. */
@@ -84,11 +77,6 @@ const MOTIVOS_PERDIDA = [
   ["otro", "Otro"],
 ];
 
-function planDe(cliente) {
-  const bruto = String(cliente?.plan || "").toLowerCase().trim();
-  return PLANES[bruto] ? bruto : PLAN_POR_DEFECTO;
-}
-
 /**
  * ¿Está la suscripción al corriente?
  *
@@ -109,22 +97,23 @@ function suscripcionAlCorriente(cliente) {
 }
 
 function vistaIncluida(idVista, plan) {
-  const def = PLANES[plan] || PLANES[PLAN_POR_DEFECTO];
-  return def.incluye === null || def.incluye.includes(idVista);
+  const necesita = VISTAS.concat(VISTAS_OCULTAS).find((v) => v.id === idVista)?.funcion;
+  // Una pantalla sin función declarada entra en todos los planes.
+  return !necesita || tieneFuncion(plan, necesita);
 }
 
 const VISTAS = [
   { grupo: "Operación" },
-  { id: "inteligencia", label: "Inteligencia", ico: "◆", api: "/api/portal/inteligencia" },
+  { id: "inteligencia", label: "Inteligencia", ico: "◆", api: "/api/portal/inteligencia", funcion: "inteligencia" },
   { id: "resumen", label: "Resumen", ico: "◇" },
   { id: "leads", label: "Contactos", ico: "◈" },
   { id: "llamadas", label: "Llamadas", ico: "◉" },
-  { id: "conversaciones", label: "Conversaciones", ico: "◈", api: "/api/portal/inbox" },
+  { id: "conversaciones", label: "Conversaciones", ico: "◈", api: "/api/portal/inbox", funcion: "crm" },
 
   { grupo: "El agente" },
-  { id: "agentes", label: "Automatismos", ico: "⚙", api: "/api/portal/agentes" },
-  { id: "voz", label: "Calidad de voz", ico: "◎", api: "/api/portal/voice-center" },
-  { id: "playbooks", label: "Guion comercial", ico: "✎", api: "/api/playbooks" },
+  { id: "agentes", label: "Automatismos", ico: "⚙", api: "/api/portal/agentes", funcion: "agentes" },
+  { id: "voz", label: "Calidad de voz", ico: "◎", api: "/api/portal/voice-center", funcion: "llamadas" },
+  { id: "playbooks", label: "Guion comercial", ico: "✎", api: "/api/playbooks", funcion: "llamadas" },
 
   { grupo: "Cuenta" },
   { id: "equipo", label: "Equipo", ico: "○", deps: ["permisos"] },
@@ -2352,50 +2341,67 @@ function PagoPendiente({ plan, onPagar, ocupado }) {
   );
 }
 
-function FueraDePlan({ vista, plan, onContratar, ocupado }) {
-  const QUE_APORTA = {
-    conversaciones: {
-      titulo: "Cada cliente, en un solo hilo",
-      texto:
-        "Todas las llamadas, mensajes y notas de una misma persona juntas y en orden, con el histórico completo. Puedes responder desde aquí por SMS o WhatsApp sin salir del portal.",
-    },
-    voz: {
-      titulo: "Saber cómo lo está haciendo la voz",
-      texto:
-        "Una nota por llamada, qué se le escapa al agente, qué objeciones aparecen más y si está cumpliendo el guion. Es lo que te permite corregirlo en vez de suponer.",
-    },
-    playbooks: {
-      titulo: "Decidir tú cómo habla la voz",
-      texto:
-        "El objetivo de la llamada, el tono, qué tiene que preguntar siempre y cómo responder a cada objeción. Sin esto, el agente usa el guion genérico.",
-    },
-  }[vista] || {
-    titulo: "Esta sección es del plan Pro",
-    texto: "Tu plan actual no la incluye.",
+/**
+ * Una sección que el plan no incluye.
+ *
+ * Nunca dice "actualiza tu plan" a secas. Quien llega aquí no sabe lo que se
+ * está perdiendo —por eso no lo tiene contratado— así que lo primero es
+ * contarle qué hace esa función, y sólo después de dónde se saca.
+ *
+ * El texto sale de VALOR_BLOQUEADO, que vive junto a la definición de planes:
+ * si alguien añade una función y no escribe su gancho, se ve enseguida.
+ */
+function FueraDePlan({ vista, plan, onSubir, ocupado }) {
+  const necesita = [...VISTAS, ...VISTAS_OCULTAS].find((v) => v.id === vista)?.funcion;
+  const destino = necesita ? planQueIncluye(necesita) : planSiguiente(plan);
+  const valor = VALOR_BLOQUEADO[necesita] || {
+    titulo: "Esta sección no entra en tu plan",
+    gancho: "",
   };
+  const planDestino = PLANES[destino];
+  const porVentas = planDestino?.hablarConVentas;
 
   return (
     <div className="pv3-view">
       <div className="pv3-card pv3-bloqueo">
-        <span className="pv3-lab">INCLUIDO EN PRO · TU PLAN ES {String(plan).toUpperCase()}</span>
-        <h2 className="pv3-bloqueo-titulo">{QUE_APORTA.titulo}</h2>
+        <span className="pv3-lab">
+          EN {String(planDestino?.nombre || "").toUpperCase()} · TU PLAN ES {String(PLANES[plan]?.nombre || plan).toUpperCase()}
+        </span>
+        <h2 className="pv3-bloqueo-titulo">{valor.titulo}</h2>
         <p className="pv3-p" style={{ marginTop: 12, fontSize: 15, maxWidth: "62ch" }}>
-          {QUE_APORTA.texto}
+          {valor.gancho}
         </p>
 
-        <div style={{ display: "flex", gap: 10, marginTop: 26, flexWrap: "wrap" }}>
-          <button
-            type="button"
-            className="pv3-btn"
-            data-v="light"
-            onClick={onContratar}
-            disabled={ocupado}
-          >
-            {ocupado ? "Abriendo…" : "Pasar a Pro"}
-          </button>
-          <a className="pv3-btn" href="mailto:ventas@nesped.com?subject=Ampliar%20a%20Pro">
-            Hablarlo con ventas
-          </a>
+        {planDestino && (
+          <p className="pv3-p" style={{ marginTop: 18, fontSize: 13.5, color: "var(--muted)" }}>
+            {planDestino.promesa}{" "}
+            {porVentas
+              ? "Enterprise se ajusta a cada caso, así que se habla antes."
+              : `${planDestino.precio} € al mes, sin permanencia.`}
+          </p>
+        )}
+
+        <div style={{ display: "flex", gap: 10, marginTop: 22, flexWrap: "wrap" }}>
+          {porVentas ? (
+            <a
+              className="pv3-btn"
+              data-v="light"
+              href={`mailto:ventas@nesped.com?subject=${encodeURIComponent("Nesped Enterprise")}`}
+            >
+              Hablar con nosotros
+            </a>
+          ) : (
+            <button
+              type="button"
+              className="pv3-btn"
+              data-v="light"
+              onClick={() => onSubir(destino)}
+              disabled={ocupado}
+            >
+              {ocupado ? "Abriendo…" : `Pasar a ${planDestino?.nombre}`}
+            </button>
+          )}
+          <a className="pv3-btn" href="/pricing">Ver los planes</a>
         </div>
       </div>
     </div>
@@ -2473,7 +2479,7 @@ const META = {
 
 
 export default function PortalV3() {
-  const [vista, setVista] = useState(VISTA_DE_ENTRADA);
+  const [vista, setVista] = useState("resumen");
   const [datos, setDatos] = useState(null);
   const [error, setError] = useState("");
 
@@ -2507,7 +2513,8 @@ export default function PortalV3() {
            los datos de una sección que el plan no incluye es una llamada que
            la API va a rechazar. */
         const planInicial = planDe(json.client);
-        const inicial = VISTA_DE_ENTRADA;
+        setVista(vistaDeEntrada(planInicial));
+        const inicial = vistaDeEntrada(planInicial);
         if (vistaIncluida(inicial, planInicial)) {
           const destino = VISTAS.find((v) => v.id === inicial);
           if (destino?.api) {
@@ -2627,7 +2634,6 @@ export default function PortalV3() {
     setSubiendoPlan(true);
     window.location.assign(`/api/suscripcion/iniciar?plan=${encodeURIComponent(planDestino)}`);
   }, []);
-  const contratarPro = useCallback(() => irAPagar("pro"), [irAPagar]);
   const alertasAbiertas = (datos?.alerts || []).length;
   const cargandoVista = Boolean(cargando[vista]);
 
@@ -2658,8 +2664,8 @@ export default function PortalV3() {
       return (
         <FueraDePlan
           vista={vista}
-          plan={PLANES[plan]?.nombre || plan}
-          onContratar={contratarPro}
+          plan={plan}
+          onSubir={irAPagar}
           ocupado={subiendoPlan}
         />
       );
@@ -2731,14 +2737,20 @@ export default function PortalV3() {
                 data-on={vista === v.id}
                 data-plan={vistaIncluida(v.id, plan) ? undefined : "fuera"}
                 onClick={() => abrir(v.id)}
-                title={vistaIncluida(v.id, plan) ? undefined : "Incluido en el plan Pro"}
+                title={vistaIncluida(v.id, plan) ? undefined : `Incluido en ${PLANES[planQueIncluye(v.funcion)]?.nombre || "un plan superior"}`}
               >
                 <span className="pv3-ico">{v.ico}</span>
                 {v.label}
                 {v.id === "resumen" && alertasAbiertas > 0 ? (
                   <span className="pv3-badge">{alertasAbiertas}</span>
                 ) : null}
-                {vistaIncluida(v.id, plan) ? null : <span className="pv3-candado">PRO</span>}
+                {vistaIncluida(v.id, plan) ? null : (
+                  /* La etiqueta dice en qué plan está, no un genérico "PRO":
+                     saber si te falta un escalón o dos cambia la decisión. */
+                  <span className="pv3-candado">
+                    {(PLANES[planQueIncluye(v.funcion)]?.nombre || "").toUpperCase()}
+                  </span>
+                )}
               </button>
             )
           )}

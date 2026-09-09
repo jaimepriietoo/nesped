@@ -27,7 +27,10 @@ import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security"
  * anotado como el que se pretende contratar, no como el que se tiene.
  */
 
-const PLANES_PUBLICOS = new Set(["starter", "pro"]);
+/* Enterprise no está: se habla antes de contratarlo. Dar a un programa
+   permiso para escribir a clientes en nombre de una empresa no se activa
+   desde una pantalla de pago sin conocer el caso. */
+const PLANES_PUBLICOS = new Set(["growth", "intelligence"]);
 
 function normalizarEmail(valor = "") {
   return String(valor || "").trim().toLowerCase();
@@ -78,7 +81,7 @@ export async function POST(req) {
     const email = normalizarEmail(cuerpo.email);
     const password = String(cuerpo.password || "");
     const empresa = String(cuerpo.empresa || "").trim();
-    const plan = String(cuerpo.plan || "starter").toLowerCase();
+    const plan = String(cuerpo.plan || "growth").toLowerCase();
 
     if (!email || !email.includes("@")) {
       return NextResponse.json({ ok: false, message: "Escribe un correo válido." }, { status: 400 });

@@ -10,6 +10,7 @@ const {
   ETIQUETA_AGENTE,
   caracteresDelAgente,
 } = require("./lib/server/consumo-voz.cjs");
+const { empezarLatido } = require("./lib/server/latido-cola.cjs");
 
 const SECRET_FIELD_PATTERN =
   /authorization|cookie|set-cookie|token|secret|password|api[_-]?key|dsn|x-nesped-internal-token/i;
@@ -572,6 +573,32 @@ function getRecordingMediaUrl(recordingUrl = "") {
  * Se sobrescribe si ya había una para el mismo call_sid: Twilio reintenta los
  * avisos, y el último siempre es el bueno.
  */
+/**
+ * Pide que se traiga la grabación a nuestro depósito.
+ *
+ * Se escribe directamente en la tabla de trabajos en vez de llamar a la
+ * aplicación: este proceso ya tiene cliente de base de datos, y una fila es
+ * más fiable que una petición HTTP a un sitio que puede estar desplegando.
+ *
+ * La clave con el call_sid evita pedir la misma copia dos veces cuando el
+ * proveedor reintenta su aviso.
+ */
+async function pedirCopiaDeGrabacion({ callSid, clientId }) {
+  if (!supabase || !callSid) return;
+
+  const { error } = await supabase.from("trabajos").insert({
+    tipo: "copiar_grabacion",
+    client_id: clientId,
+    datos: { callSid },
+    clave_unica: `copiar_grabacion:${clientId}:${callSid}`,
+  });
+
+  /* 23505 es la clave única: ya estaba pedida. No es un fallo. */
+  if (error && error.code !== "23505") {
+    reportVoiceError(error, "voice.recording.copy_enqueue_failed", { callSid, clientId });
+  }
+}
+
 async function guardarGrabacionPendiente({ callSid, clientId, recordingUrl }) {
   if (!supabase || !callSid || !recordingUrl) return;
 
@@ -1067,6 +1094,9 @@ app.post("/recording-status", async (req, res) => {
         });
       } else if (Array.isArray(data) && data.length > 0) {
         console.log("✅ recording_url guardada en calls");
+        /* Y se pide traérsela a nuestro depósito. Hasta que eso pase, la
+           dirección del proveedor es lo único que hay. */
+        await pedirCopiaDeGrabacion({ callSid, clientId });
       } else {
         /* La llamada todavía no existe: el aviso ha llegado antes. Se deja
            anotado para que la recoja quien la guarde, que puede ser esta
@@ -1299,6 +1329,12 @@ wss.on("connection", async (providerWs, req) => {
           : callSummary,
         recording_url: grabacionPendiente || null,
       });
+
+      /* Si la grabación llegó antes que el final de la llamada, ahora que la
+         llamada existe se puede pedir la copia. */
+      if (grabacionPendiente) {
+        await pedirCopiaDeGrabacion({ callSid, clientId });
+      }
 
       /* Consumo de la empresa.
       
@@ -2060,4 +2096,14 @@ const PORT = process.env.PORT || 3001;
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 NESPED Voice Server en puerto ${PORT}`);
+
+  /* La cola necesita que alguien la empuje. Antes era el cron de Vercel, que
+     en el plan Hobby corre una vez al día: un informe pedido a las nueve
+     saldría mañana. Este proceso ya está encendido, así que empuja él.
+     Ver lib/server/latido-cola.cjs, incluido por qué la ejecución sigue del
+     otro lado. */
+  empezarLatido({
+    baseUrl: process.env.NEXT_PUBLIC_APP_URL || process.env.BASE_URL,
+    token: process.env.INTERNAL_API_TOKEN || process.env.CRON_SECRET,
+  });
 });

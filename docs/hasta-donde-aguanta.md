@@ -104,12 +104,39 @@ integridad referencial de verdad por un beneficio que no llega en años.
 no lo arregle. Hoy está en 99,87%. Una réplica no arregla que los índices no
 quepan en memoria: los duplica. Primero más RAM, que además es un botón.
 
-**Repartir por fragmentos** — nada lo bloquea hoy, y por eso no hay prisa. La
-prueba `tests/unidad/aislamiento.test.mjs` garantiza que ninguna consulta cruza
-empresas sin declararlo, que es justo la condición que hace posible repartir
-más adelante. Hacerlo ahora sería añadir una capa de enrutado a un producto de
-cinco clientes.
+**Repartir por fragmentos** — nada lo bloquea, y por eso no hay prisa. Pero
+"nada lo bloquea" se ha dejado de suponer y se ha comprobado.
+
+Repartir por fragmentos no es una capa de enrutado: es poder coger una empresa
+y ponerla en otro sitio. Si eso se puede hacer limpiamente, repartir es hacerlo
+muchas veces. Si no, ninguna capa de enrutado lo arregla.
+
+Así que se ha hecho una vez, con `demo`: 129 filas en 11 tablas, más sus
+grabaciones del depósito. Sale entera, cuadra con el inventario y ninguna fila
+sacada era de otra empresa. Está en `/api/admin/empresa/exportar`, y hace falta
+hoy por motivos que no tienen que ver con crecer: el RGPD da derecho a la
+portabilidad de los datos, y cuando un cliente se va hay que poder
+entregárselos.
+
+La condición que hace posible mover una empresa es que ninguna de sus filas
+apunte a filas de otra. Eso lo comprueba `referencias_que_cruzan_empresas()`,
+derivada de las claves ajenas del catálogo, y sale en `/api/ops/salud`. Hoy:
+cero cruces sobre 7 enlaces reales. Siete enlaces es poquísimo, así que la
+comprobación vale sobre todo por lo que comprobará cuando haya datos —y se ha
+verificado que detecta un cruce plantando uno a propósito.
+
+Lo que falta antes de repartir de verdad, el día que haga falta: las quince
+rutas de `CRUZAN_EMPRESAS` (administración, trabajos programados, webhooks)
+tendrían que consultar varios fragmentos en vez de uno. No es difícil, pero es
+trabajo, y no se hace hasta que sirva para algo.
 
 **Varias regiones** — cuando haya clientes fuera de Europa. No los hay. La base
 está en `eu-west-1`, que es donde tiene que estar mientras los clientes sean
-españoles.
+españoles: los datos de sus clientes finales son datos personales europeos, y
+tenerlos en Europa evita una conversación entera sobre transferencias
+internacionales.
+
+Si algún día hay clientes fuera, lo que manda no es la base de datos sino la
+latencia del teléfono: una llamada de voz atraviesa Telnyx, el servidor de voz
+y OpenAI en tiempo real, y ahí doscientos milisegundos se notan. La base de
+datos sería el último problema, no el primero.

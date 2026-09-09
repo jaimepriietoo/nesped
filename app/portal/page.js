@@ -1216,7 +1216,7 @@ function Llamadas({ datos }) {
                   <td>{c.lead_captured ? <span className="pv3-tag" data-t="ok">Sí</span> : <span className="pv3-tag" data-t="grey">No</span>}</td>
                   <td style={{ maxWidth: 340, overflow: "hidden", textOverflow: "ellipsis" }}>{c.summary || "—"}</td>
                   <td>
-                    {c.transcript || c.recording_url ? (
+                    {c.transcript || c.tiene_grabacion ? (
                       <button type="button" className="pv3-btn" onClick={() => setAbierta(abierta === i ? null : i)}>
                         {abierta === i ? "Cerrar" : "Ver"}
                       </button>
@@ -1232,15 +1232,70 @@ function Llamadas({ datos }) {
       {abierta != null && llamadas[abierta] ? (
         <div className="pv3-card" style={{ marginTop: 16 }}>
           <div className="pv3-lab">LLAMADA · {fecha(llamadas[abierta].created_at)}</div>
-          {llamadas[abierta].recording_url ? (
-            <audio controls src={llamadas[abierta].recording_url} style={{ width: "100%", marginTop: 14 }} />
-          ) : null}
+          <Grabacion key={llamadas[abierta].id} llamada={llamadas[abierta]} />
           {llamadas[abierta].transcript ? (
             <pre style={{ marginTop: 14, whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.65, color: "var(--dim)" }}>
               {llamadas[abierta].transcript}
             </pre>
           ) : null}
         </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * El reproductor de una grabación.
+ *
+ * No pinta la dirección del proveedor. Antes sí: `<audio src={recording_url}>`
+ * hacía que el navegador fuera DIRECTO a Telnyx, sin pasar por Nesped y sin
+ * que nadie comprobara de qué empresa era esa llamada. Para que sonara, esa
+ * dirección tenía que abrirse sin credenciales, así que cualquiera que
+ * consiguiera una escuchaba la conversación de un cliente ajeno.
+ *
+ * Ahora se pide al servidor, que comprueba la sesión y la empresa y devuelve
+ * una dirección firmada que caduca en diez minutos. Se pide al pulsar y no al
+ * abrir la llamada: firmar por si acaso gastaría una firma cada vez que
+ * alguien mira una transcripción.
+ *
+ * Lleva `key` con el id de la llamada donde se usa. Sin eso, al pasar de una
+ * llamada a otra se quedaría sonando la dirección firmada de la anterior
+ * mientras se lee la transcripción de la nueva. El `key` hace que React lo
+ * monte de cero, que es más simple y más fiable que acordarse de limpiarlo.
+ */
+function Grabacion({ llamada }) {
+  const [url, setUrl] = useState(null);
+  const [estado, setEstado] = useState("quieto");
+
+  if (!llamada?.tiene_grabacion) return null;
+
+  if (url) {
+    return <audio controls autoPlay src={url} style={{ width: "100%", marginTop: 14 }} />;
+  }
+
+  const pedir = async () => {
+    setEstado("pidiendo");
+    try {
+      const res = await fetch(`/api/portal/grabacion?id=${encodeURIComponent(llamada.id)}`, {
+        cache: "no-store",
+      });
+      const json = await res.json();
+      if (json?.success && json.url) setUrl(json.url);
+      else setEstado("sin-grabacion");
+    } catch {
+      setEstado("sin-grabacion");
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 14 }}>
+      <button type="button" className="pv3-btn" onClick={pedir} disabled={estado === "pidiendo"}>
+        {estado === "pidiendo" ? "Preparando…" : "Escuchar la llamada"}
+      </button>
+      {estado === "sin-grabacion" ? (
+        <p className="pv3-p" style={{ marginTop: 8, fontSize: 12, color: "var(--muted)" }}>
+          Esta grabación ya no está disponible.
+        </p>
       ) : null}
     </div>
   );

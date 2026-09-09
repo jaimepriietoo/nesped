@@ -446,7 +446,18 @@ export async function GET() {
 
       users,
       leads,
-      calls,
+      /* Las llamadas salen SIN la dirección de la grabación.
+
+         Esa dirección es la del proveedor y se abre sin credenciales: quien
+         la tenga escucha la conversación, sea de la empresa que sea. Mandarla
+         al navegador la deja en la memoria de la pestaña, en el historial de
+         red y en cualquier extensión instalada. Se manda sólo si hay o no
+         grabación; para escucharla está /api/portal/grabacion, que comprueba
+         la sesión y firma una dirección que caduca. */
+      calls: calls.map(({ recording_url, grabacion_propia, ...resto }) => ({
+        ...resto,
+        tiene_grabacion: Boolean(grabacion_propia),
+      })),
       alerts,
       insights: mergedInsights,
       benchmarks,

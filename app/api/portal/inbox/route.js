@@ -23,7 +23,7 @@ export async function GET() {
       ctx.supabase
         .from("calls")
         .select(
-          "id,call_sid,from_number,to_number,status,summary,summary_long,transcript,recording_url,duration_seconds,lead_captured,created_at"
+          "id,call_sid,from_number,to_number,status,summary,summary_long,transcript,duration_seconds,lead_captured,created_at"
         )
         .eq("client_id", ctx.clientId)
         .order("created_at", { ascending: false })

@@ -2,6 +2,7 @@ import { requireInternalRequest } from "@/lib/server/internal-api";
 import { encolar, tomarTrabajos, terminar, fallar, rescatarColgados, SinArreglo } from "@/lib/server/cola";
 import { enviarInforme } from "@/lib/server/informes";
 import { pasadaDeMantenimiento } from "@/lib/server/mantenimiento";
+import { copiarGrabacion } from "@/lib/server/grabaciones";
 
 /**
  * El que ejecuta la cola.
@@ -36,6 +37,19 @@ const OFICIOS = {
       tipo: "semanal",
       clientId: t.client_id,
       paraSiNoHay: t.datos?.paraSiNoHay || null,
+    }),
+
+  /**
+   * Traerse una grabación a casa.
+   *
+   * No se hace en el aviso del proveedor porque descargar un audio y volver a
+   * subirlo tarda, y el proveedor espera una respuesta rápida a su webhook: si
+   * tarda, lo reintenta, y la grabación se copia dos veces.
+   */
+  copiar_grabacion: (t) =>
+    copiarGrabacion({
+      callSid: t.datos?.callSid,
+      clientId: t.client_id,
     }),
 
   /**

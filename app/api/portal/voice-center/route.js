@@ -71,7 +71,7 @@ export async function GET() {
       ctx.supabase
         .from("calls")
         .select(
-          "id,call_sid,from_number,to_number,status,summary,summary_long,transcript,recording_url,duration_seconds,lead_captured,detected_intent,created_at"
+          "id,call_sid,from_number,to_number,status,summary,summary_long,transcript,grabacion_propia,duration_seconds,lead_captured,detected_intent,created_at"
         )
         .eq("client_id", ctx.clientId)
         .order("created_at", { ascending: false })
@@ -124,7 +124,7 @@ export async function GET() {
         `${call.summary || ""} ${call.summary_long || ""} ${transcript}`
       );
       const memory = memoryByLead.get(String(lead?.id || "")) || null;
-      const complianceScore = call.recording_url
+      const complianceScore = call.grabacion_propia
         ? disclosureDetected
           ? 100
           : 52
@@ -142,7 +142,10 @@ export async function GET() {
         status: call.status || "unknown",
         summary: call.summary || call.summary_long || "",
         transcript: call.transcript || "",
-        recording_url: call.recording_url || "",
+        /* Antes iba aquí la dirección del proveedor, que se abre sin
+           credenciales. Ahora sólo se dice si la hay; para escucharla está
+           /api/portal/grabacion, que comprueba la empresa y firma. */
+        tiene_grabacion: Boolean(call.grabacion_propia),
         duration_seconds: Number(call.duration_seconds || 0),
         lead_captured: Boolean(call.lead_captured),
         detected_intent: call.detected_intent || "",
@@ -195,7 +198,7 @@ export async function GET() {
         compliance: getVoiceCompliancePolicy(),
         summary: {
           total: scoredCalls.length,
-          withRecording: scoredCalls.filter((item) => item.recording_url).length,
+          withRecording: scoredCalls.filter((item) => item.tiene_grabacion).length,
           avgScore: average(scoredCalls.map((item) => item.qa?.overall || 0)),
           avgDuration: average(
             scoredCalls.map((item) => item.duration_seconds || 0)

@@ -21,7 +21,8 @@
     "revisar:admin": "node scripts/revisar-admin.mjs",
     "revisar:seguridad": "node scripts/revisar-seguridad.mjs",
     "probar:voz": "node scripts/probar-voz.mjs",
-    "probar:conversacion": "node scripts/probar-conversacion.mjs"
+    "probar:conversacion": "node scripts/probar-conversacion.mjs",
+    "volcar:migraciones": "node scripts/volcar-migraciones.mjs"
   },
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "^7.7.0",

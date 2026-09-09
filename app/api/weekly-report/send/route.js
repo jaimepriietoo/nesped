@@ -1,36 +1,40 @@
-import { getResend } from "@/lib/resend";
 import { getPortalContext } from "@/lib/portal-auth";
-import { getPaidLeadRows } from "@/lib/server/payments";
-import { remitenteNesped } from "@/lib/server/remitente.mjs";
- 
+import { encolar } from "@/lib/server/cola";
+
+/**
+ * Pedir el informe semanal.
+ *
+ * Antes esta ruta hacía el informe entero mientras el navegador esperaba:
+ * leía la cartera completa de la empresa, la contaba en memoria, redactaba el
+ * correo y aguardaba a que Resend lo aceptara. Si algo tardaba, Vercel cortaba
+ * la función y el informe se perdía: sin reintento, sin rastro, y con quien lo
+ * pidió mirando un error sin saber si el correo había salido.
+ *
+ * Ahora sólo lo apunta en la cola. El trabajo lo hace /api/cola/procesar, que
+ * cuenta en la base de datos y reintenta si el proveedor falla.
+ */
 export async function POST() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) return Response.json({ success: false, message: ctx.message }, { status: 401 });
- 
-    const { data: leads } = await ctx.supabase.from("leads").select("*").eq("client_id", ctx.clientId);
-    const { data: client } = await ctx.supabase.from("clients").select("*").eq("id", ctx.clientId).single();
-    const rows = await getPaidLeadRows(200);
-    const weekStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const weekRevenue = rows.filter(r => new Date(r.created_at) >= weekStart).reduce((s, r) => s + r.amount, 0);
- 
-    const resend = getResend();
-    await resend.emails.send({
-      from: remitenteNesped(),
-      to: client?.owner_email || ctx.userEmail,
-      subject: `📈 Informe semanal — ${new Date().toLocaleDateString("es-ES")}`,
-      html: `
-        <h2>Informe semanal — ${client?.brand_name || "Portal"}</h2>
-        <p><strong>Total leads:</strong> ${(leads || []).length}</p>
-        <p><strong>Ganados esta semana:</strong> ${(leads || []).filter(l => l.status === "won" && new Date(l.updated_at || l.created_at) >= weekStart).length}</p>
-        <p><strong>Ingresos esta semana:</strong> ${weekRevenue.toFixed(0)}€</p>
-        <p><strong>Pipeline total:</strong> ${(leads || []).filter(l => !["won","lost"].includes(l.status)).reduce((s, l) => s + Number(l.valor_estimado || 0), 0).toFixed(0)}€</p>
-        <hr />
-        <p style="color:#888;font-size:12px">Generado automáticamente por NESPED IA</p>
-      `,
+
+    /* La clave lleva la fecha: pulsar el botón cinco veces la misma mañana no
+       manda cinco correos, y mañana sí se puede volver a pedir. */
+    const hoy = new Date().toISOString().slice(0, 10);
+
+    const { yaEstaba } = await encolar({
+      tipo: "informe_semanal",
+      clientId: ctx.clientId,
+      datos: { paraSiNoHay: ctx.userEmail || null },
+      clave: `informe_semanal:${ctx.clientId}:${hoy}`,
     });
- 
-    return Response.json({ success: true, message: "Informe semanal enviado." });
+
+    return Response.json({
+      success: true,
+      message: yaEstaba
+        ? "Ya lo tenías pedido: te llegará en unos minutos."
+        : "Informe pedido. Te llega al correo en unos minutos.",
+    });
   } catch (err) {
     return Response.json({ success: false, message: err.message }, { status: 500 });
   }

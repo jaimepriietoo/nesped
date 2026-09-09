@@ -65,8 +65,15 @@ const OFICIOS = {
    * cadena se cortaría en silencio en la primera vuelta.
    */
   mantenimiento: async () => {
-    const { quedaTrabajo } = await pasadaDeMantenimiento();
+    const { quedaTrabajo, retencion } = await pasadaDeMantenimiento();
     if (quedaTrabajo) await encolar({ tipo: "mantenimiento" });
+
+    /* La retención no puede tumbar el archivado —son cosas distintas que
+       casualmente se hacen a la vez—, pero si falla tiene que verse. Un
+       trabajo verde que esconde que la mitad no se hizo es peor que uno rojo:
+       nadie mira lo que ya está en verde. */
+    if (retencion?.error) return { aviso: `La retención falló: ${retencion.error}` };
+    return null;
   },
 };
 
@@ -114,8 +121,10 @@ async function procesar(req) {
       }
 
       try {
-        await oficio(trabajo);
-        await terminar(trabajo.id);
+        /* Un oficio puede devolver un aviso: terminó, pero algo no salió del
+           todo bien y hay que poder verlo. */
+        const resultado = await oficio(trabajo);
+        await terminar(trabajo.id, resultado?.aviso || null);
         hechos.push(trabajo.id);
       } catch (err) {
         /* Un trabajo que revienta no puede llevarse por delante a los demás

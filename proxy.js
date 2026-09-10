@@ -72,7 +72,19 @@ function construirCsp(nonce, esDev, conNonce = false) {
     // Los clientes ponen la URL de su logotipo, así que no se puede acotar.
     "img-src 'self' data: blob: https:",
     "font-src 'self' data: https://fonts.gstatic.com",
-    `connect-src ${CONEXIONES.join(" ")}${esDev ? " ws://localhost:* http://localhost:*" : ""}`,
+    /*
+     * En desarrollo hay que dejar hablar al cliente de recarga en caliente, y
+     * hay que dejarle hablar por las DOS formas de decir "esta máquina".
+     *
+     * Estaba sólo `localhost`, y `next dev` se sirve igual por 127.0.0.1
+     * —es lo que usa la configuración de Playwright—. Servido por ahí, la CSP
+     * cortaba el WebSocket de recarga, el arranque del cliente de Next moría
+     * con él y React NO LLEGABA A HIDRATAR: la página se veía entera pero no
+     * respondía a nada. Las pruebas de extremo a extremo pasaban igual porque
+     * las que había no necesitaban interacción, así que el fallo no salía por
+     * ningún lado.
+     */
+    `connect-src ${CONEXIONES.join(" ")}${esDev ? " ws://localhost:* http://localhost:* ws://127.0.0.1:* http://127.0.0.1:*" : ""}`,
     `media-src ${MEDIOS.join(" ")}`,
     "frame-src 'self' https://js.stripe.com https://hooks.stripe.com",
     "form-action 'self' https://checkout.stripe.com https://billing.stripe.com",
@@ -222,6 +234,11 @@ export async function proxy(req) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map)$).*)",
+    /*
+     * `_next/hmr` va fuera: es el WebSocket de recarga en caliente, y una
+     * respuesta con cabeceras de seguridad rompe el cambio de protocolo. El
+     * proxy le contestaba 404 y la recarga no funcionaba nunca en local.
+     */
+    "/((?!_next/static|_next/image|_next/hmr|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map)$).*)",
   ],
 };

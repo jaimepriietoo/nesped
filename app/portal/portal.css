@@ -66,6 +66,12 @@
 }
 .pv3-mark svg { width: 72%; height: 72%; }
 
+/* El punto de estado cambia de color con lo que esté pasando. Es el mismo
+   código que usa el núcleo: verde disponible, ámbar pendiente, rojo caído. */
+.pv3-live[data-estado="ATTENTION"] .pv3-dot { background: var(--warn); }
+.pv3-live[data-estado="ERROR"] .pv3-dot { background: var(--bad); }
+.pv3-live[data-estado="THINKING"] .pv3-dot { background: var(--dim); }
+
 .pv3-brand b { display: block; font-size: 14px; font-weight: 600; letter-spacing: -0.02em; }
 .pv3-brand small {
   display: block; margin-top: 2px;

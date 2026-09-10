@@ -1,0 +1,37 @@
+.lab { display: grid; grid-template-columns: minmax(0, 1fr) 300px; height: 100vh; background: #000; }
+@media (max-width: 900px) { .lab { grid-template-columns: 1fr; grid-template-rows: 55vh 1fr; } }
+
+.lab-escena { position: relative; min-height: 0; }
+
+.lab-panel {
+  border-left: 1px solid rgba(255,255,255,0.1);
+  padding: 18px 16px; overflow-y: auto;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #d0d0d0;
+}
+.lab-panel header { display: flex; flex-direction: column; gap: 4px; padding-bottom: 16px; }
+.lab-panel header b { font-size: 13px; letter-spacing: 0.12em; color: #fff; }
+.lab-panel header span { color: #7ee3bd; }
+
+.lab-grupo { padding: 16px 0; border-top: 1px solid rgba(255,255,255,0.08); }
+.lab-tit { display: block; margin-bottom: 10px; letter-spacing: 0.14em; color: #8e8e8e; font-size: 10px; }
+
+.lab-estados { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.lab-estados button {
+  padding: 7px 6px; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px;
+  background: transparent; color: #b8b8b8; font: inherit; font-size: 10px;
+  letter-spacing: 0.06em; cursor: pointer; transition: transform 0.18s, border-color 0.18s;
+}
+.lab-estados button:hover { transform: translateY(-2px); border-color: rgba(255,255,255,0.3); }
+.lab-estados button[data-on="true"] { background: #7ee3bd; border-color: #7ee3bd; color: #000; }
+
+.lab-mando { display: block; margin-bottom: 12px; }
+.lab-mando span { display: flex; justify-content: space-between; color: #b8b8b8; }
+.lab-mando i { font-style: normal; color: #7ee3bd; }
+.lab-mando input { width: 100%; margin: 4px 0 2px; accent-color: #7ee3bd; }
+.lab-mando small { color: #626262; font-size: 10px; }
+
+.lab-secuencia {
+  width: 100%; padding: 11px; border: 0; border-radius: 8px;
+  background: #fff; color: #000; font: inherit; font-weight: 600; cursor: pointer;
+}

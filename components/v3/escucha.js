@@ -33,7 +33,13 @@ function reloj(segundos) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-export function EscuchaLlamada() {
+/**
+ * @param {(quien: "agente"|"cliente"|null) => void} alSonar
+ *   Avisa de quién está hablando en cada momento. Lo usa la portada para que
+ *   el núcleo escuche cuando habla el cliente y hable cuando habla el agente:
+ *   el estado visual de Nesped no se inventa, sale de lo que está sonando.
+ */
+export function EscuchaLlamada({ alSonar }) {
   const audio = useRef(null);
   const [sonando, setSonando] = useState(false);
   const [posicion, setPosicion] = useState(0);
@@ -83,6 +89,13 @@ export function EscuchaLlamada() {
   // Índice de la línea que suena: la última cuyo inicio ya ha pasado.
   const activa = GUION.reduce((acc, l, i) => (posicion + 0.15 >= l.t ? i : acc), -1);
   const avance = duracion ? (posicion / duracion) * 100 : 0;
+
+  /* Se avisa fuera de quién habla, no de cada milisegundo: el efecto sólo
+     corre cuando cambia el turno o el reproductor arranca o para. */
+  const quien = sonando && activa >= 0 ? GUION[activa].quien : null;
+  useEffect(() => {
+    alSonar?.(quien);
+  }, [quien, alSonar]);
 
   return (
     <div className="v3-escucha">

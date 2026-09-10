@@ -673,16 +673,23 @@
  * había en `.v3` no llegaba a estos bloques y el rotateX se veía como un
  * aplastamiento vertical, no como profundidad.
  */
+/* La entrada de los bloques de lectura.
+
+   Era una inclinación en perspectiva —translateZ y rotateX— y eso hacía que
+   cada tarjeta llegara girando desde el fondo. Se ve en cientos de sitios y
+   choca de frente con el resto: en la portada nada aparece inclinándose, las
+   cosas las descubre la luz. Aquí abajo el trabajo es leer, así que lo que
+   toca es lo mínimo que dice "esto acaba de entrar": diez píxeles y opacidad.
+   Nivel uno de movimiento, ni uno más. */
 .v3-rev {
-  transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
   transition-delay: var(--d, 0s);
 }
 
 html[data-rev="1"] .v3-rev {
   opacity: 0;
-  transform: perspective(1100px) translateY(24px) translateZ(-40px) rotateX(5deg);
-  transform-origin: 50% 100%;
+  transform: translateY(10px);
 }
 
 html[data-rev="1"] .v3-rev.is-in { opacity: 1; transform: none; }

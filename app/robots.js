@@ -11,7 +11,7 @@ export default function robots() {
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/portal", "/admin", "/api/", "/c/"],
+        disallow: ["/portal", "/admin", "/api/", "/c/", "/dev/"],
       },
     ],
     sitemap: `${BASE}/sitemap.xml`,

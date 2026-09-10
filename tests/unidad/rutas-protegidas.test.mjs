@@ -35,6 +35,16 @@ const PUBLICAS = [
   /* La ficha de una empresa por su enlace, para que pueda repartirlo. Pinta
      solo lo que devuelve formaPublica() en /api/clients: nombre y marca. */
   "c",
+  /*
+   * Banco de pruebas del núcleo visual (/dev/living-core).
+   *
+   * No enseña ni un dato: es geometría, luz y muelles. Aun así no se sirve en
+   * producción —la propia página llama a notFound() salvo que se pida a mano
+   * con NESPED_LAB=1— y está fuera de robots.txt. Entra en esta lista porque
+   * lo que vigila esta prueba es dónde vive una pantalla CON datos, y esta no
+   * tiene ninguno que proteger.
+   */
+  "dev",
 ];
 
 function paginas() {

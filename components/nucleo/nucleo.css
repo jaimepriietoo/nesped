@@ -1,0 +1,85 @@
+/* =========================================================================
+   Envoltorio del Núcleo Vivo.
+
+   Casi nada: el objeto lo pinta WebGL y lo que hay aquí es la caja, el
+   respaldo y el aviso de estado accesible. Todo cuelga de .nsp- para que
+   pueda convivir con v3.css, portal.css y admin.css sin tocarlas.
+   ========================================================================= */
+
+.nsp {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* El objeto vive en negro absoluto: cualquier fondo heredado le quita el
+     contraste que hace que la luz parezca luz. */
+  background: #000;
+  isolation: isolate;
+}
+
+.nsp-lienzo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* El lienzo no captura el puntero: los botones y enlaces que van encima
+     tienen que seguir funcionando aunque Nesped ocupe toda la pantalla. */
+  pointer-events: none;
+}
+
+.nsp-respaldo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Respiración del respaldo. Un ciclo de doce segundos: por debajo de eso se
+   lee como palpitar, y palpitar es nervioso. */
+.nsp-respaldo-cuerpo {
+  transform-origin: 50% 50%;
+  animation: nsp-respirar 12s ease-in-out infinite;
+}
+
+@keyframes nsp-respirar {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.014); }
+}
+
+.nsp-respaldo-puntos circle {
+  animation: nsp-punto 5.5s ease-in-out infinite;
+  animation-delay: calc(var(--i) * 0.11s);
+}
+
+@keyframes nsp-punto {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+/* Movimiento reducido: se queda quieto y sigue siendo Nesped. */
+.nsp-respaldo[data-quieto] .nsp-respaldo-cuerpo,
+.nsp-respaldo[data-quieto] .nsp-respaldo-puntos circle {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nsp-respaldo-cuerpo,
+  .nsp-respaldo-puntos circle {
+    animation: none;
+  }
+}
+
+/* Lo que Nesped está haciendo, en texto, para quien no ve la pantalla.
+   No es opcional: si el estado sólo existe como movimiento, para un lector
+   de pantalla Nesped no hace nada nunca. */
+.nsp-dicho {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

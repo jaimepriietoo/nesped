@@ -7,6 +7,21 @@ const nextConfig = {
   // puede quitarla porque el servidor la añade después.
   poweredByHeader: false,
 
+  /*
+   * Next bloquea por defecto las peticiones a sus recursos de desarrollo que
+   * no vengan del nombre con el que arrancó el servidor, que es `localhost`.
+   *
+   * Y la configuración de Playwright apunta a 127.0.0.1, que para el
+   * navegador es OTRO origen. Consecuencia: el WebSocket de recarga se
+   * rechazaba, el arranque del cliente de Next moría con él y React no
+   * llegaba a hidratar. La página se veía entera —el HTML lo pinta el
+   * servidor— pero no respondía a un solo clic. Las pruebas seguían en verde
+   * porque ninguna de las que había necesitaba interacción.
+   *
+   * Sólo afecta a desarrollo: en producción esta opción no se usa.
+   */
+  allowedDevOrigins: ["127.0.0.1"],
+
   /**
    * El sitio vivió un tiempo en /v3 mientras se rehacía. Ahora es la raíz,
    * pero puede haber enlaces guardados apuntando allí: 308 permanente para

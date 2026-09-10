@@ -25,6 +25,29 @@ test("la portada lleva a la demo y al aviso de grabaciones", async ({ page }) =>
   ).toBeVisible();
 });
 
+/**
+ * La portada tiene que estar VIVA, no sólo pintada.
+ *
+ * Esto no lo comprobaba nadie, y llegó a estar rota semanas: Next bloquea por
+ * defecto sus recursos de desarrollo si la petición no viene del nombre con el
+ * que arrancó —`localhost`—, y esta configuración de Playwright apunta a
+ * 127.0.0.1. El WebSocket de recarga se rechazaba, el arranque del cliente de
+ * Next moría con él y React no hidrataba. El HTML lo pinta el servidor, así
+ * que la página se veía perfecta y no respondía a un solo clic. Todas las
+ * pruebas seguían en verde porque ninguna necesitaba interacción.
+ *
+ * Se comprueba lo más barato que sólo puede pasar con JavaScript vivo: abrir
+ * el menú. Si esto falla, lo que hay delante del cliente es una foto.
+ */
+test("la portada responde: el menú se abre", async ({ page }) => {
+  await page.setViewportSize({ width: 520, height: 860 });
+  await page.goto("/");
+
+  await expect(page.locator(".v3-menu")).toHaveCount(0);
+  await page.locator(".v3-burger").click();
+  await expect(page.locator(".v3-menu")).toBeVisible();
+});
+
 test("pricing enseña precios reales y lleva al checkout", async ({ page }) => {
   await page.goto("/pricing");
 

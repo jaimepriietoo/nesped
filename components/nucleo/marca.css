@@ -1,0 +1,16 @@
+/* El hueco del núcleo dentro del producto. Nada más: el objeto lo pinta
+   WebGL y el estado lo decide quien lo usa. */
+.nsp-marca {
+  display: block;
+  position: relative;
+  width: var(--tam, 40px);
+  height: var(--tam, 40px);
+  flex-shrink: 0;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.nsp-marca-nucleo {
+  background: transparent;
+  isolation: auto;
+}

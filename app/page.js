@@ -1,12 +1,40 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+/* =========================================================================
+   Portada.
+
+   La página es una película controlada por el scroll, no una pila de
+   secciones. Un único lienzo fijo detrás de TODO —Nesped no aparece y
+   desaparece entre bloques— y encima, carteles cuya visibilidad la decide la
+   posición de la película, no un observador de intersección.
+
+   Lo que NO cambia respecto de la versión anterior, y a propósito:
+
+     · el h1 y su promesa;
+     · la llamada de demostración contra /api/demo-call;
+     · los precios pedidos a /api/precios, que salen de Stripe;
+     · el aviso de grabación y su enlace legal;
+     · la muestra de llamada real y su transcripción;
+     · cabecera, pie, anclas del menú y preguntas.
+
+   Lo que sí cambia es que ahora todo eso vive dentro de una escena continua,
+   y que el estado del núcleo lo mueven hechos reales: cuando suena la
+   muestra, Nesped escucha o habla según quién esté hablando; cuando se lanza
+   la llamada de prueba, Nesped ejecuta.
+   ========================================================================= */
+
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Inter } from "next/font/google";
 import { PLANES } from "@/lib/planes";
 import "@/components/v3/v3.css";
+import "@/components/nucleo/pelicula.css";
 import { Footer, Header } from "@/components/v3/chrome";
 import { Rev } from "@/components/v3/rev";
 import { EscuchaLlamada } from "@/components/v3/escucha";
+import GUION from "@/components/v3/muestra-guion.json";
+import { NucleoVivo } from "@/components/nucleo/nucleo";
+import { direccionInicial } from "@/components/nucleo/tokens";
+import { ACTOS, CONCEPTOS, MEMORIA, TRABAJO } from "@/components/nucleo/actos";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -14,31 +42,6 @@ const inter = Inter({
   display: "swap",
 });
 
-const VIDEO_SRC =
-  "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260809_012548_ef22562c-c0ae-4816-ad9d-f8922af4e6a7.mp4";
-
-const NAV = [
-  { href: "#producto", label: "Producto" },
-  { href: "#senal", label: "Señal" },
-  { href: "#planes", label: "Planes" },
-  { href: "#demo", label: "Demo" },
-];
-
-/* Iconos de marca en SVG en línea: evitan cargar Font Awesome desde cdnjs,
-   que tu CSP bloquea (style-src y font-src solo admiten Google Fonts). */
-/**
- * Sello del hero.
- *
- * Aquí había tres logos —Microsoft, Amazon y Google— junto a "Voz con IA
- * para empresas". Ninguno es cliente ni socio. Eso da a entender un respaldo
- * que no existe, usa marcas registradas ajenas para insinuarlo, y en cuanto
- * alguien lo comprueba deja de creerse el resto de la página. En un producto
- * que se vende por miles de euros al mes, eso cuesta la venta.
- *
- * Se sustituye por lo que sí es verdad y además se puede comprobar: sobre
- * qué infraestructura corre. Es lo que un comprador técnico quiere saber, y
- * decirlo de frente transmite más seriedad que un logo prestado.
- */
 /* Lo que hay debajo de verdad. Se cambia aquí cuando cambie la pila: decir
    una cosa y usar otra en la página de un producto de voz es feo. */
 const INFRAESTRUCTURA = ["ElevenLabs", "Twilio", "Stripe"];
@@ -46,10 +49,9 @@ const INFRAESTRUCTURA = ["ElevenLabs", "Twilio", "Stripe"];
 /**
  * El mecanismo, paso a paso.
  *
- * Falta en la página y es lo que separa "otra web de IA" de algo que se
- * compra por miles de euros al mes: quien evalúa quiere entender qué pasa
- * entre que suena el teléfono y aparece el lead. Sin esto, la promesa suena
- * a magia, y la magia no se compra, se desconfía de ella.
+ * La película cuenta qué hace Nesped; esto cuenta cómo se monta. Quien
+ * evalúa necesita las dos cosas, y la segunda no se puede contar con una
+ * cámara.
  */
 const COMO_FUNCIONA = [
   {
@@ -110,71 +112,42 @@ const PREGUNTAS = [
 ];
 
 /**
- * Cifras del hero.
- *
- * Venían del prompt genérico de IA con el que se maquetó la página ("120 ms
- * de inferencia", "2.4M de contexto"). Para un producto de voz eso no
- * significa nada y encima miente: nadie descuelga en 120 ms. Estas cuatro sí
- * describen lo que el cliente compra y se pueden sostener delante de él.
+ * Cifras. Cuatro, y las cuatro se pueden sostener delante de un cliente.
+ * Van aquí abajo y no en la portada porque la portada ya no necesita
+ * números: enseña el producto trabajando.
  */
-const STATS = [
-  { icon: "<", target: 1.2, suffix: " s", decimals: 1, label: "En descolgar" },
-  { icon: "%", target: 100, suffix: "%", decimals: 0, label: "Llamadas atendidas" },
-  { icon: "*", target: 24, suffix: "/7", decimals: 0, label: "Sin turnos ni bajas" },
-  { icon: "#", target: 30, suffix: " días", decimals: 0, label: "Grabaciones guardadas" },
+const CIFRAS = [
+  { v: "< 1,2 s", l: "En descolgar" },
+  { v: "100 %", l: "Llamadas atendidas" },
+  { v: "24/7", l: "Sin turnos ni bajas" },
+  { v: "30 días", l: "Grabaciones guardadas" },
 ];
 
-const PRODUCTO = [
+/* Lo que se lleva quien contrata, en tres frases. Sin tarjetas: la jerarquía
+   la hace la tipografía. */
+const LLEVA = [
   {
     meta: "Conversación",
-    t: "Voz natural con memoria comercial",
-    d: "La llamada no se queda en un audio sin contexto. Se convierte en lead útil, resumen accionable y siguiente paso recomendado.",
+    t: "Voz con memoria comercial",
+    d: "La llamada no se queda en un audio sin contexto. Sale de ahí un lead con su resumen, su valor estimado y el siguiente paso escrito.",
   },
   {
     meta: "Visibilidad",
-    t: "Portal premium por cliente",
-    d: "Métricas, pipeline, historial, automatizaciones y facturación presentados con el nivel visual que esperas de un SaaS serio.",
+    t: "Un panel por cliente",
+    d: "Métricas, contactos, historial, automatismos y facturación en el mismo sitio, con el nivel de acabado que se le pide a un producto que se paga todos los meses.",
   },
   {
     meta: "Operación",
-    t: "Una sola capa para captación y cierre",
-    d: "WhatsApp, seguimiento, scoring, next-best-action y cobro viven dentro del mismo sistema, no repartidos en parches.",
+    t: "Captación y cierre en una capa",
+    d: "WhatsApp, seguimiento, puntuación, siguiente acción y cobro dentro del mismo sistema, no repartidos entre cuatro herramientas pegadas con cinta.",
   },
 ];
 
-const SENAL = [
-  {
-    meta: "Captación",
-    t: "Pipeline vivo",
-    d: "Estado, responsable, valor estimado y memoria IA por cada lead que entra.",
-  },
-  {
-    meta: "Orquestación",
-    t: "Seguimiento multicanal",
-    d: "SMS, WhatsApp, llamadas y recomendaciones de siguiente acción dentro del mismo panel.",
-  },
-  {
-    meta: "Revenue",
-    t: "Checkout y portal de billing",
-    d: "Cobro directo, plan activo y configuración del acceso del cliente tras el pago.",
-  },
-];
-
-/**
- * Planes. Los importes NO están aquí.
- *
- * Estaban, y por eso la portada anunciaba 97 € y 197 € mientras Stripe
- * cobraba 75 € y 150 €, y /pricing —que ya leía de Stripe— enseñaba los
- * buenos: la propia web se contradecía. Ahora los pide a /api/precios, que
- * los saca de Stripe. Para cambiar un precio se cambia allí y ya está.
- */
 /*
  * Los tres planes, descritos por lo que hace Nesped en cada uno.
  *
  * La lista de funciones y los precios salen de lib/planes.js y de Stripe: aquí
- * sólo vive cómo se cuentan. La diferencia entre planes no es cuántas casillas
- * marcan, es hasta dónde llega el producto —ordena, entiende, actúa— y eso es
- * lo que tiene que leerse de un vistazo.
+ * sólo vive cómo se cuentan.
  */
 const PLANES_WEB = [
   {
@@ -217,143 +190,279 @@ const PLANES_WEB = [
   },
 ];
 
-/** Cuenta de 0 al objetivo con easeOutCubic, una sola vez. */
-function Contador({ target, suffix, decimals, i }) {
-  const ref = useRef(null);
-  const [v, setV] = useState(() =>
-    typeof window !== "undefined" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches
-      ? target
-      : 0
-  );
+/* Duración del audio de muestra, para repartir el acto de la voz. Sale del
+   propio guion: la última frase más lo que dura decirla. */
+const FIN_GUION = GUION[GUION.length - 1].t + 3.4;
 
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return undefined;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return undefined;
+const acotar = (v) => Math.min(1, Math.max(0, v));
 
-    let raf = 0;
-    let timer = 0;
+/* ─────────────────────────────────────────────────────────────────────
+   Los dos actos que pintan detalle fotograma a fotograma viven fuera del
+   componente. No dependen de props ni de estado —sólo leen el DOM que ya
+   está montado— y sacándolos de dentro dejan de recrearse en cada render
+   y de aparecer como dependencias de un efecto que se monta una vez.
+   ───────────────────────────────────────────────────────────────────── */
 
-    function arrancar() {
-      io.disconnect();
-      timer = window.setTimeout(() => {
-        const t0 = performance.now();
-        const dur = 1500 + i * 80;
-        const paso = (now) => {
-          const p = Math.min(1, (now - t0) / dur);
-          setV(target * (1 - Math.pow(1 - p, 3)));
-          if (p < 1) raf = requestAnimationFrame(paso);
-        };
-        raf = requestAnimationFrame(paso);
-      }, 480 + i * 90);
-    }
+/* ── Acto III: la voz ─────────────────────────────────────────────────
+   El avance del acto se convierte en segundo del audio real, y con ese
+   segundo se decide qué frase suena y qué conceptos ya ha separado
+   Nesped. La animación no inventa una conversación: recorre la que está
+   publicada en el sitio. */
+function pintarVoz(carteles, p) {
+  const caja = carteles.current.voz;
+  if (!caja || caja.dataset.on !== "1") return;
+  const tramo = ACTOS.voz;
+  const s = acotar((p - tramo.desde) / (tramo.hasta - tramo.desde));
+  const segundo = s * FIN_GUION;
 
-    const io = new IntersectionObserver(
-      ([e]) => {
-        if (!e.isIntersecting) return;
-        arrancar();
-      },
-      { threshold: 0.25 }
-    );
-    io.observe(el);
+  const lineas = caja.querySelectorAll("[data-linea]");
+  lineas.forEach((el) => {
+    const t = Number(el.dataset.linea);
+    const siguiente = Number(el.dataset.hasta);
+    const dentro = segundo >= t && segundo < siguiente;
+    const pasada = segundo >= siguiente;
+    el.style.setProperty("--a", dentro ? "1" : pasada ? "0.34" : "0");
+  });
 
-    // Dos redes de seguridad, porque aquí una cifra a cero no es "sin
-    // animación": es "0 % de llamadas atendidas" en la portada, que miente.
-    //  1) si IntersectionObserver no dispara, se arranca igualmente;
-    //  2) si requestAnimationFrame tampoco corre —pestaña en segundo plano,
-    //     pintado diferido—, se pone el valor final de golpe. Cuando la
-    //     animación sí ha terminado esto es un no-op: ya vale `target`.
-    const rescate = window.setTimeout(arrancar, 2500);
-    const rescateFinal = window.setTimeout(() => setV(target), 5200);
-    return () => {
-      window.clearTimeout(rescate);
-      window.clearTimeout(rescateFinal);
-      io.disconnect();
-      cancelAnimationFrame(raf);
-      window.clearTimeout(timer);
-    };
-  }, [target, i]);
+  caja.querySelectorAll("[data-concepto]").forEach((el) => {
+    const en = Number(el.dataset.concepto);
+    const a = acotar((segundo - en) / 1.6);
+    el.style.setProperty("--a", a.toFixed(3));
+    const vivo = a > 0.75 ? "1" : "0";
+    if (el.dataset.vivo !== vivo) el.dataset.vivo = vivo;
+  });
+}
 
-  return (
-    <span ref={ref} className="v3-stat-value">
-      {v.toFixed(decimals)}
-      {suffix}
-    </span>
-  );
+/* ── Acto VI: mira a Nesped trabajar ──────────────────────────────────
+   Las tres fichas no aparecen a la vez: llega la energía a una, cambia el
+   dato, y sólo entonces sale hacia la siguiente. La cadena es la
+   explicación —causa y efecto en el mismo plano— y por eso el mismo
+   número mueve el haz y el dato. */
+function pintarTrabajo(carteles, direccion, proyectar, p) {
+  const caja = carteles.current.trabajo;
+  if (!caja || caja.dataset.on !== "1") return;
+  const tramo = ACTOS.trabajo;
+  const s = acotar((p - tramo.desde) / (tramo.hasta - tramo.desde));
+
+  pintarHaces(caja, direccion, proyectar);
+
+  caja.querySelectorAll("[data-paso]").forEach((el) => {
+    const i = Number(el.dataset.paso);
+    /* Cada paso ocupa su tercio y solapa un poco con el siguiente: sin
+       solape la cadena se ve como tres cosas sueltas en vez de una. */
+    const inicio = 0.14 + i * 0.24;
+    const e = acotar((s - inicio + 0.12) / 0.16);
+    const a = acotar((s - inicio) / 0.22);
+    el.style.setProperty("--e", e.toFixed(3));
+    el.style.setProperty("--a", a.toFixed(3));
+  });
+}
+
+/**
+ * Dibuja los haces desde la apertura hasta cada ficha.
+ *
+ * Los dos extremos se miden, ninguno se escribe a mano. El origen se proyecta
+ * con la misma cámara que está usando el shader —así sale exactamente del
+ * vacío central por muy raro que sea el ángulo— y el destino sale de dónde ha
+ * caído la ficha en esta pantalla.
+ *
+ * Antes eran coordenadas fijas sobre un lienzo estirado: el haz llegaba a la
+ * ficha en una resolución concreta y se quedaba a medio camino en todas las
+ * demás. Un rayo que no toca nada no explica ninguna causa, que es justo lo
+ * único que este acto tiene que conseguir.
+ */
+function pintarHaces(caja, direccion, proyectar) {
+  const svg = caja.querySelector(".pel-haces");
+  if (!svg || !direccion) return;
+
+  const c = caja.getBoundingClientRect();
+  if (c.width < 2 || c.height < 2) return;
+
+  const clave = `${Math.round(c.width)}x${Math.round(c.height)}`;
+  if (svg.dataset.caja !== clave) {
+    svg.dataset.caja = clave;
+    svg.setAttribute("viewBox", `0 0 ${c.width} ${c.height}`);
+  }
+
+  const origen = proyectar(direccion, c.width, c.height);
+  if (!origen) return;
+
+  caja.querySelectorAll(".pel-ficha").forEach((ficha, i) => {
+    const g = svg.querySelector(`g[data-paso="${i}"]`);
+    if (!g) return;
+    /* El haz llega al punto del borde de la ficha más cercano al núcleo, no
+       siempre a su lado izquierdo. En escritorio las fichas están a la derecha
+       y da igual; en móvil están debajo, y apuntar al lado izquierdo dibujaba
+       una curva que cruzaba media pantalla para entrar por donde no era. */
+    const f = ficha.getBoundingClientRect();
+    const izq = f.left - c.left;
+    const der = f.right - c.left;
+    const arr = f.top - c.top;
+    const abj = f.bottom - c.top;
+    const dx = Math.min(Math.max(origen.x, izq), der);
+    const dy = Math.min(Math.max(origen.y, arr), abj);
+
+    // Curva, no recta: la energía tiene inercia, no puntería.
+    const d =
+      `M${origen.x.toFixed(1)},${origen.y.toFixed(1)} ` +
+      `C${(origen.x + (dx - origen.x) * 0.5).toFixed(1)},${origen.y.toFixed(1)} ` +
+      `${(origen.x + (dx - origen.x) * 0.62).toFixed(1)},${dy.toFixed(1)} ` +
+      `${dx.toFixed(1)},${dy.toFixed(1)}`;
+
+    const rutas = g.querySelectorAll("path");
+    rutas.forEach((ruta) => ruta.setAttribute("d", d));
+    g.style.setProperty("--largo", rutas[0].getTotalLength().toFixed(1));
+  });
 }
 
 export default function Home() {
-  const [menu, setMenu] = useState(false);
-  const [seccion, setSeccion] = useState("");
   const [precios, setPrecios] = useState(null);
   const [telefono, setTelefono] = useState("");
   const [cargando, setCargando] = useState(false);
   const [estado, setEstado] = useState(null);
+  const [anclado, setAnclado] = useState("0");
+  const [seccion, setSeccion] = useState("");
 
-  useEffect(() => {
-    function onKey(e) {
-      if (e.key === "Escape") setMenu(false);
-    }
-    function onResize() {
-      if (window.innerWidth >= 860) setMenu(false);
-    }
-    window.addEventListener("keydown", onKey);
-    window.addEventListener("resize", onResize);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("resize", onResize);
-    };
+  const raiz = useRef(null);
+  const pelicula = useRef(null);
+  const escenario = useRef(null);
+  const barra = useRef(null);
+  const carteles = useRef({});
+  const control = useRef(null);
+  /* La cámara la crea la página, no el núcleo.
+
+     El director y el núcleo se cargan por separado y no hay garantía de en
+     qué orden resuelven. Si el objeto de cámara lo creara el núcleo, el
+     director podía montarse antes y quedarse dirigiendo un `null`. Creándolo
+     aquí, los dos reciben el mismo objeto llegue quien llegue primero. */
+  const direccion = useRef(direccionInicial());
+  const director = useRef(null);
+  const ancladoRef = useRef("0");
+
+  const guardarCartel = useCallback((id) => (el) => {
+    if (el) carteles.current[id] = el;
+    else delete carteles.current[id];
   }, []);
 
-  /*
-   * Aleja el vídeo del fondo en cuanto se hace scroll.
-   *
-   * Se guarda en un atributo y el movimiento lo hace el CSS: si se animara
-   * desde JavaScript habría que tocar el estilo en cada fotograma. Aquí sólo
-   * cambia un booleano, y como se compara antes de escribir, el atributo se
-   * toca dos veces en toda la sesión en vez de en cada píxel de scroll.
-   */
+  /* ── La película ──────────────────────────────────────────────────────
+     El director se carga aparte, igual que el núcleo: hasta que no hay algo
+     que dirigir no hace falta traerlo. */
   useEffect(() => {
-    const raiz = document.querySelector(".v3");
-    if (!raiz) return undefined;
+    let vivo = true;
+    let soltar = () => {};
 
-    let desplazado = false;
-    const alHacerScroll = () => {
-      const ahora = window.scrollY > 80;
-      if (ahora === desplazado) return;
-      desplazado = ahora;
-      raiz.dataset.desplazado = String(ahora);
-    };
+    import("@/components/nucleo/director").then(({ Director, avanceActo, proyectarNucleo }) => {
+      if (!vivo || !pelicula.current) return;
 
-    alHacerScroll();
-    window.addEventListener("scroll", alHacerScroll, { passive: true });
-    return () => window.removeEventListener("scroll", alHacerScroll);
+      /* Al terminar la película el núcleo se ancla en una esquina y deja de
+         obedecer a la cámara: a partir de ahí lo que manda son los hechos del
+         producto —qué suena, qué se ha lanzado— y no el scroll. */
+      const mirarFinal = () => {
+        const caja = pelicula.current?.getBoundingClientRect();
+        if (!caja) return;
+        /* Se ancla cuando la película ya ha salido de escena de verdad, no
+           en el fotograma exacto en que termina. Con el umbral pegado al
+           final, el último acto —el cierre, con sus botones— se pintaba sobre
+           un núcleo ya recogido en una esquina. */
+        const fin = caja.bottom <= window.innerHeight * 0.5;
+
+        /* Al asomar el pie, el núcleo se retira. Flotando sobre los enlaces
+           legales no aporta nada y estorba a la vista. */
+        const pie = document.querySelector(".v3-footer");
+        const enElPie = fin && pie
+          ? pie.getBoundingClientRect().top < window.innerHeight * 0.85
+          : false;
+        const modo = !fin ? "0" : enElPie ? "fin" : "1";
+        if (modo !== ancladoRef.current) {
+          ancladoRef.current = modo;
+          setAnclado(modo);
+        }
+
+        if (fin === d.congelado) return;
+        d.congelado = fin;
+        if (!fin && direccion.current) direccion.current.fondo = 1;
+        if (fin && direccion.current) {
+          const dir = direccion.current;
+          dir.cam[0] = 0; dir.cam[1] = 0.06; dir.cam[2] = 3.85;
+          dir.mira[0] = 0; dir.mira[1] = 0; dir.mira[2] = 0;
+          dir.fov = 0.58;
+          dir.revelado = 1;
+          dir.dentro = 0;
+          dir.replica = 0;
+          dir.escala = 1;
+          // Sin fondo: anclado, el lienzo se mezcla con la página y cualquier
+          // valor distinto de cero se ve como un rectángulo gris.
+          dir.fondo = 0;
+          control.current?.ir("IDLE");
+        }
+      };
+
+      const d = new Director({
+        pelicula: pelicula.current,
+        direccion: direccion.current,
+        buscarMaquina: () => control.current?.maquina || null,
+        antesDeCada: mirarFinal,
+        alAvanzar: (p) => {
+          if (barra.current) barra.current.style.setProperty("--p", p.toFixed(4));
+
+          /* La cabecera se atenúa sólo en la primera pantalla. Vuelve entera
+             en cuanto la película arranca, y con el ratón encima o al tabular
+             se enciende siempre. */
+          raiz.current?.style.setProperty(
+            "--pel-chrome",
+            (0.3 + Math.min(1, p / 0.05) * 0.7).toFixed(3)
+          );
+
+          for (const [id, tramo] of Object.entries(ACTOS)) {
+            const el = carteles.current[id];
+            if (!el) continue;
+            const v = avanceActo(p, tramo.desde, tramo.hasta);
+            /* `--s` es por dónde va el frente de luz dentro del acto y `--v`
+               si el cartel está o no. Se separan porque el frente tiene que
+               avanzar en el mismo sentido que el scroll, y la presencia
+               tiene que subir al entrar y bajar al salir. */
+            const s = acotar((p - tramo.desde) / (tramo.hasta - tramo.desde));
+            el.style.setProperty("--v", v.toFixed(3));
+            el.style.setProperty("--s", s.toFixed(3));
+            const on = v > 0.02 ? "1" : "0";
+            if (el.dataset.on !== on) el.dataset.on = on;
+          }
+
+          pintarVoz(carteles, p);
+          pintarTrabajo(carteles, direccion.current, proyectarNucleo, p);
+        },
+      });
+
+      d.montar();
+      director.current = d;
+      /* Sólo en desarrollo: poder llevar la película a un punto concreto
+         desde la consola ahorra recorrer siete pantallas de scroll cada vez
+         que se ajusta un fotograma. */
+      if (process.env.NODE_ENV !== "production") window.__pelicula = d;
+      soltar = () => d.desmontar();
+    });
+
+    return () => { vivo = false; soltar(); };
   }, []);
 
+  /* ── Precios ──────────────────────────────────────────────────────────
+     Salen de Stripe. Tenerlos en dos sitios fue lo que hizo que la web
+     anunciara una cifra y se cobrara otra. */
   useEffect(() => {
     let vivo = true;
     fetch("/api/precios")
       .then((r) => r.json())
       .then((j) => { if (vivo) setPrecios(j?.data || {}); })
-      // Sin precios la tarjeta enseña "Consultar" y lleva a ventas: es
-      // preferible a arriesgarse a mostrar una cifra que no se cobra.
       .catch(() => { if (vivo) setPrecios({}); });
     return () => { vivo = false; };
   }, []);
 
-  /**
-   * El menú son anclas de esta misma página, así que marcar una fija es
-   * mentira en cuanto se hace scroll. Esto sigue la sección que se está
-   * mirando: se queda la última que cruza la franja central del viewport.
-   */
+  /* El menú son anclas de esta misma página: marcar una fija sería mentira
+     en cuanto se hace scroll. */
   useEffect(() => {
-    const ids = ["producto", "como", "senal", "demo", "planes", "preguntas"];
-    const nodos = ids
-      .map((id) => document.getElementById(id))
-      .filter(Boolean);
+    const ids = ["como", "demo", "preguntas"];
+    const nodos = ids.map((id) => document.getElementById(id)).filter(Boolean);
     if (nodos.length === 0) return undefined;
-
     const io = new IntersectionObserver(
       (entradas) => {
         const visible = entradas
@@ -363,19 +472,35 @@ export default function Home() {
       },
       { rootMargin: "-45% 0px -45% 0px" }
     );
-
     nodos.forEach((n) => io.observe(n));
     return () => io.disconnect();
   }, []);
 
-  /* Mismo contrato que ya usa tu web: POST { telefono, client_id }. */
+  /**
+   * La muestra de llamada mueve el núcleo.
+   *
+   * Es la regla del sistema: un estado visual no se dispara porque quede
+   * bien, se dispara porque está pasando. Suena el agente, Nesped habla;
+   * suena el cliente, Nesped escucha. Sin audio, vuelve a estar disponible.
+   */
+  const alSonarMuestra = useCallback((quien) => {
+    const c = control.current;
+    if (!c) return;
+    if (quien === "agente") c.ir("SPEAKING");
+    else if (quien === "cliente") c.ir("LISTENING");
+    else c.ir("IDLE");
+  }, []);
+
+  /* Mismo contrato de siempre: POST { telefono, client_id }. */
   async function lanzarLlamada() {
     if (!telefono.trim()) {
       setEstado({ ok: false, text: "Introduce un teléfono para lanzar la demo." });
+      control.current?.ir("ATTENTION", { durante: 1.6 });
       return;
     }
     setCargando(true);
     setEstado(null);
+    control.current?.ir("ACTING", { hacia: [0, -0.4, 1] });
     try {
       const res = await fetch("/api/demo-call", {
         method: "POST",
@@ -385,344 +510,482 @@ export default function Home() {
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.success) {
         setEstado({ ok: false, text: json.message || "No se pudo lanzar la llamada de prueba." });
+        control.current?.ir("ERROR", { durante: 2.4 });
         return;
       }
       setEstado({ ok: true, text: "Llamada lanzada. Revisa tu móvil para probar la experiencia real." });
+      control.current?.ir("SUCCESS", { durante: 1.8 });
     } catch {
       setEstado({ ok: false, text: "Error técnico al lanzar la llamada." });
+      control.current?.ir("ERROR", { durante: 2.4 });
     } finally {
       setCargando(false);
     }
   }
 
   return (
-    <div className={`v3 ${inter.className}`}>
-      {/* Progreso de lectura. Puramente decorativo: lo mueve el navegador
-          con animación de desplazamiento, sin JavaScript. */}
-      <div className="v3-progreso" aria-hidden="true" />
+    <div ref={raiz} className={`pel v3 ${inter.className}`}>
+      <div ref={barra} className="pel-avance" aria-hidden="true" />
+
+      {/* Un solo lienzo para toda la página. */}
+      <div
+        ref={escenario}
+        className="pel-escenario"
+        data-anclado={anclado}
+        aria-hidden="true"
+      >
+        <NucleoVivo
+          estado="DORMANT"
+          controlRef={control}
+          direccionRef={direccion}
+          atento
+        />
+      </div>
 
       <Header activo={seccion} />
 
-      {/* ── Hero ─────────────────────────────────────────────────────── */}
-      <section id="top" className="v3-hero">
-        <div className="v3-bg" aria-hidden="true">
-          {/* poster: se ve al instante; preload none evita descargar 13,8 MB
-                antes de que el navegador decida reproducir. */}
-          <video autoPlay muted loop playsInline preload="none" poster="/fonts/poster.svg">
-            <source src={VIDEO_SRC} type="video/mp4" />
-          </video>
-        </div>
+      <div ref={pelicula} className="pel-pelicula">
+        <div className="pel-plano">
 
-        <div className="v3-trust">
-          <span className="v3-trust-pill">
-            <span className="v3-punto" aria-hidden="true" />
-            Voz con IA sobre {INFRAESTRUCTURA.join(" · ")}
-          </span>
-        </div>
-
-        <h1 className="v3-h1">
-          <span className="v3-line">Convierte cada llamada</span>
-          <span className="v3-line">en ingreso real</span>
-        </h1>
-
-        <p className="v3-sub">
-          Una capa de voz con IA que suena humana: capta, hace seguimiento,
-          cierra y cobra dentro de una misma experiencia.
-        </p>
-
-        <div className="v3-cta-row">
-          <a className="v3-btn v3-btn--white" href="#demo">Probar llamada real</a>
-          <a className="v3-btn v3-btn--ghost" href="#planes">Ver planes</a>
-        </div>
-
-        <div className="v3-stats">
-          {STATS.map((s, i) => (
-            <div key={s.label} className="v3-stat">
-              <span className="v3-stat-icon">{s.icon}</span>
-              <Contador target={s.target} suffix={s.suffix} decimals={s.decimals} i={i} />
-              <span className="v3-stat-label">{s.label}</span>
+          {/* ── 00 · La oscuridad ────────────────────────────────────────
+              No hay hero. Durante un instante parece que no hay nada, y lo
+              que hay lo descubre la luz, no un fundido de opacidad. */}
+          <div ref={guardarCartel("revelacion")} className="pel-cartel" data-sitio="abajo-izq" data-on="0">
+            <div>
+              <h1 className="pel-h1 pel-t">
+                Convierte cada llamada
+                <br />
+                en ingreso real
+              </h1>
+              <p className="pel-pie">
+                Voz con IA sobre {INFRAESTRUCTURA.join(" · ")}.
+              </p>
             </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── Producto ─────────────────────────────────────────────────── */}
-      <section id="producto" className="v3-section">
-        <div className="v3-wrap">
-          <Rev>
-            <span className="v3-eyebrow">Producto</span>
-            <h2 className="v3-h2">Una experiencia que vende mejor porque parece producto de verdad.</h2>
-            <p className="v3-lede">
-              No es una demo bonita encima de automatizaciones sueltas. Es una capa
-              coherente de voz, CRM, seguimiento y revenue pensada para que el
-              cliente note orden, control y calidad.
-            </p>
-          </Rev>
-
-          <div className="v3-grid" data-c="3">
-            {PRODUCTO.map((c, i) => (
-              <Rev as="article" key={c.t} d={i * 0.09} className="v3-card">
-                <span className="v3-card-meta">{c.meta}</span>
-                <h3 className="v3-h3">{c.t}</h3>
-                <p className="v3-p">{c.d}</p>
-              </Rev>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Señal ────────────────────────────────────────────────────── */}
-      {/* ── Cómo funciona ────────────────────────────────────────────── */}
-      <section id="como" className="v3-section v3-section--line">
-        <div className="v3-wrap">
-          <Rev>
-            <span className="v3-eyebrow">Cómo funciona</span>
-            <h2 className="v3-h2">De que suene el teléfono<br />a tener el lead apuntado.</h2>
-            <p className="v3-lede">
-              Cuatro pasos. Ninguno te obliga a cambiar de número ni a tocar
-              nada de lo que ya tienes montado.
-            </p>
-          </Rev>
-
-          <ol className="v3-pasos">
-            {COMO_FUNCIONA.map((p, i) => (
-              <Rev as="li" key={p.n} d={i * 0.08} className="v3-paso">
-                <span className="v3-paso-n">{p.n}</span>
-                <div>
-                  <h3 className="v3-h3">{p.t}</h3>
-                  <p className="v3-p">{p.d}</p>
-                </div>
-              </Rev>
-            ))}
-          </ol>
-        </div>
-      </section>
-
-      <section id="senal" className="v3-section v3-section--line">
-        <div className="v3-wrap">
-          <Rev>
-            <span className="v3-eyebrow">Señal</span>
-            <h2 className="v3-h2">Indicadores que un cliente entiende al instante.</h2>
-            <p className="v3-lede">
-              El producto transmite control porque cada dato tiene contexto, cada
-              lead tiene estado y cada acción deja una huella visible.
-            </p>
-          </Rev>
-
-          <div className="v3-grid" data-c="3">
-            {SENAL.map((c, i) => (
-              <Rev as="article" key={c.t} d={i * 0.09} className="v3-card">
-                <span className="v3-card-meta">{c.meta}</span>
-                <h3 className="v3-h3">{c.t}</h3>
-                <p className="v3-p">{c.d}</p>
-              </Rev>
-            ))}
+            <div className="pel-empuja">
+              <i />
+              HAZ SCROLL PARA DESPERTAR A NESPED
+            </div>
           </div>
 
-          <Rev d={0.2}>
-            <div className="v3-chips">
-              {["Clínicas", "Inmobiliarias", "Seguros", "Servicios", "Despachos", "Ventas consultivas"].map((c) => (
-                <span key={c} className="v3-chip">{c}</span>
+          {/* ── I · Despierta ────────────────────────────────────────── */}
+          <div ref={guardarCartel("despierta")} className="pel-cartel" data-sitio="medio-der" data-on="0">
+            <div>
+              <span className="pel-eyebrow">ACTO I</span>
+              <p className="pel-h2 pel-t">Ya está escuchando.</p>
+              <p className="pel-pie">
+                No hay nadie de guardia. No hay turno de noche. Cuando suena
+                el teléfono a las once y media, contesta igual que a las diez
+                de la mañana.
+              </p>
+            </div>
+          </div>
+
+          {/* ── II · Entra la voz ────────────────────────────────────── */}
+          <div ref={guardarCartel("escucha")} className="pel-cartel" data-sitio="arriba-izq" data-on="0">
+            <div>
+              <p className="pel-palabra pel-t">Escucha.</p>
+            </div>
+          </div>
+
+          {/* ── II bis · Atravesamos la apertura ─────────────────────── */}
+          <div ref={guardarCartel("dentro")} className="pel-cartel" data-sitio="centro" data-on="0">
+            <div>
+              <p className="pel-palabra pel-t">Comprende.</p>
+              <p className="pel-pie" style={{ marginInline: "auto" }}>
+                Lo que entra por el teléfono es ruido con palabras dentro.
+                Esto es lo que pasa entre esa frase y un contacto con nombre,
+                necesidad y siguiente paso.
+              </p>
+            </div>
+          </div>
+
+          {/* ── III · La voz se convierte en significado ─────────────── */}
+          <div ref={guardarCartel("voz")} className="pel-cartel" data-sitio="abajo-izq" data-on="0">
+            <div>
+              <span className="pel-eyebrow">LLAMADA REAL · NINGUNA DE LAS DOS VOCES ES UNA PERSONA</span>
+              <div className="pel-voz">
+                {GUION.map((l, i) => (
+                  <div
+                    key={l.t}
+                    className="pel-linea"
+                    data-quien={l.quien}
+                    data-linea={l.t}
+                    data-hasta={GUION[i + 1] ? GUION[i + 1].t : FIN_GUION}
+                  >
+                    <span className="pel-quien">
+                      {l.quien === "agente" ? "NESPED" : "CLIENTE"}
+                    </span>
+                    <span className="pel-dice">{l.texto}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="pel-conceptos">
+                {CONCEPTOS.map((c) => (
+                  <span key={c.t} className="pel-concepto" data-concepto={c.en} data-vivo="0">
+                    {c.t}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ── IV · Memoria ─────────────────────────────────────────── */}
+          <div ref={guardarCartel("memoria")} className="pel-cartel" data-sitio="abajo-izq" data-on="0">
+            <div>
+              <p className="pel-palabra pel-t">Recuerda.</p>
+              <p className="pel-pie">
+                Cada interacción cambia lo que Nesped sabe después. Javier no
+                empieza de cero: ya había llamado.
+              </p>
+              <div className="pel-conceptos">
+                {MEMORIA.map((m) => (
+                  <span key={m} className="pel-concepto" style={{ "--a": 1 }}>
+                    {m}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ── V · Actúa ────────────────────────────────────────────── */}
+          <div ref={guardarCartel("actua")} className="pel-cartel" data-sitio="arriba-izq" data-on="0">
+            <div>
+              <p className="pel-h2 pel-t">No sólo responde.</p>
+              <p className="pel-palabra pel-t">Actúa.</p>
+            </div>
+          </div>
+
+          {/* ── VI · Mira a Nesped trabajar ──────────────────────────── */}
+          <div ref={guardarCartel("trabajo")} className="pel-cartel" data-sitio="abajo-der" data-on="0">
+            {/* Los haces salen del núcleo y llegan a cada ficha. El trazo y
+                el dato se mueven con el mismo número: eso es lo que hace que
+                se lea "Nesped ha hecho esto" y no "esto ha cambiado". */}
+            {/* Las trayectorias las calcula pintarHaces(): proyecta el centro
+                de la apertura y mide dónde ha caído cada ficha. Aquí sólo se
+                declaran los dos trazos —el haz y su cabeza. */}
+            <svg className="pel-haces" aria-hidden="true">
+              {TRABAJO.map((f, i) => (
+                <g key={f.id} data-paso={i}>
+                  <path className="pel-haz" />
+                  <path className="pel-chispa" />
+                </g>
+              ))}
+            </svg>
+
+            <div>
+              <span className="pel-eyebrow">MIRA A NESPED TRABAJAR</span>
+              <div className="pel-trabajo">
+                {TRABAJO.map((f, i) => (
+                  <article key={f.id} className="pel-ficha" data-paso={i}>
+                    <div className="pel-ficha-meta">
+                      <span>{f.meta[0]}</span>
+                      <span>{f.meta[1]}</span>
+                    </div>
+                    <h3 className="pel-ficha-t">{f.t}</h3>
+                    <p className="pel-ficha-d">
+                      <span className="pel-dato">
+                        <span className="antes">{f.antes}</span>
+                        <span className="despues">{f.despues}</span>
+                      </span>
+                    </p>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ── VII · Escala ─────────────────────────────────────────── */}
+          <div ref={guardarCartel("escala")} className="pel-cartel" data-sitio="arriba-centro" data-on="0">
+            <div>
+              <p className="pel-h2 pel-t">
+                Una inteligencia.
+                <br />
+                Todas las conversaciones.
+              </p>
+              <p className="pel-pie" style={{ marginInline: "auto" }}>
+                No son cien agentes descoordinados. Es el mismo, atendiendo a
+                la vez, con el mismo guion y la misma memoria.
+              </p>
+            </div>
+          </div>
+
+          {/* ── VIII · Cierre ────────────────────────────────────────── */}
+          <div
+            ref={guardarCartel("cierre")}
+            className="pel-cartel"
+            data-sitio="arriba-centro"
+            data-clicable="1"
+            data-on="0"
+          >
+            <div>
+              <p className="pel-h2 pel-t">
+                Tu negocio.
+                <br />
+                Siempre activo.
+              </p>
+              <div className="pel-botones" style={{ justifyContent: "center" }}>
+                <a className="pel-btn pel-btn--luz" href="#demo">Escúchalo ahora</a>
+                <a className="pel-btn" href="/pricing">Ver planes</a>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      {/* ═══ A partir de aquí el producto se explica con palabras ═══════ */}
+      <div className="pel-negocio">
+
+        <section id="como" className="v3-section">
+          <div className="v3-wrap">
+            <Rev>
+              <span className="v3-eyebrow">Cómo funciona</span>
+              <h2 className="v3-h2">De que suene el teléfono<br />a tener el lead apuntado.</h2>
+              <p className="v3-lede">
+                Cuatro pasos. Ninguno te obliga a cambiar de número ni a tocar
+                nada de lo que ya tienes montado.
+              </p>
+            </Rev>
+
+            <ol className="v3-pasos">
+              {COMO_FUNCIONA.map((p, i) => (
+                <Rev as="li" key={p.n} d={i * 0.08} className="v3-paso">
+                  <span className="v3-paso-n">{p.n}</span>
+                  <div>
+                    <h3 className="v3-h3">{p.t}</h3>
+                    <p className="v3-p">{p.d}</p>
+                  </div>
+                </Rev>
+              ))}
+            </ol>
+
+            <Rev d={0.2}>
+              <div className="v3-chips">
+                {["Clínicas", "Inmobiliarias", "Seguros", "Servicios", "Despachos", "Ventas consultivas"].map((c) => (
+                  <span key={c} className="v3-chip">{c}</span>
+                ))}
+              </div>
+            </Rev>
+          </div>
+        </section>
+
+        <section className="v3-section v3-section--line">
+          <div className="v3-wrap">
+            <Rev>
+              <span className="v3-eyebrow">Lo que te llevas</span>
+              <h2 className="v3-h2">Una capa, no cuatro herramientas<br />pegadas con cinta.</h2>
+            </Rev>
+
+            <div className="v3-grid" data-c="3">
+              {LLEVA.map((c, i) => (
+                <Rev as="article" key={c.t} d={i * 0.09}>
+                  <span className="v3-card-meta">{c.meta}</span>
+                  <h3 className="v3-h3">{c.t}</h3>
+                  <p className="v3-p">{c.d}</p>
+                </Rev>
               ))}
             </div>
-          </Rev>
-        </div>
-      </section>
 
-      {/* ── Planes ───────────────────────────────────────────────────── */}
-      {/* ── Demo ─────────────────────────────────────────────────────── */}
-      <section id="demo" className="v3-section v3-section--line">
-        <div className="v3-wrap">
-          <Rev>
-            <span className="v3-eyebrow">Demo real</span>
-            <h2 className="v3-h2">Escúchalo antes de creerte nada.</h2>
-            <p className="v3-lede">
-              Cuarenta segundos de una llamada del agente. Ninguna de las dos
-              voces es una persona. Si prefieres oírlo en tu propio móvil,
-              déjanos tu número y te llama.
-            </p>
-          </Rev>
-
-          {/* Oírlo pesa más que cualquier párrafo, así que va antes que el
-              formulario: pedir el teléfono es fricción y no todo el mundo la
-              acepta sin haber oído nada primero. */}
-          <Rev d={0.06}>
-            <EscuchaLlamada />
-          </Rev>
-
-          <div className="v3-grid" data-c="2" style={{ marginTop: 22 }}>
-            <Rev className="v3-card">
-              <span className="v3-card-meta">Qué acabas de oír</span>
-              <h3 className="v3-h3">Detecta la necesidad y se queda con el contacto</h3>
-              <p className="v3-p">
-                El agente entiende qué se le pide, pregunta sólo lo que falta,
-                repite el teléfono para confirmarlo y deja el lead registrado
-                antes de colgar.
-              </p>
-              <div className="v3-chips">
-                <span className="v3-chip">Instancia: demo</span>
-                <span className="v3-chip">Voz cloud lista</span>
-                <span className="v3-chip">Realtime IA</span>
-              </div>
-            </Rev>
-
-            <Rev className="v3-card" d={0.09}>
-              <div className="v3-field">
-                <label className="v3-label" htmlFor="v3-tel">Teléfono para la demo</label>
-                <input
-                  id="v3-tel"
-                  className="v3-input"
-                  type="tel"
-                  inputMode="tel"
-                  autoComplete="tel"
-                  placeholder="+346XXXXXXXX"
-                  value={telefono}
-                  onChange={(e) => setTelefono(e.target.value)}
-                />
-              </div>
-
-              <button
-                type="button"
-                className="v3-btn v3-btn--white"
-                style={{ marginTop: 16, width: "100%" }}
-                onClick={lanzarLlamada}
-                disabled={cargando}
-              >
-                {cargando ? "Lanzando llamada…" : "Probar llamada en vivo"}
-              </button>
-
-              <p
-                className="v3-status"
-                data-ok={estado ? String(estado.ok) : undefined}
-                role="status"
-                aria-live="polite"
-              >
-                {estado?.text || ""}
-              </p>
-
-              <p className="v3-legal">
-                Al lanzar la demo aceptas que la llamada pueda ser grabada y
-                transcrita con fines de calidad, seguridad y seguimiento
-                comercial.{" "}
-                <a href="/legal/voice-compliance">Ver política de grabaciones</a>
-              </p>
-            </Rev>
-          </div>
-        </div>
-      </section>
-
-      <section id="planes" className="v3-section v3-section--line">
-        <div className="v3-wrap">
-          <Rev>
-            <span className="v3-eyebrow">Planes</span>
-            <h2 className="v3-h2">Listos para vender, cobrar y escalar.</h2>
-            <p className="v3-lede">
-              La diferencia no es cuántas cosas marca cada uno. Es hasta dónde
-              llega Nesped: ordena, entiende, o trabaja por ti.
-            </p>
-          </Rev>
-
-          <div className="v3-grid" data-c="3">
-            {PLANES_WEB.map((p, i) => {
-              const def = PLANES[p.plan];
-              const real = precios?.[p.plan];
-              /* El precio se pide a Stripe, no se escribe aquí. Tenerlo en dos
-                 sitios fue lo que hizo que la web anunciara una cifra y se
-                 cobrara otra. Mientras llega se deja el hueco en blanco en vez
-                 de enseñar una provisional que luego cambia sola. */
-              const importe = precios === null ? "" : real?.precio || `${def.precio} €`;
-              const porVentas = def.hablarConVentas;
-
-              return (
-                <Rev
-                  as="article"
-                  key={p.plan}
-                  d={i * 0.09}
-                  className={`v3-card v3-plan ${def.recomendado ? "v3-plan--hi" : ""}`}
-                >
-                  <span className="v3-card-meta">
-                    {def.recomendado ? "El que recomendamos" : "Plan"}
+            <Rev d={0.18}>
+              <div className="v3-chips" style={{ marginTop: 34 }}>
+                {CIFRAS.map((c) => (
+                  <span key={c.l} className="v3-chip">
+                    <b style={{ color: "#fff", fontWeight: 500 }}>{c.v}</b>
+                    &nbsp;· {c.l}
                   </span>
-                  <h3 className="v3-h3">{def.nombre}</h3>
-                  <p className="v3-plan-verbo">{p.verbo}</p>
-                  <p className="v3-p">{p.sub}</p>
-                  <div className="v3-price" aria-busy={precios === null}>
-                    {def.desde && importe ? <span className="v3-desde">desde </span> : null}
-                    {importe || "\u00a0"}
-                  </div>
-                  <div className="v3-billing">{real?.periodo || "al mes"}</div>
-                  <ul className="v3-feats">
-                    {p.feats.map((f) => (
-                      <li key={f}><span className="v3-tick">/</span>{f}</li>
-                    ))}
-                  </ul>
-                  <a
-                    className={`v3-btn ${def.recomendado ? "v3-btn--white" : "v3-btn--dark"}`}
-                    href={
-                      porVentas
-                        ? `mailto:ventas@nesped.com?subject=${encodeURIComponent("Nesped Enterprise")}`
-                        : `/registro?plan=${p.plan}`
-                    }
-                  >
-                    {porVentas ? "Hablar con nosotros" : `Empezar con ${def.nombre}`}
-                  </a>
-                </Rev>
-              );
-            })}
+                ))}
+              </div>
+            </Rev>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* ── Preguntas ────────────────────────────────────────────────── */}
-      <section id="preguntas" className="v3-section v3-section--line">
-        <div className="v3-wrap">
-          <Rev>
-            <span className="v3-eyebrow">Lo que siempre preguntan</span>
-            <h2 className="v3-h2">Las dudas de verdad,<br />respondidas de frente.</h2>
-          </Rev>
+        <section id="demo" className="v3-section v3-section--line">
+          <div className="v3-wrap">
+            <Rev>
+              <span className="v3-eyebrow">Demo real</span>
+              <h2 className="v3-h2">Escúchalo antes de creerte nada.</h2>
+              <p className="v3-lede">
+                Cuarenta segundos de una llamada del agente. Ninguna de las dos
+                voces es una persona. Si prefieres oírlo en tu propio móvil,
+                déjanos tu número y te llama.
+              </p>
+            </Rev>
 
-          <div className="v3-preguntas">
-            {PREGUNTAS.map((p, i) => (
-              /* <details> nativo: se abre sin JavaScript, es accesible por
-                 teclado de fábrica y el buscador lee el contenido aunque esté
-                 plegado. Un acordeón hecho a mano no da nada de eso gratis. */
-              <Rev as="details" key={p.q} d={i * 0.05} className="v3-pregunta">
-                <summary>
-                  <span>{p.q}</span>
-                  <span className="v3-pregunta-mas" aria-hidden="true" />
-                </summary>
-                <p className="v3-p">{p.a}</p>
+            {/* Oírlo pesa más que cualquier párrafo, así que va antes que el
+                formulario: pedir el teléfono es fricción y no todo el mundo la
+                acepta sin haber oído nada primero. */}
+            <Rev d={0.06}>
+              <EscuchaLlamada alSonar={alSonarMuestra} />
+            </Rev>
+
+            <div className="v3-grid" data-c="2" style={{ marginTop: 22 }}>
+              <Rev className="v3-card">
+                <span className="v3-card-meta">Qué acabas de oír</span>
+                <h3 className="v3-h3">Detecta la necesidad y se queda con el contacto</h3>
+                <p className="v3-p">
+                  El agente entiende qué se le pide, pregunta sólo lo que falta,
+                  repite el teléfono para confirmarlo y deja el lead registrado
+                  antes de colgar.
+                </p>
+                <div className="v3-chips">
+                  <span className="v3-chip">Instancia: demo</span>
+                  <span className="v3-chip">Voz cloud lista</span>
+                  <span className="v3-chip">Realtime IA</span>
+                </div>
               </Rev>
-            ))}
-          </div>
-        </div>
-      </section>
 
-      {/* ── Cierre ───────────────────────────────────────────────────── */}
-      <section className="v3-section v3-section--line">
-        <div className="v3-wrap">
-          <Rev className="v3-cta">
-            <span className="v3-eyebrow">Siguiente paso</span>
-            <h2 className="v3-h2">
-              Si quieres venderlo como producto serio,
-              <br />
-              enséñalo como producto serio.
-            </h2>
-            <p className="v3-lede">
-              El mejor argumento comercial no es explicarlo. Es abrir la
-              plataforma, cobrar un plan y dejar al cliente viendo una
-              experiencia impecable de punta a punta.
-            </p>
-            <div className="v3-cta-row">
-              <a className="v3-btn v3-btn--white" href="/pricing">Ver planes</a>
-              <a className="v3-btn" href="/portal">Entrar al portal</a>
-              <a className="v3-btn" href="mailto:hola@nesped.com">Hablar con ventas</a>
+              <Rev className="v3-card" d={0.09}>
+                <div className="v3-field">
+                  <label className="v3-label" htmlFor="v3-tel">Teléfono para la demo</label>
+                  <input
+                    id="v3-tel"
+                    className="v3-input"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    placeholder="+346XXXXXXXX"
+                    value={telefono}
+                    onChange={(e) => setTelefono(e.target.value)}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  className="v3-btn v3-btn--white"
+                  style={{ marginTop: 16, width: "100%" }}
+                  onClick={lanzarLlamada}
+                  disabled={cargando}
+                >
+                  {cargando ? "Lanzando llamada…" : "Probar llamada en vivo"}
+                </button>
+
+                <p
+                  className="v3-status"
+                  data-ok={estado ? String(estado.ok) : undefined}
+                  role="status"
+                  aria-live="polite"
+                >
+                  {estado?.text || ""}
+                </p>
+
+                <p className="v3-legal">
+                  Al lanzar la demo aceptas que la llamada pueda ser grabada y
+                  transcrita con fines de calidad, seguridad y seguimiento
+                  comercial.{" "}
+                  <a href="/legal/voice-compliance">Ver política de grabaciones</a>
+                </p>
+              </Rev>
             </div>
-          </Rev>
-        </div>
-      </section>
+          </div>
+        </section>
 
-      <Footer />
+        <section id="planes" className="v3-section v3-section--line">
+          <div className="v3-wrap">
+            <Rev>
+              <span className="v3-eyebrow">Planes</span>
+              <h2 className="v3-h2">Listos para vender, cobrar y escalar.</h2>
+              <p className="v3-lede">
+                La diferencia no es cuántas cosas marca cada uno. Es hasta dónde
+                llega Nesped: ordena, entiende, o trabaja por ti.
+              </p>
+            </Rev>
+
+            <div className="v3-grid" data-c="3">
+              {PLANES_WEB.map((p, i) => {
+                const def = PLANES[p.plan];
+                const real = precios?.[p.plan];
+                const importe = precios === null ? "" : real?.precio || `${def.precio} €`;
+                const porVentas = def.hablarConVentas;
+
+                return (
+                  <Rev
+                    as="article"
+                    key={p.plan}
+                    d={i * 0.09}
+                    className={`v3-card v3-plan ${def.recomendado ? "v3-plan--hi" : ""}`}
+                  >
+                    <span className="v3-card-meta">
+                      {def.recomendado ? "El que recomendamos" : "Plan"}
+                    </span>
+                    <h3 className="v3-h3">{def.nombre}</h3>
+                    <p className="v3-plan-verbo">{p.verbo}</p>
+                    <p className="v3-p">{p.sub}</p>
+                    <div className="v3-price" aria-busy={precios === null}>
+                      {def.desde && importe ? <span className="v3-desde">desde </span> : null}
+                      {importe || " "}
+                    </div>
+                    <div className="v3-billing">{real?.periodo || "al mes"}</div>
+                    <ul className="v3-feats">
+                      {p.feats.map((f) => (
+                        <li key={f}><span className="v3-tick">/</span>{f}</li>
+                      ))}
+                    </ul>
+                    <a
+                      className={`v3-btn ${def.recomendado ? "v3-btn--white" : "v3-btn--dark"}`}
+                      href={
+                        porVentas
+                          ? `mailto:ventas@nesped.com?subject=${encodeURIComponent("Nesped Enterprise")}`
+                          : `/registro?plan=${p.plan}`
+                      }
+                    >
+                      {porVentas ? "Hablar con nosotros" : `Empezar con ${def.nombre}`}
+                    </a>
+                  </Rev>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        <section id="preguntas" className="v3-section v3-section--line">
+          <div className="v3-wrap">
+            <Rev>
+              <span className="v3-eyebrow">Lo que siempre preguntan</span>
+              <h2 className="v3-h2">Las dudas de verdad,<br />respondidas de frente.</h2>
+            </Rev>
+
+            <div className="v3-preguntas">
+              {PREGUNTAS.map((p, i) => (
+                /* <details> nativo: se abre sin JavaScript, es accesible por
+                   teclado de fábrica y el buscador lee el contenido aunque esté
+                   plegado. Un acordeón hecho a mano no da nada de eso gratis. */
+                <Rev as="details" key={p.q} d={i * 0.05} className="v3-pregunta">
+                  <summary>
+                    <span>{p.q}</span>
+                    <span className="v3-pregunta-mas" aria-hidden="true" />
+                  </summary>
+                  <p className="v3-p">{p.a}</p>
+                </Rev>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="v3-section v3-section--line">
+          <div className="v3-wrap">
+            <Rev className="v3-cta">
+              <span className="v3-eyebrow">Siguiente paso</span>
+              <h2 className="v3-h2">
+                Si quieres venderlo como producto serio,
+                <br />
+                enséñalo como producto serio.
+              </h2>
+              <p className="v3-lede">
+                El mejor argumento comercial no es explicarlo. Es abrir la
+                plataforma, cobrar un plan y dejar al cliente viendo una
+                experiencia impecable de punta a punta.
+              </p>
+              <div className="v3-cta-row">
+                <a className="v3-btn v3-btn--white" href="/pricing">Ver planes</a>
+                <a className="v3-btn" href="/portal">Entrar al portal</a>
+                <a className="v3-btn" href="mailto:hola@nesped.com">Hablar con ventas</a>
+              </div>
+            </Rev>
+          </div>
+        </section>
+
+        <Footer />
+      </div>
     </div>
   );
 }

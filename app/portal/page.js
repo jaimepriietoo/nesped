@@ -24,6 +24,7 @@ import {
   PLANES, PLAN_POR_DEFECTO, planDe, planSiguiente,
   tieneFuncion, planQueIncluye, VALOR_BLOQUEADO,
 } from "@/lib/planes";
+import { NucleoMarca, estadoDe } from "@/components/nucleo/marca";
 import "./portal.css";
 
 /* ── utilidades ──────────────────────────────────────────────────────── */
@@ -89,6 +90,18 @@ const MOTIVOS_PERDIDA = [
  * un dato que nunca se rellenó sería echar a quien ya paga.
  */
 const ESTADOS_SIN_ACCESO = new Set(["pendiente", "cancelado"]);
+
+/* Cómo se llama en pantalla lo que está haciendo Nesped. El objeto lo dice
+   con movimiento; esto lo dice con palabras, que es lo que necesita quien usa
+   lector de pantalla o simplemente no quiere adivinar. */
+const TEXTO_ESTADO = {
+  IDLE: "EN DIRECTO",
+  THINKING: "CARGANDO",
+  ATTENTION: "REQUIERE ATENCIÓN",
+  ERROR: "SIN CONEXIÓN",
+  ACTING: "EJECUTANDO",
+  SPEAKING: "EN LLAMADA",
+};
 
 function suscripcionAlCorriente(cliente) {
   const estado = String(cliente?.billing_status || "").toLowerCase().trim();
@@ -2847,6 +2860,21 @@ export default function PortalV3() {
   }, [vista, cargandoVista, cargando, extra]);
   const datosVista = extra[vista];
 
+  /**
+   * Qué está haciendo Nesped, en el mismo idioma que la portada.
+   *
+   * No es un adorno con once poses: se le pasa lo que de verdad está pasando
+   * en el portal —hay error, se está cargando una sección, hay avisos sin
+   * mirar— y lo dice con el lenguaje que el cliente ya ha visto en la web.
+   * Cargando es THINKING, no un girador; con avisos pendientes es ATTENTION,
+   * que se ve por el rabillo del ojo sin dar la lata.
+   */
+  const estadoNucleo = estadoDe({
+    error: Boolean(error),
+    cargando: !datos || cargandoDeps,
+    atencion: alertasAbiertas > 0,
+  });
+
   function contenido() {
     /* Primero el pago, después el plan. Sin suscripción al corriente no hay
        sección que valga: enseñar el plan bloqueado a quien todavía no ha
@@ -2915,12 +2943,10 @@ export default function PortalV3() {
       <div className="pv3-layout">
         <aside className="pv3-side">
           <div className="pv3-brand">
-            <span className="pv3-mark">
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <circle cx="12" cy="12" r="9" stroke="#000" strokeWidth="2" />
-                <circle cx="12" cy="12" r="3" fill="#000" />
-              </svg>
-            </span>
+            {/* Aquí había un círculo dibujado que no era ni el logo ni nada.
+                Ahora está Nesped: el mismo objeto de la portada, del tamaño de
+                un icono, diciendo qué está haciendo el portal. */}
+            <NucleoMarca estado={estadoNucleo} tam={38} etiqueta="Nesped" />
             <span>
               <b>{marca}</b>
               <small>PORTAL</small>
@@ -2968,7 +2994,13 @@ export default function PortalV3() {
         <main className="pv3-main">
           <div className="pv3-top">
             <Cabecera eyebrow={meta[0]} titulo={meta[1]} sub={meta[2]} />
-            <span className="pv3-live"><span className="pv3-dot" /> EN DIRECTO</span>
+            {/* El punto verde decía "EN DIRECTO" pasara lo que pasara. Ahora
+                dice lo que está pasando de verdad, y lo dice dos veces: en
+                texto para quien lee, y en el núcleo de la izquierda para quien
+                lo capta de un vistazo. */}
+            <span className="pv3-live" data-estado={estadoNucleo}>
+              <span className="pv3-dot" /> {TEXTO_ESTADO[estadoNucleo]}
+            </span>
           </div>
 
           {error ? (

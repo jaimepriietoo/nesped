@@ -1,0 +1,643 @@
+/* =========================================================================
+   La película de la portada.
+
+   Todo cuelga de .pel para no tocar v3.css, portal.css ni admin.css. Aquí
+   sólo vive lo que la película necesita: el escenario fijo, los carteles y
+   las piezas de interfaz sobre las que Nesped actúa.
+
+   Regla que ordena el archivo: la mayor parte de la pantalla está quieta.
+   Si todo se mueve, nada impresiona. Lo único que se mueve de forma continua
+   es el núcleo; el resto reacciona, y reacciona poco.
+   ========================================================================= */
+
+.pel {
+  position: relative;
+  background: #000;
+  color: #fff;
+  overflow-x: clip;
+  --luz: #f6f1e7;
+  --energia: #7ee3bd;
+  --tenue: #8e8e8e;
+  --linea: rgba(255, 255, 255, 0.09);
+  --display: "BubbledotICG-FinePos", ui-monospace, monospace;
+}
+
+/* ── Escenario ───────────────────────────────────────────────────────────
+   Un único lienzo fijo para TODA la página. Nesped no aparece y desaparece
+   entre secciones: está siempre, y lo que cambia es dónde está la cámara y
+   cuánto ocupa. Eso es lo que hace que la portada se lea como una escena
+   continua y no como seis bloques apilados. */
+.pel-escenario {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  transition:
+    inset 1.1s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.8s ease;
+}
+
+/* Terminada la película, el núcleo se recoge a una esquina y se queda ahí,
+   despierto. Sigue siendo el mismo objeto y el mismo estado: mientras se lee
+   el precio, Nesped escucha la muestra de llamada y responde. */
+.pel-escenario[data-anclado="1"],
+.pel-escenario[data-anclado="fin"] {
+  /* Por encima del contenido, no detrás.
+
+     El bloque de negocio lleva fondo negro sólido para que el texto tenga
+     contraste, así que con el lienzo por debajo el núcleo anclado
+     simplemente desaparecía. Aquí flota encima, sin capturar el puntero, y
+     por debajo de la cabecera. */
+  z-index: 3;
+  inset: auto 24px 24px auto;
+  width: clamp(150px, 17vw, 230px);
+  height: clamp(150px, 17vw, 230px);
+  opacity: 0.92;
+}
+
+/* Al llegar al pie se retira. Un objeto flotando encima de la letra pequeña
+   y los enlaces legales no aporta nada y estorba a la vista. */
+.pel-escenario[data-anclado="fin"] {
+  opacity: 0;
+}
+
+/* Anclado, el lienzo deja de ser un rectángulo.
+
+   WebGL escribe negro opaco, así que sobre el contenido se veía un cuadrado
+   negro con el objeto dentro. Con `screen` sobre un sitio negro, el negro
+   desaparece y sólo queda lo que Nesped emite.
+
+   La transparencia la pone el propio shader por alfa: `mix-blend-mode` hacía
+   lo mismo pero obligaba al compositor a releer el lienzo en cada fotograma,
+   y el driver lo avisa como parada de GPU. Aquí sólo hay que quitar el fondo
+   negro del envoltorio para que se vea la página. */
+.pel-escenario[data-anclado="1"] .nsp,
+.pel-escenario[data-anclado="fin"] .nsp {
+  background: transparent;
+}
+
+@media (max-width: 720px) {
+  .pel-escenario[data-anclado="1"] {
+    inset: auto 12px 12px auto;
+    width: 116px;
+    height: 116px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pel-escenario { transition: none; }
+}
+
+/* ── Duración ────────────────────────────────────────────────────────────
+   La altura de este bloque ES la duración de la película. Dentro, un único
+   plano pegado al viewport donde se superponen todos los carteles. */
+.pel-pelicula {
+  position: relative;
+  z-index: 1;
+  height: 760vh;
+}
+
+@media (max-width: 720px) {
+  /* En móvil cada gesto recorre menos: con la misma altura la película se
+     hace larguísima. */
+  .pel-pelicula { height: 620vh; }
+}
+
+.pel-plano {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100svh;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* ── Carteles ────────────────────────────────────────────────────────────
+   Uno por acto, superpuestos. `--v` dice si están, `--s` por dónde va el
+   frente de luz. Ninguno usa opacidad como recurso principal. */
+.pel-cartel {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  padding: clamp(20px, 6vw, 84px);
+  align-content: center;
+}
+
+.pel-cartel[data-on="0"] { visibility: hidden; }
+
+/* El ancho máximo es para el TEXTO: una columna de más de setenta caracteres
+   no se lee. No puede aplicarse a todo hijo del cartel, porque el lienzo de
+   los haces es hijo también y recortarlo a 760 px hace que el haz no llegue
+   nunca a la ficha por muy bien medido que esté. */
+.pel-cartel > div {
+  max-width: min(760px, 88vw);
+}
+
+/* Colocación: NO todo centrado. Cada acto ocupa un sitio distinto del
+   encuadre, que es lo que hace que la película tenga planos y no diapositivas. */
+.pel-cartel[data-sitio="abajo-izq"]  { align-content: end; justify-items: start; }
+.pel-cartel[data-sitio="medio-der"]  { align-content: center; justify-items: end; text-align: right; }
+.pel-cartel[data-sitio="arriba-izq"] { align-content: start; justify-items: start; padding-top: clamp(96px, 16vh, 190px); }
+.pel-cartel[data-sitio="abajo-der"]  { align-content: end; justify-items: end; text-align: right; }
+.pel-cartel[data-sitio="centro"]     { align-content: center; justify-items: center; text-align: center; }
+
+/* Centrado pero arriba: para los dos actos en los que la frase es corta y
+   contundente y el objeto tiene que quedar debajo, no detrás. */
+.pel-cartel[data-sitio="arriba-centro"] {
+  align-content: start;
+  justify-items: center;
+  text-align: center;
+  padding-top: clamp(88px, 14vh, 168px);
+}
+
+/* ── Tipografía revelada por la luz ──────────────────────────────────────
+   El texto no aparece con opacidad: lo recorre un frente de luz, igual que
+   al objeto. Es el mismo lenguaje aplicado a las letras, y por eso la
+   portada se lee como una sola cosa y no como un objeto 3D con títulos
+   encima. */
+.pel-t {
+  display: block;
+  background-image: linear-gradient(
+    97deg,
+    var(--luz) 0%,
+    var(--luz) calc(var(--s, 0) * 128% - 16%),
+    rgba(246, 241, 231, 0.07) calc(var(--s, 0) * 128% - 3%),
+    rgba(246, 241, 231, 0.07) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.pel-h1 {
+  margin: 0;
+  font-size: clamp(2.4rem, 7.4vw, 6.1rem);
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+  font-weight: 500;
+}
+
+.pel-h2 {
+  margin: 0;
+  font-size: clamp(1.9rem, 5.6vw, 4.4rem);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  font-weight: 500;
+}
+
+/* Las palabras del sistema: ESCUCHA, COMPRENDE, RECUERDA, ACTÚA. Enormes
+   sólo cuando les toca hacer de remate; nunca compitiendo con el objeto. */
+.pel-palabra {
+  margin: 0;
+  font-size: clamp(2.6rem, 9vw, 7.4rem);
+  line-height: 0.92;
+  letter-spacing: -0.055em;
+  font-weight: 500;
+}
+
+.pel-eyebrow {
+  display: block;
+  margin-bottom: clamp(12px, 1.6vh, 20px);
+  font-family: var(--display);
+  font-size: clamp(10px, 1.1vw, 12px);
+  letter-spacing: 0.22em;
+  color: var(--energia);
+}
+
+.pel-pie {
+  margin: clamp(14px, 2vh, 22px) 0 0;
+  max-width: 44ch;
+  font-size: clamp(0.92rem, 1.35vw, 1.06rem);
+  line-height: 1.55;
+  color: #b8b8b8;
+}
+
+.pel-cartel[data-sitio="medio-der"] .pel-pie,
+.pel-cartel[data-sitio="abajo-der"] .pel-pie { margin-left: auto; }
+
+/* Los actos que van pegados a un lado llevan la columna más estrecha: con
+   cuarenta y cuatro caracteres el párrafo cruza medio encuadre y acaba
+   metiéndose por encima del objeto por muy bien colocado que esté. */
+.pel-cartel[data-sitio="medio-der"] > div,
+.pel-cartel[data-sitio="abajo-der"] > div { max-width: min(620px, 52vw); }
+
+/* Y la palabra grande baja de cuerpo cuando va pegada a un lado: no tiene
+   dónde partirse, así que con el cuerpo del centro se salía del encuadre por
+   la derecha y se comía la última sílaba. */
+.pel-cartel[data-sitio="medio-der"] .pel-palabra,
+.pel-cartel[data-sitio="abajo-der"] .pel-palabra {
+  font-size: clamp(2.2rem, 6.2vw, 5rem);
+}
+.pel-cartel[data-sitio="medio-der"] .pel-pie,
+.pel-cartel[data-sitio="abajo-der"] .pel-pie { max-width: 32ch; }
+
+/* ── Indicación de scroll ────────────────────────────────────────────────
+   Sólo al principio, y se va sola en cuanto alguien empieza. */
+.pel-empuja {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(18px, 4vh, 40px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--display);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: #626262;
+}
+
+.pel-empuja i {
+  display: block;
+  width: 1px;
+  height: 26px;
+  background: linear-gradient(#626262, transparent);
+  animation: pel-caer 2.6s ease-in-out infinite;
+}
+
+@keyframes pel-caer {
+  0%, 100% { transform: scaleY(0.4); transform-origin: top; opacity: 0.4; }
+  45% { transform: scaleY(1); transform-origin: top; opacity: 1; }
+}
+
+/* ── Acto III: la voz ────────────────────────────────────────────────────
+   Las frases son las de la llamada real que ya está en el sitio, con sus
+   tiempos. No hay guion inventado para la portada: si la muestra cambia,
+   esto cambia con ella. */
+.pel-voz {
+  display: grid;
+  gap: 10px;
+  width: min(560px, 86vw);
+}
+
+.pel-linea {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 14px;
+  align-items: baseline;
+  /* Cada frase entra cuando le toca y se atenúa después: la conversación
+     avanza, no se acumula en una pila de burbujas. */
+  opacity: calc(0.12 + var(--a, 0) * 0.88);
+  transform: translateX(calc((1 - var(--a, 0)) * 8px));
+  transition: opacity 0.28s linear, transform 0.28s linear;
+}
+
+.pel-quien {
+  font-family: var(--display);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--tenue);
+  text-align: right;
+}
+
+.pel-linea[data-quien="agente"] .pel-quien { color: var(--energia); }
+
+.pel-dice {
+  font-size: clamp(0.95rem, 1.5vw, 1.12rem);
+  line-height: 1.45;
+  color: #e9e9e9;
+}
+
+/* Los conceptos que Nesped separa de lo que oye. No son etiquetas puestas
+   encima: salen de la frase y se quedan orbitando. */
+.pel-conceptos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: clamp(16px, 2.4vh, 26px);
+}
+
+.pel-concepto {
+  padding: 5px 11px;
+  border: 1px solid var(--linea);
+  border-radius: 999px;
+  font-family: var(--display);
+  font-size: 10px;
+  letter-spacing: 0.13em;
+  color: #d0d0d0;
+  opacity: var(--a, 0);
+  transform: translateY(calc((1 - var(--a, 0)) * 6px));
+  transition: opacity 0.3s linear, transform 0.3s linear, border-color 0.3s linear;
+}
+
+.pel-concepto[data-vivo="1"] {
+  border-color: rgba(126, 227, 189, 0.5);
+  color: var(--energia);
+}
+
+/* ── Acto VI: mira a Nesped trabajar ─────────────────────────────────────
+   Tres piezas de interfaz de verdad —contacto, agenda, aviso— sobre las que
+   la energía llega y cambia algo. Es la parte que se puede grabar diez
+   segundos y se entiende sin sonido, así que aquí la causa y el efecto
+   tienen que verse en el mismo plano. */
+.pel-trabajo {
+  display: grid;
+  gap: 10px;
+  width: min(360px, 84vw);
+}
+
+.pel-ficha {
+  position: relative;
+  padding: 13px 15px;
+  border: 1px solid var(--linea);
+  border-radius: 12px;
+  background: rgba(8, 9, 10, 0.72);
+  backdrop-filter: blur(6px);
+  text-align: left;
+  /* La ficha no aparece: se enciende cuando le llega la energía. El borde y
+     el fondo cambian con --a, que es el avance del haz. */
+  border-color: rgba(255, 255, 255, calc(0.09 + var(--a, 0) * 0.16));
+  transform: translateY(calc((1 - var(--e, 0)) * 10px));
+  opacity: var(--e, 0);
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s linear;
+}
+
+.pel-ficha-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: var(--display);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  color: var(--tenue);
+}
+
+.pel-ficha-t {
+  margin: 6px 0 0;
+  font-size: 0.94rem;
+  letter-spacing: -0.01em;
+  color: #fff;
+}
+
+.pel-ficha-d {
+  margin: 3px 0 0;
+  font-size: 0.82rem;
+  color: #9a9a9a;
+}
+
+/* El dato que Nesped cambia. Antes y después conviven un instante: es lo que
+   demuestra que ha pasado algo, en vez de que ya estuviera puesto. */
+.pel-dato {
+  display: inline-grid;
+  grid-template-areas: "x";
+  vertical-align: bottom;
+}
+
+.pel-dato > span {
+  grid-area: x;
+  transition: opacity 0.25s linear, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pel-dato .antes {
+  opacity: calc(1 - var(--a, 0));
+  transform: translateY(calc(var(--a, 0) * -6px));
+  color: #626262;
+  text-decoration: line-through;
+  text-decoration-color: rgba(255, 255, 255, 0.25);
+}
+
+.pel-dato .despues {
+  opacity: var(--a, 0);
+  transform: translateY(calc((1 - var(--a, 0)) * 6px));
+  color: var(--energia);
+}
+
+/* El haz. Va del núcleo a la ficha y es literalmente la causa de que la
+   ficha cambie: el mismo --a mueve el trazo y el dato. */
+.pel-haces {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.pel-haz {
+  fill: none;
+  stroke: var(--energia);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-dasharray: var(--largo, 60);
+  stroke-dashoffset: calc(var(--largo, 60) * (1 - var(--a, 0)));
+  opacity: calc(var(--e, 0) * 0.55);
+}
+
+/* La cabeza del haz. Sin ella el trazo se "dibuja" y parece una animación de
+   línea; con ella algo VIAJA del núcleo a la ficha, que es lo que hay que
+   entender. */
+.pel-chispa {
+  fill: none;
+  stroke: var(--luz);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-dasharray: 2 400;
+  stroke-dashoffset: calc(var(--largo, 60) * (1 - var(--a, 0)) - 2);
+  opacity: calc(var(--e, 0) * (1 - var(--a, 0)) * 1.2);
+}
+
+/* ── Acto VIII: cierre ───────────────────────────────────────────────────
+   El único cartel con el que se puede interactuar. */
+.pel-cartel[data-clicable="1"] { pointer-events: auto; }
+
+.pel-botones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: clamp(20px, 3vh, 30px);
+  justify-content: inherit;
+}
+
+.pel-btn {
+  display: inline-grid;
+  place-items: center;
+  height: 46px;
+  padding: 0 22px;
+  border-radius: 999px;
+  border: 1px solid var(--linea);
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: #d0d0d0;
+  /* Respuesta magnética mínima. Tres píxeles: se nota que contesta, no se
+     nota que se mueve. */
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.3s ease, background 0.3s ease, color 0.3s ease;
+}
+
+.pel-btn:hover { transform: translateY(-3px); border-color: rgba(255, 255, 255, 0.3); }
+
+.pel-btn--luz {
+  background: var(--luz);
+  border-color: var(--luz);
+  color: #000;
+}
+
+.pel-btn--luz:hover { background: #fff; border-color: #fff; }
+
+/* ── Cabecera durante la apertura ───────────────────────────────────────
+   Nada de barra de navegación enorme en la primera pantalla: se atenúa
+   mientras Nesped sale de la oscuridad y vuelve a plena luz en cuanto la
+   película arranca. Nunca deja de estar disponible —basta acercarse o
+   tabular para que se encienda— porque atenuar la única salida de la página
+   sería cambiar una portada bonita por una portada inutilizable. */
+.pel .v3-header {
+  opacity: var(--pel-chrome, 1);
+  transition: opacity 0.55s ease;
+}
+
+.pel .v3-header:hover,
+.pel .v3-header:focus-within {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pel .v3-header { opacity: 1; transition: none; }
+}
+
+/* ── Barra de avance de la película ──────────────────────────────────────
+   Una línea de un píxel arriba. Dice cuánto queda de escena, que en una
+   portada de siete pantallas de alto no es un detalle: sin ella nadie sabe
+   si esto se acaba. */
+.pel-avance {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 1px;
+  width: 100%;
+  z-index: 60;
+  transform-origin: 0 50%;
+  transform: scaleX(var(--p, 0));
+  background: linear-gradient(90deg, rgba(126, 227, 189, 0), var(--energia));
+  pointer-events: none;
+}
+
+/* ── Contenido de negocio ────────────────────────────────────────────────
+   A partir de aquí manda v3.css. Lo único que se añade es que el fondo deje
+   ver el núcleo anclado sin que el texto pierda contraste. */
+.pel-negocio {
+  position: relative;
+  z-index: 2;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, #000 9vh, #000 100%);
+}
+
+/* Con movimiento reducido la película se acorta a una sola pantalla por acto
+   y desaparecen los viajes largos de cámara: el director sigue existiendo,
+   pero recorre mucho menos espacio. */
+@media (prefers-reduced-motion: reduce) {
+  .pel-pelicula { height: 420vh; }
+  .pel-linea,
+  .pel-concepto,
+  .pel-ficha,
+  .pel-btn { transition: none; }
+  .pel-empuja i { animation: none; }
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   Móvil
+
+   No es la versión de escritorio encogida: es otra composición. En vertical
+   sólo hay una manera de que el objeto y el texto convivan —uno encima del
+   otro— así que todos los actos se alinean abajo a la izquierda y la cámara
+   sube a Nesped (eso lo hace el director, no el CSS).
+
+   Se mantienen la identidad, el relato, los estados y la continuidad. Se
+   quitan capas simultáneas y se agranda lo que hay que poder leer con el
+   móvil en la mano.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 760px) {
+  .pel-cartel,
+  .pel-cartel[data-sitio="abajo-izq"],
+  .pel-cartel[data-sitio="medio-der"],
+  .pel-cartel[data-sitio="arriba-izq"],
+  .pel-cartel[data-sitio="abajo-der"],
+  .pel-cartel[data-sitio="centro"],
+  .pel-cartel[data-sitio="arriba-centro"] {
+    align-content: end;
+    justify-items: start;
+    text-align: left;
+    padding: 18px 18px 30px;
+  }
+
+  /* A todo el ancho: con `justify-items: start` el bloque se encoge a su
+     contenido y las fichas quedaban en una columna de doscientos píxeles. */
+  .pel-cartel > div { max-width: 100%; width: 100%; }
+
+  /* Velo bajo el texto.
+
+     En vertical el objeto ocupa media pantalla y el texto va debajo sí o sí,
+     así que hay tramos donde uno cae sobre el otro. Un degradado hasta negro
+     en la mitad inferior garantiza el contraste sin tapar a Nesped y sin
+     tener que apagar la escena. */
+  .pel-cartel::before {
+    content: "";
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 64%;
+    background: linear-gradient(
+      to top,
+      rgba(0, 0, 0, 0.94) 14%,
+      rgba(0, 0, 0, 0.6) 48%,
+      rgba(0, 0, 0, 0) 100%
+    );
+    pointer-events: none;
+  }
+
+  .pel-cartel > div,
+  .pel-cartel > .pel-empuja { position: relative; }
+
+  /* El primer cartel deja hueco abajo para la indicación de scroll: sin esto
+     el h1 y el aviso se pisan justo en la primera pantalla. */
+  .pel-cartel[data-sitio="abajo-izq"] { padding-bottom: 62px; }
+
+  .pel-h1 { font-size: clamp(2.05rem, 10.5vw, 3rem); letter-spacing: -0.035em; }
+  .pel-h2 { font-size: clamp(1.65rem, 8.4vw, 2.5rem); }
+  .pel-palabra { font-size: clamp(2.5rem, 15vw, 4rem); }
+  .pel-pie { max-width: 34ch; font-size: 0.95rem; }
+
+  .pel-cartel[data-sitio="medio-der"] .pel-pie,
+  .pel-cartel[data-sitio="abajo-der"] .pel-pie { margin-left: 0; }
+
+  .pel-botones { justify-content: flex-start !important; }
+
+  /* Los conceptos de memoria venían alineados a la derecha por el encuadre de
+     escritorio; aquí todo va al filo izquierdo. */
+  .pel-conceptos { justify-content: flex-start !important; }
+
+  .pel-voz { width: 100%; }
+  .pel-linea { grid-template-columns: 50px minmax(0, 1fr); gap: 9px; }
+  .pel-quien { font-size: 9px; }
+  .pel-dice { font-size: 0.9rem; line-height: 1.35; }
+
+  /* La secuencia de trabajo es lo que más se graba en vertical: fichas a todo
+     ancho y los haces bajando desde la apertura, que queda justo encima. */
+  .pel-trabajo { width: 100%; gap: 8px; }
+  .pel-ficha { padding: 11px 13px; }
+  .pel-ficha-t { font-size: 0.9rem; }
+
+  .pel-empuja { bottom: 12px; font-size: 9px; letter-spacing: 0.16em; }
+  .pel-empuja i { height: 18px; }
+}
+
+/* En pantallas muy bajas —un móvil en horizontal— los tamaños grandes se
+   comen el encuadre entero. */
+@media (max-height: 560px) {
+  .pel-h1 { font-size: clamp(1.7rem, 5vh, 2.4rem); }
+  .pel-palabra { font-size: clamp(2rem, 7vh, 3rem); }
+  .pel-pie { display: none; }
+}
+
+/* En vertical no hay "un lado": las columnas estrechas y los cuerpos
+   reducidos de los actos laterales sobran, porque el texto ya va debajo del
+   objeto y a todo el ancho. */
+@media (max-width: 760px) {
+  .pel-cartel[data-sitio="medio-der"] > div,
+  .pel-cartel[data-sitio="abajo-der"] > div { max-width: 100%; }
+
+  .pel-cartel[data-sitio="medio-der"] .pel-palabra,
+  .pel-cartel[data-sitio="abajo-der"] .pel-palabra {
+    font-size: clamp(2.5rem, 15vw, 4rem);
+  }
+
+  .pel-cartel[data-sitio="medio-der"] .pel-pie,
+  .pel-cartel[data-sitio="abajo-der"] .pel-pie { max-width: 34ch; }
+}

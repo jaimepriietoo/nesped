@@ -20,8 +20,18 @@
 
 import { useRef } from "react";
 import { NucleoVivo } from "./nucleo";
+import { Respaldo } from "./respaldo";
 import { direccionInicial } from "./tokens";
 import "./marca.css";
+
+/* Por debajo de este tamaño no se monta WebGL.
+
+   A cuarenta píxeles no hay diferencia visible entre el objeto marchado y su
+   silueta en SVG —no caben ni el relieve ni los hilos— y en cambio sí hay
+   diferencia en lo que cuesta: un contexto de WebGL y un bucle de render
+   permanentes en una pantalla en la que lo que importa es que la tabla de
+   contactos vaya instantánea. El producto es la prueba, no la película. */
+const MINIMO_WEBGL = 96;
 
 /**
  * @param {string} estado   uno de los once de tokens.js
@@ -30,6 +40,15 @@ import "./marca.css";
  */
 export function NucleoMarca({ estado = "IDLE", tam = 40, etiqueta }) {
   const direccion = useRef(null);
+
+  if (tam < MINIMO_WEBGL) {
+    return (
+      <span className="nsp-marca" style={{ "--tam": `${tam}px` }}>
+        <Respaldo estado={estado} etiqueta={etiqueta} />
+      </span>
+    );
+  }
+
   if (direccion.current == null) {
     const d = direccionInicial();
     // Un poco más cerca: en un disco de cuarenta píxeles el encuadre de la

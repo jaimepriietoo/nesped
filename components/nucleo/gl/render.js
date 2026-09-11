@@ -20,6 +20,19 @@ import { FS_BORRON, FS_BRILLO, FS_COMPONER, fsNucleo } from "./sombras";
 
 const NIVELES = ["alta", "media", "baja"];
 
+/** ¿Está dibujando la CPU en vez de la tarjeta gráfica? */
+function esPorSoftware(gl) {
+  try {
+    const info = gl.getExtension("WEBGL_debug_renderer_info");
+    const nombre = String(
+      info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)
+    ).toLowerCase();
+    return /swiftshader|llvmpipe|software|microsoft basic|mesa offscreen/.test(nombre);
+  } catch {
+    return false;
+  }
+}
+
 /* Se reexporta para que quien ya usaba el renderer como origen de la
    cámara siga funcionando; la definición vive en tokens.js. */
 export { direccionInicial };
@@ -63,6 +76,29 @@ export class NucleoRender {
 
     this.medioFloat = !!gl.getExtension("EXT_color_buffer_half_float") ||
                       !!gl.getExtension("EXT_color_buffer_float");
+
+    /* Si no hay GPU de verdad, no se marcha nada.
+
+       Pasa más de lo que parece: una máquina virtual, un portátil con la
+       aceleración desactivada, un navegador en modo de compatibilidad. Ahí
+       WebGL sigue existiendo pero lo dibuja la CPU, y una marcha de rayos por
+       CPU no es "más lenta": deja la página entera agarrotada, con el scroll
+       a tirones y los botones sin responder.
+
+       Bajar de calidad no arregla eso, sólo lo hace menos evidente. Lo que
+       corresponde es lo mismo que cuando no hay WebGL: la silueta en SVG, que
+       es el mismo objeto, va instantánea y no bloquea nada. */
+    /* En desarrollo se puede forzar la marcha aunque dibuje la CPU: es la
+       única manera de revisar el objeto con un navegador sin tarjeta, que es
+       con lo que se hacen las capturas de las pruebas. En producción esta
+       rama no existe: el compilador la elimina. */
+    const forzar = process.env.NODE_ENV !== "production" &&
+      typeof window !== "undefined" && window.__nucleoIgnorarSoftware === true;
+
+    if (!forzar && esPorSoftware(gl)) {
+      this.alFallar(new Error("webgl por software"));
+      return false;
+    }
 
     try {
       this.construir();
@@ -229,9 +265,11 @@ export class NucleoRender {
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, this.destinos.escena.tex);
         gl.uniform1i(u.get("uTex"), 0);
-        /* Umbral por encima de 1: sólo florece lo que ya está sobreexpuesto,
-           que es únicamente la energía. La cerámica nunca llega. */
-        gl.uniform1f(u.get("uUmbral"), 1.02);
+        /* Umbral bastante por encima de 1: sólo florece lo que ya está muy
+           sobreexpuesto, que son los hilos de luz. Con el umbral pegado a 1,
+           en los estados de mucha energía el halo se extendía por encima de
+           las membranas y la obsidiana se volvía gris lechoso. */
+        gl.uniform1f(u.get("uUmbral"), 1.3);
       });
 
       for (let i = 0; i < 2; i += 1) {
@@ -257,7 +295,7 @@ export class NucleoRender {
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, (this.destinos.haloA || this.destinos.escena).tex);
       gl.uniform1i(u.get("uHalo"), 1);
-      gl.uniform1f(u.get("uFuerzaHalo"), cfg.halo ? 0.85 : 0);
+      gl.uniform1f(u.get("uFuerzaHalo"), cfg.halo ? 0.62 : 0);
       gl.uniform1f(u.get("uFondo"), d.fondo === undefined ? 1 : d.fondo);
       gl.uniform2f(u.get("uRes"), this.lienzo.width, this.lienzo.height);
     });
@@ -275,6 +313,16 @@ export class NucleoRender {
    * peor que tenerlo un punto por debajo de lo que aguanta el equipo.
    */
   vigilar(ms) {
+    /* Salida de emergencia. Un fotograma que tarda más de un octavo de
+       segundo no es un pico: es que este equipo no puede con esto. Esperar a
+       reunir la muestra completa serían varios segundos de página agarrotada,
+       y lo primero que hace alguien con una web agarrotada es cerrarla. */
+    if (ms > VIGILANCIA.urgente) {
+      this.muestras.length = 0;
+      this.bajarNivel(ms);
+      return;
+    }
+
     const m = this.muestras;
     m.push(ms);
     if (m.length < VIGILANCIA.muestras) return;
@@ -284,6 +332,10 @@ export class NucleoRender {
     m.length = 0;
 
     if (mediana <= VIGILANCIA.objetivoMs) return;
+    this.bajarNivel(mediana);
+  }
+
+  bajarNivel(ms) {
     const i = NIVELES.indexOf(this.nivel);
     if (i < 0 || i >= NIVELES.length - 1) return;
 
@@ -292,7 +344,7 @@ export class NucleoRender {
       this.construir();
       this.destinos.escena = null;
       this.redimensionar();
-      this.alCambiarCalidad(this.nivel, mediana);
+      this.alCambiarCalidad(this.nivel, ms);
     } catch (e) {
       this.alFallar(e);
     }

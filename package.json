@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "npm run test:unidad && npm run test:e2e",
-    "test:unidad": "node --import ./tests/alias.mjs --test \"tests/unidad/*.test.mjs\"",
+    "test:unidad": "node scripts/revisar-shaders.mjs && node --import ./tests/alias.mjs --test \"tests/unidad/*.test.mjs\"",
     "test:unidad:watch": "node --import ./tests/alias.mjs --test --watch \"tests/unidad/*.test.mjs\"",
     "export-project": "bash scripts/export-project.sh",
     "verify:env": "node scripts/validate-env.mjs",
@@ -22,7 +22,8 @@
     "revisar:seguridad": "node scripts/revisar-seguridad.mjs",
     "probar:voz": "node scripts/probar-voz.mjs",
     "probar:conversacion": "node scripts/probar-conversacion.mjs",
-    "volcar:migraciones": "node scripts/volcar-migraciones.mjs"
+    "volcar:migraciones": "node scripts/volcar-migraciones.mjs",
+    "revisar:shaders": "node scripts/revisar-shaders.mjs"
   },
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "^7.7.0",

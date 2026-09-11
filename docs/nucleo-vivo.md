@@ -106,6 +106,46 @@ a un lado y dejar el texto en el otro, así que el desplazamiento del encuadre
 pasa a ser vertical —Nesped arriba, el texto debajo—, la cámara se retira y todos
 los actos se alinean abajo a la izquierda.
 
+## De dónde sale la nitidez
+
+Un raymarch hecho de cualquier manera se reconoce a un metro: bordes en
+escalones, superficies planas y una niebla en vez de estructura. Las cuatro
+cosas que lo evitan, por orden de lo que se nota:
+
+**La silueta tiene filo.** La marcha guarda a cuántos píxeles ha pasado el rayo
+de la superficie en su punto de máxima aproximación, y con eso pinta el borde
+con cobertura parcial en vez de dentro-o-fuera. Sin esto no hay material ni luz
+que disimule los escalones. El umbral de impacto también es relativo al tamaño
+de un píxel a esa distancia, no un número fijo: con un umbral fijo el borde
+cambia de grosor según lo lejos que esté el objeto.
+
+**Los hilos de luz no se muestrean.** Un hilo de dos centésimas de radio
+integrado a pasos de cuatro es un hilo que aparece y desaparece entre
+fotogramas, y sumado sobre un volumen da exactamente la mancha verde que tenía
+la primera versión. Se calcula la distancia mínima del rayo a cada arco —que es
+exacta— y se afina con cuatro iteraciones de sección áurea. El resultado no
+depende del número de pasos, así que sale igual de nítido en calidad baja.
+
+Lo mismo con los puntos del logo: la distancia mínima de un rayo a un punto se
+resuelve de una vez, sin muestrear.
+
+Y la primera versión de los hilos eran hélices alrededor del eje del vacío, que
+fue un error de concepto: una hélice vista POR SU EJE se proyecta como una
+circunferencia, y el eje del vacío es justo desde donde se mira el objeto. Seis
+hélices daban un disco. Son arcos finitos en planos inclinados, que desde
+cualquier ángulo se ven cruzarse a distintas profundidades.
+
+**El material tiene dirección.** El especular no es una potencia del coseno
+—eso reparte el brillo igual en todas direcciones y da una mancha redonda, que
+se lee como plástico— sino tres lóbulos anisótropos estirados a lo largo del
+barrido de la hoja. Encima va un relieve microscópico con más ruido que veta:
+al revés salía pana.
+
+**La definición está en la forma, no pintada encima.** Cada membrana lleva dos
+canales recorriéndola a lo largo, tallados en la propia función de distancia.
+Un canal produce dos aristas donde la luz se parte, y esas aristas son lo que
+hace que la pieza se lea como algo construido.
+
 ## Rendimiento
 
 Una web preciosa a 17 fps es una mala web.
@@ -115,18 +155,37 @@ pintado —no los fps, que mezclan el coste de la escena con el del resto de la
 página— y baja de nivel si la mediana se pasa del objetivo. Sólo baja: subir en
 caliente haría que el objeto cambiara de nitidez cada dos segundos.
 
+Y antes que todo eso: **si lo dibuja la CPU, no se dibuja**. Una máquina
+virtual, un portátil con la aceleración desactivada o un navegador en modo de
+compatibilidad tienen WebGL, pero lo ejecuta el procesador. Ahí una marcha de
+rayos no va "más lenta": deja la página agarrotada, con el scroll a tirones y
+los botones sin responder. Se detecta por el nombre del renderizador y se pasa
+directamente a la silueta en SVG, que es el mismo objeto y va instantánea.
+
 Lo que más ahorra, por orden:
 
-1. **La escala de render.** El núcleo se pinta a una fracción del lienzo. El
-   objeto es oscuro y suave: a 0,85 no se distingue del 1,0 y se pintan casi la
-   mitad de los píxeles.
+1. **Los pasos del volumen.** En calidad alta son cincuenta y seis, no los
+   ciento y pico que harían falta si los hilos se integraran: como salen por
+   distancia mínima, lo único que queda a pasos es la vaina, los anillos y el
+   trasfondo, que son todos suaves.
 2. **La sombra proyectada.** Es el gasto extra más caro porque se paga por cada
    píxel que toca el objeto. En calidad baja va a cero, y el volumen lo siguen
    dando el especular y el borde.
-3. **No evaluar lo que no existe.** La retícula del logo y el campo interior
-   sólo se calculan cuando su magnitud es distinta de cero.
-4. **Pausa fuera de pantalla.** El estado sigue avanzando —al volver no puede
+3. **No evaluar lo que no existe.** Los puntos del logo, el campo interior y el
+   cono de energía dirigida sólo se calculan cuando su magnitud no es cero.
+4. **Una sola pasada por los arcos.** El bucle del volumen calcula la distancia
+   a cada hilo una vez y la usa para dos cosas: sumar la vaina y quedarse con el
+   mínimo.
+5. **Pausa fuera de pantalla.** El estado sigue avanzando —al volver no puede
    aparecer congelado— pero no se pinta.
+
+La calidad alta se pinta a resolución completa. Reescalar es lo primero que se
+nota cuando lo que falta es nitidez, así que lo que se recorta es todo lo demás
+antes que eso.
+
+Y hay una salida de emergencia: un solo fotograma por encima de 125 ms no es un
+pico, es un equipo que no puede, y ahí se baja de nivel al momento en vez de
+esperar a reunir la muestra completa.
 
 La capa de WebGL entera se carga aparte: la portada pinta su texto sin esperar
 a nada de esto, y quien nunca llega a ver el núcleo no lo descarga.
@@ -149,3 +208,15 @@ luz sueltos. Desarrollar la Apertura Neural dentro de la película es imposible:
 para ver un estado hay que llegar hasta su punto de scroll.
 
 No sale a producción salvo que se pida a mano con `NESPED_LAB=1`.
+
+Dos ayudas más, las dos sólo en desarrollo:
+
+- `npm run revisar:shaders` comprueba que los shaders siguen siendo un fichero
+  válido. Viven dentro de literales de plantilla, así que un acento grave
+  escrito en un comentario del shader cierra el literal y rompe el fichero
+  entero; el error que sale entonces señala una línea de GLSL que no tiene nada
+  malo. Se ejecuta también dentro de `npm run test:unidad`.
+- `window.__nucleoIgnorarSoftware = true` antes de cargar la página fuerza la
+  marcha aunque la dibuje la CPU. Es la única manera de revisar el objeto desde
+  un navegador sin tarjeta, que es con lo que se hacen las capturas
+  automatizadas.

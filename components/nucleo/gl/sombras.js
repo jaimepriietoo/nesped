@@ -75,6 +75,22 @@ const float VACIO    = ${f(VACIO)};
 
 mat2 giro(float a) { float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }
 
+/**
+ * Ruido de gradiente entrelazado.
+ *
+ * El arranque de cada rayo del volumen hay que desordenarlo, o los pasos se
+ * ven como anillos concéntricos. Se hacía con ruido blanco dependiente del
+ * tiempo, y eso es literalmente nieve de televisión: cambia entero cada
+ * fotograma y el ojo lo lee como suciedad.
+ *
+ * Este reparte los desórdenes de forma que píxeles vecinos nunca caen en el
+ * mismo sitio y el patrón se queda quieto. Sale un tramado fino en vez de
+ * grano, que es la diferencia entre "tiene textura" y "está mal hecho".
+ */
+float ign(vec2 p) {
+  return fract(52.9829189 * fract(0.06711056 * p.x + 0.00583715 * p.y));
+}
+
 float hash31(vec3 p) {
   p = fract(p * 0.3183099 + vec3(0.11, 0.17, 0.13));
   p *= 17.0;
@@ -150,15 +166,27 @@ float hoja(vec3 p, float centro, float arco, float radio, float grosor,
      como cuerda. Aplastando el eje del vacío el barrido produce una hoja:
      ancha en el plano del arco, fina en profundidad. Es la diferencia entre
      un gusano y una membrana, y es toda la silueta. */
-  const float APLASTA = 2.8;
+  const float APLASTA = 3.6;
   vec3 q = p - c;
   q.z *= APLASTA;
+
+  /* Dos canales recorriendo la hoja a lo largo, uno por cara.
+
+     Esto sí es definición: no es textura pintada en la normal, es geometría.
+     Un canal produce dos aristas donde la luz se parte, y esas aristas son lo
+     que hace que la pieza se lea como algo construido en vez de como un bulto
+     con un degradado encima. Se resta grosor, nunca se añade, para que la
+     función siga siendo una cota por debajo de la distancia real. */
+  float caraZ = q.z / max(length(q), 1e-5);
+  float canal = exp(-pow((abs(caraZ) - 0.62) / 0.20, 2.0));
 
   /* Se divide por el aplastamiento y no es un detalle: al escalar un eje, la
      función deja de devolver una distancia y devuelve algo MAYOR que la
      distancia real en esa dirección. El rayo da entonces pasos más largos de
      lo que puede y atraviesa la hoja sin verla. Dividiendo por el factor
      mayor vuelve a ser una cota inferior y la superficie existe otra vez. */
+  th -= th * 0.22 * canal;
+
   return (length(q) - max(th, 0.005)) / APLASTA;
 }
 
@@ -187,61 +215,156 @@ vec3 normal(vec3 p) {
    Ninguna partícula está por decorar. Cada término de aquí abajo significa
    algo, y ese significado es el mismo en la portada y en el panel. */
 
-/* Filamentos que enhebran el vacío. Son la actividad interna: pensar. */
+/**
+ * Los hilos que enhebran el vacío. Son la actividad interna: pensar.
+ *
+ * La primera versión eran hélices alrededor del eje del vacío, y fue un error
+ * de concepto: una hélice vista POR SU EJE se proyecta como una
+ * circunferencia, y el eje del vacío es justo desde donde se mira el objeto.
+ * Seis hélices daban seis círculos concéntricos, o sea un disco borroso. No
+ * era un problema de brillo ni de muestreo: no había nada que enfocar.
+ *
+ * Estos son arcos finitos, cada uno en un plano con su propia inclinación.
+ * Desde cualquier ángulo se ven hilos curvos cruzándose a distintas
+ * profundidades, que es lo que se lee como estructura. Y como son arcos y no
+ * circunferencias enteras, tienen principio y final: el ojo puede seguirlos.
+ *
+ * Cada hilo va en dos capas. Un núcleo apretado que sobrevive al muestreo del
+ * volumen y se ve como un hilo de verdad, y una vaina ancha y tenue que lo
+ * envuelve. Sin el núcleo es niebla; sin la vaina, un alambre digital.
+ */
+
+#define HILOS 9
+
+/**
+ * El plano, el radio y el tramo de cada uno de los hilos.
+ *
+ * El marco sale ya girado para que el arco quede centrado en el ángulo cero.
+ * Eso permite recortarlo después con un coseno en vez de con un arcotangente,
+ * que dentro del bucle del volumen se evalúa nueve veces por paso.
+ */
+void arcoDe(int j, float t, out vec3 eje, out vec3 u, out vec3 v,
+            out vec3 centroArco, out float radio, out float cosMedio, out float senMedio) {
+  float fj = float(j);
+  float agita = 0.22 + uAgita * 1.9;
+
+  /* Inclinación del plano de cada hilo. Los dos ángulos avanzan con el tiempo
+     a ritmos distintos: los hilos se reorganizan despacio, que es exactamente
+     lo que tiene que hacer algo que está pensando. */
+  float a = fj * 0.698 + t * agita * (0.11 + 0.028 * fj);
+  float b = 0.46 * sin(fj * 2.1 + t * agita * 0.07) + fj * 0.19;
+
+  eje = vec3(cos(a) * cos(b), sin(b), sin(a) * cos(b));
+  vec3 u0 = normalize(cross(eje, vec3(0.0, 1.0, 0.013)));
+  vec3 v0 = cross(eje, u0);
+
+  float centro = fj * 2.79 + t * agita * 0.2;
+  u = u0 * cos(centro) + v0 * sin(centro);
+  v = cross(eje, u);
+
+  radio = 0.26 + 0.085 * sin(fj * 1.7) + 0.042 * fj;
+
+  /* Dentro de la apertura los mismos hilos se agrandan y se reparten a lo
+     largo del eje por el que entra la cámara, así que pasan por los lados
+     mientras se avanza. Es el mismo objeto a otra escala: la estructura de
+     dentro no es otra cosa, es LA MISMA vista desde dentro. Y al ser hilos,
+     siguen saliendo exactos, que es justo lo que le faltaba al interior. */
+  /* Repartidos a lo largo del corredor por el que entra la cámara, y
+     descentrados cada uno un poco: alineados y concéntricos se leerían como
+     un túnel de aros, que es justo el tópico que hay que evitar. Así es un
+     enredo de hilos por el que se pasa. */
+  centroArco = uDentro * vec3(cos(fj * 2.1) * 0.24,
+                              sin(fj * 1.7) * 0.20,
+                              -(0.25 + fj * 0.40));
+  radio *= mix(1.0, 1.05, uDentro);
+
+  float medio = (1.9 + 1.0 * sin(fj * 1.3)) * 0.5;
+  cosMedio = cos(medio);
+  senMedio = sin(medio);
+}
+
+/**
+ * Distancia al cuadrado de un punto a un arco de circunferencia.
+ *
+ * Exacta, no aproximada: dentro del tramo es la distancia al toro, y fuera es
+ * la distancia al extremo más cercano, que además da al hilo una punta
+ * redondeada en vez de un corte.
+ */
+float distArco(vec3 mundo, vec3 eje, vec3 u, vec3 v, vec3 centroArco,
+               float radio, float cosMedio, float senMedio) {
+  vec3 p = mundo - centroArco;
+  float h = dot(p, eje);              // separación del plano del arco
+  vec3 pp = p - eje * h;              // proyección sobre ese plano
+  float rr = length(pp);
+
+  float ca = dot(pp, u);              // rr * cos(ángulo)
+  if (ca >= rr * cosMedio) {
+    float dr = rr - radio;
+    return dr * dr + h * h;
+  }
+
+  // Fuera del tramo: al extremo que caiga del lado en el que estamos.
+  float lado = dot(pp, v) >= 0.0 ? 1.0 : -1.0;
+  vec3 extremo = (u * cosMedio + v * (senMedio * lado)) * radio;
+  vec3 d = p - extremo;
+  return dot(d, d);
+}
+
+/**
+ * Envolvente: los hilos viven dentro y alrededor del vacío, no en todo el
+ * encuadre. Fuera es una esfera alrededor del objeto; dentro se convierte en
+ * un cilindro alrededor del eje por el que se entra, porque ahí la estructura
+ * se extiende hacia delante y una esfera la cortaría a dos palmos.
+ */
+float velo(vec3 p) {
+  return mix(exp(-dot(p, p) * 1.45), exp(-dot(p.xy, p.xy) * 0.55), clamp(uDentro, 0.0, 1.0));
+}
+
+/**
+ * Densidad de los hilos en un punto. La usa la superficie para saber cuánta
+ * luz le llega por dentro; el volumen NO la usa para los núcleos, porque
+ * muestrear un hilo fino a pasos fijos es exactamente lo que lo convertía en
+ * una mancha.
+ */
 float filamentos(vec3 p, float t) {
   float dens = 0.0;
-  for (int j = 0; j < 3; j++) {
-    float fj = float(j);
-    float radio = 0.20 + 0.16 * fj;
-    float giroF = 3.0 + 1.9 * fj;
-    float fase = t * (0.35 + 0.22 * fj) * (0.25 + uAgita * 2.2) + fj * 2.1;
-    float a = p.z * giroF + fase;
-    vec3 c = vec3(cos(a) * radio, sin(a) * radio, p.z);
-    float d = length(p - c);
-    dens += exp(-d * d * 260.0);
+  for (int j = 0; j < HILOS; j++) {
+    vec3 eje, u, v, ca; float radio, cm, sm;
+    arcoDe(j, t, eje, u, v, ca, radio, cm, sm);
+    float d2 = distArco(p, eje, u, v, ca, radio, cm, sm);
+    dens += exp(-d2 * 2600.0) * 2.0 + exp(-d2 * 90.0) * 0.075;
   }
-  /* Acotados en el eje del vacío. Una hélice no tiene final: sin esta
-     envolvente el rayo encuentra filamento a cualquier distancia y la escena
-     se convierte en niebla verde de borde a borde. */
-  return dens * exp(-p.z * p.z * 1.6);
+  return dens * velo(p);
 }
 
 /* La retícula del logo.
 
-   Cuando a Nesped no le queda energía, lo poco que hay se ordena solo en
-   seis columnas de puntos dentro del vacío: las alturas del logotipo. No se
-   dibuja el logo dentro del objeto —eso sería ponerle una pegatina—, es que
-   en reposo la energía cae en la misma retícula de la que sale la marca.
-   Sube la energía y la formación se deshace. */
+   Cuando a Nesped no le queda energía, lo poco que hay se ordena solo en seis
+   columnas de puntos dentro del vacío: las alturas del logotipo. No se dibuja
+   el logo dentro del objeto —eso sería ponerle una pegatina—, es que en
+   reposo la energía cae en la misma retícula de la que sale la marca. Sube la
+   energía y la formación se deshace.
+
+   Los puntos los traza main() por distancia mínima del rayo, que es exacta.
+   Aquí sólo viven sus alturas. */
 const float ALTURAS[6] = float[6](6.0, 4.0, 2.0, 3.0, 5.0, 6.0);
 
-float reticulaLogo(vec3 p) {
-  const float PASO_X = 0.128;
-  const float PASO_Y = 0.098;
-
-  float col = floor(p.x / PASO_X + 3.0);
-  if (col < 0.0 || col > 5.0) return 0.0;
-  float alt = ALTURAS[int(col)];
-
-  float x = (col - 2.5) * PASO_X;
-  float k = floor(p.y / PASO_Y + (alt - 1.0) * 0.5 + 0.5);
-  if (k < 0.0 || k > alt - 1.0) return 0.0;
-  float y = (k - (alt - 1.0) * 0.5) * PASO_Y;
-
-  float d = length(p - vec3(x, y, 0.0));
-  return exp(-d * d * 900.0) * exp(-p.z * p.z * 40.0);
-}
-
 /* Anillos que viajan. Hacia dentro cuando Nesped recibe, hacia fuera cuando
-   ejecuta, y a golpes cuando habla. Es la mitad de la gramática visual. */
+   ejecuta, y a golpes cuando habla. Es la mitad de la gramática visual.
+
+   Los exponentes son bajos a propósito. Con potencias de veinte y pico los
+   anillos salían finos como un pelo, y un pelo muestreado a pasos fijos
+   desaparece: LISTENING se quedaba sin su gesto, que es justo lo que tiene
+   que leerse sin texto. Anchos y suaves se ven siempre, y además es lo que
+   son: ondas, no alambres. */
 float anillos(vec3 p, float t) {
   float rho = length(p.xy);
-  float caida = exp(-p.z * p.z * 2.6) * smoothstep(1.7, 0.25, rho);
+  float caida = exp(-p.z * p.z * 3.2) * smoothstep(1.05, 0.18, rho);
   float dens = 0.0;
 
   if (uEntra > 0.001) {
     float fase = rho * 2.1 + t * 0.62;
-    dens += uEntra * pow(max(0.0, sin(fase * TAU)), 28.0) * caida;
+    dens += uEntra * pow(max(0.0, sin(fase * TAU)), 14.0) * caida * 0.85;
   }
 
   /* Escala. No son cien Nesped: es el mismo recibiendo de muchos sitios a la
@@ -253,7 +376,7 @@ float anillos(vec3 p, float t) {
       float fk = float(k);
       float sector = pow(max(0.0, cos(a - fk * 1.2566)), 7.0);
       float fase = rho * 2.4 + t * (0.5 + fk * 0.14) + fk * 1.7;
-      dens += uReplica * sector * pow(max(0.0, sin(fase * TAU)), 26.0) * caida * 1.1;
+      dens += uReplica * sector * pow(max(0.0, sin(fase * TAU)), 14.0) * caida * 0.8;
     }
   }
 
@@ -263,7 +386,7 @@ float anillos(vec3 p, float t) {
        real cuando lo hay. */
     float golpe = mix(1.0, pow(max(0.0, sin(uPulsoFase)), 2.4), uPulso);
     float fase = rho * 2.1 - t * 0.78;
-    dens += uSale * golpe * pow(max(0.0, sin(fase * TAU)), 24.0) * caida;
+    dens += uSale * golpe * pow(max(0.0, sin(fase * TAU)), 13.0) * caida * 0.85;
   }
 
   return dens;
@@ -282,9 +405,10 @@ float anillos(vec3 p, float t) {
    organizándose —cosas que se relacionan, se encienden y se deshacen— y no
    como viajar por un tubo. */
 float interior(vec3 p, float t) {
-  /* La celda mide unas quince centésimas de unidad. Con celdas grandes
-     esto se ve como luces desenfocadas; con celdas pequeñas se lee como una
-     estructura de datos, que es lo que tiene que parecer. */
+  /* Celdas grandes y contraste bajo: esto es el TRASFONDO del interior, no su
+     protagonista. Lo que se lee ahí dentro son los hilos, que salen exactos
+     por aproximación mínima; una retícula fina muestreada a pasos sólo añade
+     borrón por detrás. */
   vec3 g = p * 5.4;
   g.z += t * 0.5;              // se avanza por la estructura, no hacia un punto
 
@@ -305,7 +429,7 @@ float interior(vec3 p, float t) {
   float vivo = smoothstep(0.62, 0.78, semilla);
   float brote = smoothstep(0.86, 0.94, hash31(id * 1.7 + 11.0));
 
-  float dens = nodo * (0.4 + brote * 2.6) + (ax + ay + az) * vivo * 0.34;
+  float dens = nodo * (0.25 + brote * 1.1) + (ax + ay + az) * vivo * 0.14;
 
   // Se apaga con la distancia al eje por el que vamos entrando.
   /* Se apaga deprisa al alejarse del eje por el que se entra. Sin esto la
@@ -314,18 +438,23 @@ float interior(vec3 p, float t) {
   return dens * exp(-dot(p.xy, p.xy) * 1.05);
 }
 
-float campo(vec3 p, float t) {
-  float base = filamentos(p, t) * (0.35 + uAgita * 0.9);
+/**
+ * El campo de energía en un punto.
+ *
+ * @param hilos densidad de los filamentos, ya calculada por quien llama.
+ *   No se calcula aquí porque el bucle del volumen necesita la distancia a
+ *   cada arco de todos modos —la usa para el mínimo del rayo— y recalcularla
+ *   dentro sería hacer el trabajo dos veces por paso.
+ */
+float campo(vec3 p, float t, float hilos) {
+  float base = hilos * (0.35 + uAgita * 0.9);
 
-  /* La retícula del logo y el interior se evalúan sólo cuando existen.
-     Estaban los dos en la mezcla siempre, y eso es pagar un hash y media
-     docena de exponenciales por cada paso del volumen durante toda la
-     película para multiplicarlo por cero. */
-  if (uFormacion > 0.002) {
-    base = mix(base, reticulaLogo(p) * 1.5, clamp(uFormacion, 0.0, 1.0));
-  }
+  /* La retícula del logo sale del trazo exacto en main(), no de aquí: a pasos
+     fijos los puntos parpadean. Lo que queda aquí es recoger los hilos cuando
+     la marca se forma. */
+  base *= 1.0 - clamp(uFormacion, 0.0, 1.0) * 0.88;
 
-  float dens = base + anillos(p, t) * 0.95;
+  float dens = base + anillos(p, t) * 0.6;
 
   if (uDentro > 0.002) {
     dens = mix(dens, dens * 0.3 + interior(p, t) * 1.5, clamp(uDentro, 0.0, 1.0));
@@ -347,7 +476,7 @@ float campo(vec3 p, float t) {
   float lejos = max(0.0, length(p) - 1.25);
   dens *= exp(-lejos * lejos * 6.0);
 
-  return dens * (0.25 + uEnergia * 1.6);
+  return dens * (0.25 + uEnergia * 0.95);
 }
 
 /* ── Marcha ────────────────────────────────────────────────────────────── */
@@ -363,12 +492,35 @@ vec2 esfera(vec3 ro, vec3 rd, float r) {
   return vec2(-b - h, -b + h);
 }
 
-float marchar(vec3 ro, vec3 rd, float lejos) {
+/**
+ * Marcha del rayo, consciente del tamaño de un píxel.
+ *
+ * Dos cosas salen de aquí, y la segunda es la que quita el aspecto barato:
+ *
+ * 1. El umbral de impacto ya no es un número fijo, es el radio que abarca un
+ *    píxel a esa distancia. Un umbral fijo hace que la superficie se "corte"
+ *    antes o después según lo lejos que esté, y eso se ve como un borde que
+ *    cambia de grosor cuando la cámara se acerca.
+ *
+ * 2. cob guarda a cuántos píxeles ha pasado el rayo de la superficie en su
+ *    punto de máxima aproximación. Con eso se puede pintar el borde con
+ *    cobertura parcial en vez de dentro-o-fuera. Un raymarch sin esto tiene
+ *    la silueta en escalones, y no hay material ni luz que lo disimule: es lo
+ *    primero que delata que algo está hecho a medias.
+ */
+float marchar(vec3 ro, vec3 rd, float lejos, float px, out float cob, out float tCerca) {
   float t = 0.02;
+  cob = 1e9;
+  tCerca = t;
   for (int i = 0; i < PASOS; i++) {
     vec3 p = ro + rd * t;
     float d = mapa(p);
-    if (d < 0.0007 * t) return t;
+
+    float radioPixel = max(px * t, 1e-6);
+    float razon = d / radioPixel;
+    if (razon < cob) { cob = razon; tCerca = t; }
+
+    if (d < radioPixel * 0.35) return t;
     /* 0,62 y no 1: el mapa es una cota inferior aproximada por el barrido
        del arco, y a paso completo el rayo se cuela por la superficie. Se ve
        como agujeros en las membranas al girar. */
@@ -397,59 +549,136 @@ float sombraSuave(vec3 p, vec3 l) { return 1.0; }
 #endif
 
 #ifdef MICRO
-/* Relieve microscópico. No entra en la marcha —costaría dos octavas de ruido
-   por paso— sino sólo en la normal del impacto. El efecto visual es el
-   mismo: aparece con luz rasante y desaparece de frente. */
+/**
+ * El relieve microscópico de la membrana.
+ *
+ * Antes era una sola octava de ruido a una amplitud de dos milésimas, es
+ * decir: nada. La superficie salía como un degradado liso de gris a gris, que
+ * es exactamente el aspecto de una maqueta sin acabar.
+ *
+ * Ahora hay tres cosas, y las tres tienen un porqué:
+ *
+ *  - Estrías finas recorriendo la hoja a lo largo del barrido. Dan dirección
+ *    al material: una superficie con veta se lee como algo fabricado o
+ *    crecido, una sin veta se lee como plastilina.
+ *  - Dos octavas de ruido que rompen esa veta, para que no parezca un rayado
+ *    de máquina.
+ *  - Un moteado muy fino que sólo existe para que el especular cerrado se
+ *    parta en destellos en vez de ser una mancha blanca.
+ *
+ * Nada de esto entra en la marcha: se aplica sólo a la normal del impacto.
+ * Meterlo en el mapa costaría dos octavas de ruido POR PASO, y se ve igual.
+ */
 vec3 microNormal(vec3 p, vec3 n) {
-  const float e = 0.006;
-  float b = ruido3(p * 27.0);
-  vec3 g = vec3(
-    ruido3(p * 27.0 + vec3(e, 0.0, 0.0)) - b,
-    ruido3(p * 27.0 + vec3(0.0, e, 0.0)) - b,
-    ruido3(p * 27.0 + vec3(0.0, 0.0, e)) - b) / e;
-  g -= n * dot(n, g);
-  return normalize(n - g * 0.0055);
+  float rho = length(p.xy);
+
+  /* Coordenada a lo ancho de la sección. Las líneas que genera corren en
+     paralelo al barrido, que es la dirección en la que la hoja crece. */
+  float ancho = rho * 132.0 + p.z * 132.0;
+
+  /* La veta pesa poco y el ruido pesa mucho. Al revés salía pana: un rayado
+     regular y visible de frente. Lo que se busca es lo contrario —algo que no
+     se ve de frente y aparece cuando la luz entra rasante—, y eso se consigue
+     con irregularidad, no con líneas. */
+  float veta = sin(ancho) * 0.30 + sin(ancho * 2.31 + 1.7) * 0.14;
+  float roto = ruido3(p * 22.0) * 1.0 + ruido3(p * 61.0) * 0.5 + ruido3(p * 148.0) * 0.25;
+
+  float h = veta * 0.22 + (roto - 0.87) * 1.0;
+
+  /* Gradiente por diferencias: se evalúa el mismo relieve desplazado sobre
+     dos direcciones tangentes y se inclina la normal con la pendiente. */
+  vec3 tg = normalize(cross(n, vec3(0.0, 0.0, 1.0)) + vec3(1e-5));
+  vec3 bt = cross(n, tg);
+  const float e = 0.0035;
+
+  float ha = sin((length((p + tg * e).xy) * 132.0 + (p + tg * e).z * 132.0)) * 0.30 * 0.22
+           + (ruido3((p + tg * e) * 22.0) - 0.87) * 1.0;
+  float hb = sin((length((p + bt * e).xy) * 132.0 + (p + bt * e).z * 132.0)) * 0.30 * 0.22
+           + (ruido3((p + bt * e) * 22.0) - 0.87) * 1.0;
+
+  vec3 pend = (vec3(ha, hb, 0.0) - vec3(h, h, 0.0)) / e;
+  return normalize(n - (tg * pend.x + bt * pend.y) * 0.000075);
 }
 #endif
 
-/* ── Iluminación ─────────────────────────────────────────────────────── */
+/* ── Iluminación ─────────────────────────────────────────────────────────
+   Lo que separa un objeto negro bonito de una mancha oscura es el especular.
+   No la difusa —esto es obsidiana, apenas rebota nada— y no el color, que es
+   casi negro. El brillo. Así que aquí hay tres capas de brillo y cada una
+   hace un trabajo distinto. */
+
+/**
+ * Especular anisótropo (modelo de Ward).
+ *
+ * Antes era una potencia del coseno a secas, que reparte el brillo igual en
+ * todas las direcciones y da una mancha redonda, que se lee como
+ * plástico: no dice nada de cómo está hecha la superficie.
+ *
+ * Este se estira a lo largo del barrido de la hoja, que es la dirección en la
+ * que la membrana crece. El resultado es un brillo alargado que sigue la
+ * forma, y eso es lo que hace que el material parezca tener fibra.
+ */
+float wardAniso(vec3 n, vec3 l, vec3 v, vec3 tg, vec3 bt, float ax, float ay) {
+  vec3 h = normalize(l + v);
+  float nl = dot(n, l), nv = dot(n, v), nh = dot(n, h);
+  if (nl <= 0.0 || nv <= 0.0) return 0.0;
+
+  float th = dot(h, tg) / ax;
+  float bh = dot(h, bt) / ay;
+  float exponente = -2.0 * (th * th + bh * bh) / (1.0 + nh);
+
+  return exp(exponente) / (12.566 * ax * ay * sqrt(max(nl * nv, 1e-4)));
+}
+
 vec3 sombrear(vec3 p, vec3 n, vec3 rd) {
-  /* Tres luces y ninguna es ambiente.
-
-     La clave barre: durante la revelación, girar uBarrido es lo que descubre
-     primero una línea, luego una superficie y luego la curvatura. El contra
-     separa la silueta del fondo —sin él un objeto negro sobre negro no tiene
-     borde por detrás— y el relleno impide que la cara opuesta sea un agujero.
-
-     La difusa aporta poquísimo, y es correcto: esto es obsidiana. Lo que da
-     volumen en un objeto negro es el especular, igual que en una fotografía
-     de cerámica negra. Por eso hay dos lóbulos, uno cerrado para el filo del
-     barniz y otro abierto para el satinado. */
+  /* Tres luces y ninguna es ambiente. La clave barre: girar uBarrido es lo
+     que descubre primero una línea, luego una superficie y luego la
+     curvatura. El contra separa la silueta del fondo —sin él un objeto negro
+     sobre negro no tiene borde por detrás— y el relleno impide que la cara
+     opuesta sea un agujero. */
   vec3 lClave  = normalize(vec3(cos(uBarrido) * 0.9, 0.78, sin(uBarrido) * 0.9 + 0.4));
   vec3 lContra = normalize(vec3(-cos(uBarrido) * 0.8, 0.2, -0.85));
   vec3 lRelleno = normalize(vec3(-0.8, -0.35, 0.5));
+  vec3 v = -rd;
+
+  /* Dirección del barrido en el punto de impacto: la tangente al arco que
+     recorre la hoja. Es lo que orienta el especular anisótropo. */
+  vec3 tg = normalize(vec3(-p.y, p.x, 0.0) + vec3(1e-5));
+  tg = normalize(tg - n * dot(n, tg));
+  vec3 bt = cross(n, tg);
 
   float ndl = max(0.0, dot(n, lClave));
   float sombra = sombraSuave(p + n * 0.008, lClave);
-  float fres = pow(1.0 - max(0.0, dot(n, -rd)), 3.1);
+  float fres = pow(1.0 - max(0.0, dot(n, v)), 3.1);
 
+  /* Difusa: casi nada, y es correcto. */
   vec3 col = C_MATERIA * (0.10 + ndl * 0.55 * sombra);
   col += C_MATERIA * max(0.0, dot(n, lRelleno)) * 0.18;
 
-  vec3 h1 = normalize(lClave - rd);
-  float nh1 = max(0.0, dot(n, h1));
-  col += C_LUZ * (pow(nh1, 240.0) * 2.6 + pow(nh1, 70.0) * 0.045) * sombra * uRevelado;
+  /* Capa 1 — el barniz. Muy estrecho y estirado a lo largo de la hoja. Es el
+     filo del brillo, el que dibuja por dónde va la superficie. */
+  float barniz = wardAniso(n, lClave, v, tg, bt, 0.035, 0.22);
+  col += C_LUZ * clamp(barniz, 0.0, 20.0) * 0.048 * sombra * uRevelado;
 
-  vec3 h2 = normalize(lContra - rd);
-  col += C_LUZ * pow(max(0.0, dot(n, h2)), 60.0) * 0.35 * uRevelado;
+  /* Capa 2 — el satinado. Ancho y débil: es el que hace que la membrana se
+     despegue del fondo en las zonas donde no le da la clave de lleno. */
+  float satinado = wardAniso(n, lClave, v, tg, bt, 0.32, 0.58);
+  col += C_LUZ * clamp(satinado, 0.0, 5.0) * 0.017 * sombra * uRevelado;
 
-  /* Borde. Es la línea que dibuja la silueta: lo primero que aparece al salir
-     de la oscuridad y lo último que queda al volver a ella. */
-  col += C_LUZ * fres * (0.06 + 0.20 * uRevelado);
+  /* Capa 3 — el contraluz. Estrecho y por detrás: recorta la silueta. */
+  float contra = wardAniso(n, lContra, v, tg, bt, 0.12, 0.30);
+  col += C_LUZ * clamp(contra, 0.0, 10.0) * 0.03 * uRevelado;
+
+  /* El filo. Una banda muy estrecha justo en el límite de la silueta, además
+     del borde ancho de siempre. Sin ella el objeto termina en un degradado y
+     parece que esté desenfocado. */
+  float filo = pow(1.0 - max(0.0, dot(n, v)), 13.0);
+  col += C_LUZ * filo * 0.42 * (0.3 + 0.7 * uRevelado);
+  col += C_LUZ * fres * (0.05 + 0.15 * uRevelado);
 
   /* Un cielo mínimo. Sin él la cara de arriba y la de abajo son idénticas
      cuando la clave está de lado, y el objeto se aplana. */
-  col += C_LUZ * (0.5 + 0.5 * n.y) * 0.008;
+  col += C_LUZ * (0.5 + 0.5 * n.y) * 0.012;
 
   /* La apertura ilumina hacia dentro.
 
@@ -460,12 +689,34 @@ vec3 sombrear(vec3 p, vec3 n, vec3 rd) {
      esté ATRAPADA en una estructura y no puesta como una bola en el medio. */
   vec3 tono = mix(C_ENERGIA, C_ALTA, clamp(uEnergia * 0.75 - 0.3 + uRuido, 0.0, 1.0));
   float haciaDentro = max(0.0, dot(n, normalize(-p - vec3(0.0, 0.0, 1e-4))));
-  float cerca = exp(-max(0.0, length(p) - VACIO) * 2.0);
-  col += tono * haciaDentro * cerca * (0.18 + uEnergia * 1.4) * 1.1;
+  float cerca = exp(-max(0.0, length(p) - VACIO) * 4.5);
+  col += tono * haciaDentro * cerca * (0.18 + sqrt(uEnergia) * 0.5) * 1.15;
 
   /* Luz que atraviesa la membrana donde es fina: los filamentos de dentro se
      transparentan. Es lo que separa el cristal ahumado del plástico negro. */
-  col += tono * campo(p - n * 0.09, uTiempo) * 0.35 * (0.35 + fres);
+  vec3 pIn = p - n * 0.09;
+  col += tono * campo(pIn, uTiempo, filamentos(pIn, uTiempo)) * 0.22 * (0.35 + fres);
+
+  /* Y las puntas se encienden.
+
+     Donde la hoja se afila hasta desaparecer deja de ser opaca, igual que el
+     borde de cualquier pieza de cristal ahumado. Se mide entrando cuatro
+     centésimas en el material: si por ahí ya se ha salido otra vez, es que la
+     hoja es más fina que eso. Cuesta una evaluación del mapa por píxel con
+     impacto y es lo que convierte la cerámica en algo que tiene luz dentro. */
+  float atras = mapa(p + rd * 0.03);
+  /* El umbral va en la escala del mapa, no en unidades de mundo: hoja()
+     divide la distancia por el aplastamiento de la sección, así que una
+     profundidad de tres centésimas sale de ahí como ocho milésimas. Con el
+     umbral en unidades de mundo, TODA la hoja contaba como fina y el objeto
+     entero se ponía verde menta. */
+  /* Fino es cuando al entrar TRES centésimas ya se ha salido: es decir,
+     cuando la medida sube hacia cero o se hace positiva. Estaba al revés y
+     marcaba como fino justo lo más grueso, que es por lo que la pieza entera
+     se ponía verde menta. El umbral va además en la escala del mapa, que
+     divide por el aplastamiento de la sección. */
+  float fino = smoothstep(-0.012, 0.002, atras);
+  col += tono * fino * (0.14 + sqrt(uEnergia) * 0.3) * 0.45 * (0.3 + 0.7 * cerca);
 
   /* Con el error el tono se desatura y titila. Vuelve solo: Nesped no muere. */
   col = mix(col, col * vec3(1.2, 0.9, 0.88), uRuido * (0.5 + 0.5 * sin(uTiempo * 23.0)));
@@ -490,7 +741,13 @@ void main() {
   vec3 col = vec3(0.0022, 0.0024, 0.0030) * vinieta * uFondo;
 
   float lejos = 9.0;
-  float t = marchar(ro, rd, lejos);
+
+  /* Tamaño angular de un píxel. Es lo que convierte la marcha en algo que
+     sabe a qué resolución está pintando. */
+  float px = uFov * 2.0 / uRes.y;
+
+  float cob, tCerca;
+  float t = marchar(ro, rd, lejos, px, cob, tCerca);
 
   /* Volumen. Se marcha hasta la superficie —o hasta el fondo si no hay— para
      que la energía quede correctamente ocluida por las membranas. Sin esto
@@ -510,22 +767,111 @@ void main() {
      repartirlos entre cuatro unidades en vez de dos y media deja menos de dos
      muestras por celda de la retícula. Y por debajo de dos muestras por celda
      lo que sale no es una estructura, es ruido borroso. */
-  vec2 caja = esfera(ro, rd, uDentro > 0.5 ? 2.8 : 2.2);
+/* El radio se ajusta a donde vive la energía, no a donde vive el objeto.
+     Los pasos del volumen son fijos: repartirlos entre 2,2 unidades cuando
+     todo lo que hay que resolver cabe en 1,5 es tirar un tercio de las
+     muestras, y ese tercio es justo lo que separa un hilo de una mancha. */
+  vec2 caja = esfera(ro, rd, uDentro > 0.5 ? 2.8 : 1.55);
   vec3 acum = vec3(0.0);
   float t0 = max(0.03, caja.x);
   float t1 = min(hasta, caja.y);
   float dt = (t1 - t0) / float(PASOS_VOL);
   if (caja.y > 0.0 && dt > 0.0) {
-    /* Ruido de arranque por píxel: sin él, los pasos del volumen se ven como
-       anillos concéntricos, que es el sello de un raymarch mal hecho. */
-    float jit = hash31(vec3(gl_FragCoord.xy, uTiempo * 60.0));
-    float tv = t0 + dt * jit;
+    float tv = t0 + dt * ign(gl_FragCoord.xy);
     vec3 tono = mix(C_ENERGIA, C_ALTA, clamp(uEnergia * 0.75 - 0.3, 0.0, 1.0));
+
+    float minD2[HILOS];
+    float tMin[HILOS];
+    for (int j = 0; j < HILOS; j++) { minD2[j] = 1e9; tMin[j] = t0; }
+
     for (int i = 0; i < PASOS_VOL; i++) {
       vec3 p = ro + rd * tv;
-      float d = campo(p, uTiempo);
-      acum += tono * d * dt * 1.15;
+      /* Una sola pasada por los arcos, y sirve para dos cosas: sumar la vaina
+         —lo ancho y suave, que sí se puede integrar a pasos— y quedarse con a
+         qué distancia ha pasado el rayo de cada hilo.
+
+         Los núcleos NO se integran. Un hilo de dos centésimas de radio
+         muestreado a pasos de cuatro es un hilo que aparece y desaparece
+         entre fotogramas; con la aproximación mínima sale exacto y no depende
+         de cuántos pasos se den. Es la diferencia entre un hilo de luz y una
+         mancha. */
+      float vaina = 0.0;
+      for (int j = 0; j < HILOS; j++) {
+        vec3 eje, ue, ve, ca; float radio, cm, sm;
+        arcoDe(j, uTiempo, eje, ue, ve, ca, radio, cm, sm);
+        float d2 = distArco(p, eje, ue, ve, ca, radio, cm, sm);
+        vaina += exp(-d2 * 90.0) * 0.075;
+        if (d2 < minD2[j]) { minD2[j] = d2; tMin[j] = tv; }
+      }
+
+      acum += tono * campo(p, uTiempo, vaina * velo(p)) * dt * 1.55;
+
       tv += dt;
+    }
+
+    /* La retícula del logo, cuando la hay.
+
+       Son puntos, y la distancia mínima de un rayo a un punto se calcula de
+       una vez, sin muestrear. Igual que con los hilos: a pasos fijos los
+       puntos aparecían y desaparecían según dónde cayera la muestra, y con
+       DORMANT —que es cuando la marca se forma— eso significaba no verla. */
+    if (uFormacion > 0.01) {
+      const float PASO_X = 0.128;
+      const float PASO_Y = 0.098;
+      float brilloPunto = pow(clamp(uFormacion, 0.0, 1.0), 1.8) * (0.3 + uEnergia * 1.2) * 1.25;
+
+      for (int col = 0; col < 6; col++) {
+        float alt = ALTURAS[col];
+        float x = (float(col) - 2.5) * PASO_X;
+        for (int k = 0; k < 6; k++) {
+          if (float(k) > alt - 1.0) break;
+          vec3 q = vec3(x, (float(k) - (alt - 1.0) * 0.5) * PASO_Y, 0.0);
+          vec3 w = q - ro;
+          float proy = dot(w, rd);
+          if (proy <= 0.0 || proy > t1) continue;
+          float d2 = dot(w, w) - proy * proy;
+          acum += tono * exp(-d2 * 2200.0) * brilloPunto;
+        }
+      }
+    }
+
+    /* Y ahora sí, los hilos, una vez cada uno.
+   
+       Antes de pintarlos se afina el mínimo. El bucle de arriba lo localiza
+       con la precisión de un paso, y eso deja el hilo con un abalonado fino:
+       su grosor cambia según dónde haya caído la muestra más cercana. Cuatro
+       iteraciones de sección áurea alrededor de ese punto lo dejan liso, y
+       cuestan nueve distancias por hilo en vez de una por paso. */
+    float brilloHilo = (0.35 + uAgita * 0.9) * (0.25 + uEnergia * 0.95) * 0.62
+                     * (1.0 - clamp(uFormacion, 0.0, 1.0) * 0.88);
+
+    for (int j = 0; j < HILOS; j++) {
+      float fj = float(j);
+      vec3 eje, ue, ve, ca; float radio, cm, sm;
+      arcoDe(j, uTiempo, eje, ue, ve, ca, radio, cm, sm);
+
+      float a = max(t0, tMin[j] - dt);
+      float b = min(t1, tMin[j] + dt);
+      for (int k = 0; k < 4; k++) {
+        float m1 = a + (b - a) * 0.382;
+        float m2 = a + (b - a) * 0.618;
+        float d1 = distArco(ro + rd * m1, eje, ue, ve, ca, radio, cm, sm);
+        float d2 = distArco(ro + rd * m2, eje, ue, ve, ca, radio, cm, sm);
+        if (d1 < d2) b = m2; else a = m1;
+      }
+
+      float tm = (a + b) * 0.5;
+      vec3 pm = ro + rd * tm;
+      float dm = distArco(pm, eje, ue, ve, ca, radio, cm, sm);
+
+      /* Cada hilo brilla distinto, y los que quedan detrás brillan menos.
+         Con todos iguales el manojo se aplana y parece un dibujo; con esto
+         hay unos delante de otros, que es lo que le da hondura al vacío. */
+      float suyo = 0.55 + 0.45 * sin(fj * 2.4 + uTiempo * 0.3);
+      float hondo = exp(-max(0.0, tm - length(uCam)) * 0.55);
+
+      float apriete = mix(2600.0, 1700.0, clamp(uDentro, 0.0, 1.0));
+      acum += tono * exp(-dm * apriete) * brilloHilo * suyo * hondo * velo(pm);
     }
   }
 
@@ -536,6 +882,17 @@ void main() {
     n = microNormal(p, n);
 #endif
     col = sombrear(p, n, rd);
+  } else if (cob < 1.0) {
+    /* El rayo ha pasado rozando: este píxel está a medias dentro del objeto.
+       Se sombrea en el punto de máxima aproximación y se mezcla con el fondo
+       según cuánto lo cubre. Es lo que convierte una silueta en escalones en
+       una silueta con filo. */
+    vec3 p = ro + rd * tCerca;
+    vec3 n = normal(p);
+#ifdef MICRO
+    n = microNormal(p, n);
+#endif
+    col = mix(col, sombrear(p, n, rd), 1.0 - smoothstep(0.0, 1.0, cob));
   }
 
   col += acum;

@@ -57,7 +57,7 @@ export const MEMBRANAS = [
     centro: 0.0,
     arco: N(6) * 2.62,
     radio: 0.90,
-    grosor: N(4) * 0.30,
+    grosor: N(4) * 0.26,
     // Inclinación: ninguna de las tres vive en el mismo plano, y por eso la
     // silueta cambia de familia al girar tres grados.
     inclina: [0.16, -0.08],
@@ -76,7 +76,7 @@ export const MEMBRANAS = [
     centro: 2.28,
     arco: N(2) * 2.62,
     radio: 0.93,
-    grosor: N(3) * 0.30,
+    grosor: N(3) * 0.26,
     inclina: [-0.26, 0.20],
     z: 0.46,
     zAmp: 0.30,
@@ -88,7 +88,7 @@ export const MEMBRANAS = [
     centro: 4.12,
     arco: N(5) * 2.62,
     radio: 0.96,
-    grosor: N(6) * 0.30,
+    grosor: N(6) * 0.26,
     inclina: [0.05, 0.24],
     z: -0.40,
     zAmp: 0.34,
@@ -259,20 +259,33 @@ export const CAMARA = {
    `escala` es la fracción del lienzo a la que se renderiza: el objeto es
    oscuro y suave, así que reescalar de 0,72 a 1 no se nota, y ahorra la
    mitad de los píxeles. */
-/* `sombra` es el número de pasos de la sombra proyectada, y es el gasto extra
+/* `pasos` es la marcha de la superficie y `pasosVol` la del volumen.
+
+   El volumen necesita muchos menos de los que parecería, y es por cómo están
+   hechos los hilos de luz: no se integran muestreándolos —eso es lo que los
+   convertía en una mancha— sino por la distancia mínima del rayo a cada uno,
+   que es exacta y no depende del número de pasos. Lo que queda a pasos es la
+   vaina, los anillos y la retícula, que son todos suaves. Por eso bajar de
+   ochenta y ocho a cincuenta y seis no se nota y ahorra un tercio.
+
+   `sombra` es el número de pasos de la sombra proyectada, y es el gasto extra
    más caro que hay: se paga por cada píxel que toca el objeto, encima de la
    marcha principal. En calidad baja va a cero —sin sombra el objeto sigue
    teniendo volumen porque lo dan el especular y el borde. */
 export const CALIDAD = {
-  alta:  { pasos: 84, pasosVol: 40, sombra: 14, escala: 0.85, dprMax: 2.0, halo: true,  micro: true },
-  media: { pasos: 58, pasosVol: 26, sombra: 10, escala: 0.72, dprMax: 1.5, halo: true,  micro: true },
-  baja:  { pasos: 40, pasosVol: 14, sombra: 0,  escala: 0.58, dprMax: 1.0, halo: false, micro: false },
+  alta:  { pasos: 110, pasosVol: 56, sombra: 12, escala: 1.0,  dprMax: 2.0, halo: true,  micro: true },
+  media: { pasos: 76, pasosVol: 32, sombra: 10, escala: 0.85, dprMax: 1.5, halo: true,  micro: true },
+  baja:  { pasos: 48, pasosVol: 18, sombra: 0,  escala: 0.65, dprMax: 1.0, halo: false, micro: false },
 };
 
-/* Cuántos fotogramas seguidos por debajo del objetivo hacen falta para bajar
-   de nivel. Alto a propósito: bajar la calidad por un pico de dos frames se
-   ve peor que el pico. */
-export const VIGILANCIA = { objetivoMs: 22, muestras: 45, margen: 0.55 };
+/* Cuándo bajar de nivel.
+
+   `muestras` es cuántos fotogramas se juntan antes de decidir por la mediana:
+   alto a propósito, porque bajar la calidad por un pico de dos fotogramas se
+   ve peor que el pico. `urgente` es la excepción: un solo fotograma por
+   encima de eso no es un pico, es un equipo que no puede, y ahí se baja al
+   momento en vez de dejar la página agarrotada mientras se reúne la muestra. */
+export const VIGILANCIA = { objetivoMs: 22, urgente: 125, muestras: 30, margen: 0.55 };
 
 /**
  * Estado inicial de la cámara.

@@ -125,6 +125,51 @@
 
 .pel-cartel[data-on="0"] { visibility: hidden; }
 
+/* La tipografía cruza un plano de corte, con la misma dirección al volver. */
+@media (prefers-reduced-motion: no-preference) {
+  .pel-cartel > div:not(.pel-empuja) {
+    clip-path: inset(0 0 calc((1 - var(--entrada, 1)) * 100%) 0);
+    transform: perspective(1100px)
+      translate3d(0, calc(var(--salida, 0) * -22px), calc(var(--salida, 0) * -65px))
+      rotateX(calc(var(--salida, 0) * 3deg));
+    transform-origin: center bottom;
+  }
+  .pel-cartel:first-of-type > div { clip-path: none; }
+}
+
+.pel-senal {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: var(--presencia, 0);
+  overflow: visible;
+  contain: layout style;
+}
+.pel-senal[data-visible="0"] { visibility: hidden; }
+.pel-senal path { fill: none; vector-effect: non-scaling-stroke; }
+.pel-senal-base { stroke: rgba(246, 241, 231, 0.18); stroke-width: 0.8; }
+.pel-senal-flujo {
+  stroke: #b9ead7;
+  stroke-width: 1.15;
+  stroke-linecap: round;
+  stroke-dasharray: 9 91;
+  animation: pel-transmitir 4.8s linear infinite;
+  animation-delay: calc(var(--capa) * -1.6s);
+}
+.pel-senal[data-visible="0"] .pel-senal-flujo { animation-play-state: paused; }
+.pel-senal text { fill: #d0ded8; font-size: 10px; letter-spacing: 2px; }
+.pel-senal circle { fill: #7ee3bd; }
+@keyframes pel-transmitir { to { stroke-dashoffset: -100; } }
+@media (max-width: 720px) {
+  .pel-senal { top: 7%; height: 65%; }
+  .pel-senal text { font-size: 16px; letter-spacing: 1px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pel-senal-flujo { animation: none; stroke-dasharray: none; opacity: 0.4; }
+}
+
 /* El ancho máximo es para el TEXTO: una columna de más de setenta caracteres
    no se lee. No puede aplicarse a todo hijo del cartel, porque el lienzo de
    los haces es hijo también y recortarlo a 760 px hace que el haz no llegue

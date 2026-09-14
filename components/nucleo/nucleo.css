@@ -38,7 +38,16 @@
    lee como palpitar, y palpitar es nervioso. */
 .nsp-respaldo-cuerpo {
   transform-origin: 50% 50%;
-  animation: nsp-respirar 12s ease-in-out infinite;
+}
+
+.nsp-respaldo-hoja {
+  transform-origin: 0 0;
+  animation: nsp-articular 10.8s ease-in-out infinite;
+  animation-delay: calc(var(--hoja) * -3.6s);
+}
+@keyframes nsp-articular {
+  0%, 100% { transform: rotate(-3deg) translateY(-1.5px); }
+  50% { transform: rotate(3deg) translateY(1.5px); }
 }
 
 @keyframes nsp-respirar {
@@ -58,12 +67,14 @@
 
 /* Movimiento reducido: se queda quieto y sigue siendo Nesped. */
 .nsp-respaldo[data-quieto] .nsp-respaldo-cuerpo,
+.nsp-respaldo[data-quieto] .nsp-respaldo-hoja,
 .nsp-respaldo[data-quieto] .nsp-respaldo-puntos circle {
   animation: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .nsp-respaldo-cuerpo,
+  .nsp-respaldo-hoja,
   .nsp-respaldo-puntos circle {
     animation: none;
   }

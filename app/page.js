@@ -37,6 +37,7 @@ import { NucleoVivo } from "@/components/nucleo/nucleo";
 import { direccionInicial } from "@/components/nucleo/tokens";
 import { ACTOS, CONCEPTOS, MEMORIA, TRABAJO } from "@/components/nucleo/actos";
 import { Revelado } from "@/components/nucleo/texto";
+import { SenalContinua, pintarSenal } from "@/components/nucleo/senal";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -383,6 +384,7 @@ export default function Home() {
 
   const raiz = useRef(null);
   const pelicula = useRef(null);
+  const senal = useRef(null);
   const escenario = useRef(null);
   const barra = useRef(null);
   const carteles = useRef({});
@@ -478,6 +480,7 @@ export default function Home() {
         buscarMaquina: () => control.current?.maquina || null,
         antesDeCada: mirarFinal,
         alAvanzar: (p) => {
+          pintarSenal(senal.current, p);
           if (barra.current) barra.current.style.setProperty("--p", p.toFixed(4));
 
           /* La cabecera se atenúa sólo en la primera pantalla. Vuelve entera
@@ -497,8 +500,12 @@ export default function Home() {
                avanzar en el mismo sentido que el scroll, y la presencia
                tiene que subir al entrar y bajar al salir. */
             const s = acotar((p - tramo.desde) / (tramo.hasta - tramo.desde));
-            el.style.setProperty("--v", v.toFixed(3));
-            el.style.setProperty("--s", s.toFixed(3));
+            poner(el, "--v", v.toFixed(3));
+            poner(el, "--s", s.toFixed(3));
+            const entrada = acotar((p - tramo.desde) / 0.022);
+            const salida = acotar((p - tramo.hasta + 0.01) / 0.023);
+            poner(el, "--entrada", entrada.toFixed(3));
+            poner(el, "--salida", salida.toFixed(3));
             const on = v > 0.02 ? "1" : "0";
             if (el.dataset.on !== on) el.dataset.on = on;
           }
@@ -641,6 +648,7 @@ export default function Home() {
 
       <div ref={pelicula} className="pel-pelicula">
         <div className="pel-plano">
+          <SenalContinua referencia={senal} />
 
           {/* ── 00 · La oscuridad ────────────────────────────────────────
               No hay hero. Durante un instante parece que no hay nada, y lo

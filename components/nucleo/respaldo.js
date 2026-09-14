@@ -63,7 +63,7 @@ export function Respaldo({ estado = "IDLE", quieto = false, etiqueta }) {
 
       <g className="nsp-respaldo-cuerpo">
         {CONTORNOS.map(({ d, indice }) => (
-          <g key={indice}>
+          <g key={indice} className="nsp-respaldo-hoja" style={{ "--hoja": indice }}>
             <path d={d} fill="url(#nsp-r-cuerpo)" />
             <path d={d} fill="none" stroke="url(#nsp-r-luz)" strokeWidth="1.1" />
           </g>
@@ -76,7 +76,6 @@ export function Respaldo({ estado = "IDLE", quieto = false, etiqueta }) {
       <g
         className="nsp-respaldo-puntos"
         fill={COLOR_CSS.energia}
-        filter="url(#nsp-r-brillo)"
         opacity={activo ? 0.5 : 0.95}
       >
         {PUNTOS.map((p) => (

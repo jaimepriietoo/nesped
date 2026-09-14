@@ -122,6 +122,22 @@ export const MUELLES = {
   rapido: { rigidez: 11.0, roce: 0.95 },
 };
 
+// Movimiento articulado: se calcula una vez por frame, nunca por píxel.
+export const MOVIMIENTO = {
+  giro: 0.105,
+  profundidad: 0.058,
+  respiracion: 0.028,
+  frecuencia: 0.58,
+  desfase: 2.094,
+  luz: 0.24,
+  nitidez: 0.18,
+  halo: 0.38,
+  filoExterior: 11000,
+  filoInterior: 7000,
+  camaraRigidez: 42,
+  camaraAmortiguacion: 1,
+};
+
 /* ── Los once estados ───────────────────────────────────────────────────
    Cada estado es una combinación de siete magnitudes. No hay animaciones
    sueltas: todo lo que Nesped hace es un punto en este espacio, y pasar de
@@ -302,10 +318,10 @@ export const CALIDAD = {
 
    `objetivoGpuMs` es el umbral cuando hay cronómetro de tarjeta: 13 ms deja
    sitio para que el navegador componga la página y aun así entre en los 60
-   fotogramas. No se mide durante la travesía de la apertura —el plano más
-   caro de la película, y dura dos segundos—: juzgar ahí bajaba la calidad del
-   sitio entero por un pico, y de ahí no se vuelve a subir. `objetivoMs` es el de reserva, sobre el hueco entre fotogramas,
-   y va más alto porque ahí dentro está todo lo demás que hace la página.
+   fotogramas. También se mide dentro de la apertura: el visitante puede
+   detenerse en ese plano. La mediana evita bajar por un pico aislado.
+   `objetivoMs` es el de reserva, sobre el hueco entre fotogramas,
+   y va más alto porque incluye el resto de la página.
    `muestras` es cuántas medidas se juntan antes de decidir por la mediana,
    suficientes para que un pico suelto no cuente y pocas para que la decisión
    llegue en un par de segundos y no en diez. `urgente` es la excepción: un solo fotograma por encima de

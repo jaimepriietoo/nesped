@@ -119,12 +119,43 @@ que disimule los escalones. El umbral de impacto también es relativo al tamaño
 de un píxel a esa distancia, no un número fijo: con un umbral fijo el borde
 cambia de grosor según lo lejos que esté el objeto.
 
-**Los hilos de luz no se muestrean.** Un hilo de dos centésimas de radio
+**Los hilos no se muestrean: se resuelven.** Un hilo de dos centésimas de radio
 integrado a pasos de cuatro es un hilo que aparece y desaparece entre
 fotogramas, y sumado sobre un volumen da exactamente la mancha verde que tenía
-la primera versión. Se calcula la distancia mínima del rayo a cada arco —que es
-exacta— y se afina con cuatro iteraciones de sección áurea. El resultado no
-depende del número de pasos, así que sale igual de nítido en calidad baja.
+la primera versión.
+
+Lo que se hace es buscar por dónde pasa el rayo más cerca de cada arco. Y la
+clave está en qué se barre: **el ángulo sobre el arco, no la distancia sobre el
+rayo**. El arco es un tramo acotado, así que con veinticuatro muestras se cubre
+entero; el rayo no tiene cota natural y obligaba a mirar los catorce arcos en
+cada uno de los setenta y dos pasos del volumen —mil evaluaciones por píxel
+para encontrar catorce mínimos—.
+
+Además, visto como función del ángulo, el cuadrado de la distancia de un punto
+del arco al rayo es un polinomio trigonométrico de grado dos:
+
+```
+d²(θ) = c0 + c1·cosθ + c2·senθ + c3·cos2θ + c4·sen2θ
+```
+
+—sale de proyectar el arco sobre el plano perpendicular al rayo, donde es una
+elipse—. Los cinco coeficientes se calculan una vez por arco y evaluar el
+perfil son diez multiplicaciones. El seno y el coseno del barrido avanzan por
+recurrencia, así que las veinticuatro muestras cuestan un seno y un coseno en
+total. Después, seis iteraciones de sección áurea dejan el ángulo con un error
+diez veces menor que el grosor del hilo.
+
+Ese último afinado no es un lujo. Sin él —ajustando una parábola a las tres
+muestras del fondo del valle, que fue el primer intento— los hilos salían con
+**muescas perpendiculares, una por muestra**: el ángulo estimado saltaba de una
+muestra a su vecina entre un píxel y el de al lado.
+
+Y el resplandor ancho que rodea al hilo tampoco se suma a pasos: se integra. A
+lo largo del rayo la distancia al arco crece como una parábola alrededor del
+punto más cercano, así que `exp(-90·d²)` es una campana y su integral tiene
+fórmula cerrada. Lo abierta que es la campana sale del mismo perfil derivado
+dos veces —medirla restando muestras vecinas daba cortes rectos a media luz por
+toda la apertura, porque había que recortar la resta y el recorte se veía—.
 
 Lo mismo con los puntos del logo: la distancia mínima de un rayo a un punto se
 resuelve de una vez, sin muestrear.
@@ -148,12 +179,114 @@ hace que la pieza se lea como algo construido.
 
 ## Rendimiento
 
-Una web preciosa a 17 fps es una mala web.
+Una web preciosa a 17 fps es una mala web. Y durante un tiempo esta lo fue: con
+la calidad alta puesta, la escena costaba **155 ms por fotograma** —seis fps y
+medio— en un MacBook con M3 Pro. No se notaba porque el vigilante bajaba la
+calidad a la primera y el sitio se veía siempre en el nivel más bajo.
 
-Tres niveles en `CALIDAD`, y se baja solo: el vigilante mide cuánto tarda el
-pintado —no los fps, que mezclan el coste de la escena con el del resto de la
+Hoy, la misma máquina y el mismo encuadre:
+
+| momento de la película       | ms/fotograma | fps |
+| ---------------------------- | ------------ | --- |
+| la oscuridad y el despertar  | 5,1 – 9,1    | 110–195 |
+| la apertura llena la pantalla| 18,2         | 55  |
+| dentro, atravesando          | 8,9 – 14,4   | 70–113 |
+| el resto de la película      | 4,2 – 11,4   | 88–239 |
+| núcleo anclado (el producto) | 1,4          | 725 |
+
+A 2288×1440, que es lo que ocupa a pantalla completa en un portátil. El único
+momento por debajo de sesenta es el pico de la travesía, y dura cerca de un
+segundo de scroll.
+
+### De dónde salieron los trece aumentos
+
+Por orden de lo que dieron:
+
+1. **`arcoDe()` fuera del bucle.** Calcular el plano, el radio y el reparto de
+   un arco cuesta diez senos y cosenos, dos productos vectoriales y una
+   normalización, y se estaba haciendo **mil ocho veces por píxel**: catorce
+   arcos dentro de setenta y dos pasos del volumen, cuando el resultado sólo
+   depende del arco y del tiempo. Resolver cada arco una vez, por el perfil en
+   forma cerrada, quitó 110 ms de los 144.
+2. **La esfera envolvente antes de marchar.** Todo el objeto cabe en una esfera
+   de radio 1,35, y cortar un rayo con una esfera es una raíz cuadrada. Sin
+   eso, cada rayo del fondo —la mitad larga de la pantalla en un encuadre
+   abierto— recorría las nueve unidades del escenario a pasos de la función de
+   distancia para acabar sin tocar nada. Seis milisegundos.
+   Ojo: no es la comprobación por paso que se probó una vez y salió más lenta.
+   Aquella preguntaba lo mismo dentro del bucle; ésta se hace una vez y decide
+   si hay bucle.
+3. **Descartar arcos por su envolvente.** Un hilo sólo se ve hasta unas cuatro
+   décimas: más allá, `exp(-90·d²)` vale una cienmilésima. Como todos los
+   puntos de un arco están a la misma distancia de su centro, un producto
+   escalar decide si hay que mirarlo. Ocho milisegundos.
+4. **La cota de la distancia, exacta.** La sección de la hoja es elíptica: se
+   aplasta un eje por 3,6. Al escalar un eje la función deja de devolver una
+   distancia, y lo obvio es dividir por el factor de aplastamiento —que
+   funciona, pero reparte el castigo por igual—. En el plano del arco, que es
+   por donde llega casi cualquier rayo, la función no crece 3,6 veces más
+   deprisa: crece igual, y el rayo avanzaba a un sexto de lo que podía.
+   Dividiendo por el módulo del gradiente, que vale 1 de frente y 3,6 de canto,
+   la cota sigue siendo válida y el rayo avanza lo que le corresponde.
+5. **Pasos del volumen que crecen.** Con la cámara dentro del corredor, una
+   celda de la retícula a media unidad ocupa en pantalla diez veces lo que la
+   misma celda a cuatro. A pasos iguales las dos reciben el mismo número de
+   muestras. Creciendo un 6% por paso, la densidad medida EN PANTALLA queda
+   casi constante: veintiocho pasos dan mejor imagen que los cincuenta y seis
+   de antes, y el interior dejó de leerse como un estallido radial.
+6. **El campo, partido en dos.** El campo es afín en la densidad de hilos: lo
+   que los hilos aportan se suma y todo lo demás los multiplica. Separarlo en
+   `campoBase()` —anillos, retícula, envolvente— y `pesoHilos()` permite
+   integrar el trasfondo a pasos, que es suave y lo admite, y resolver los
+   hilos aparte y exactos.
+
+### Cómo se mide esto, que tampoco fue gratis
+
+Tres maneras de medir mal, las tres probadas aquí:
+
+- **Cronometrar `pintar()` con un reloj normal.** Las llamadas a WebGL encolan
+  trabajo y vuelven enseguida: salían décimas de milisegundo yendo a cuatro
+  fotogramas por segundo.
+- **Envolver N fotogramas en una consulta de tiempo de la tarjeta.** `pintar()`
+  ya abre la suya, y el cronómetro admite una consulta a la vez: anidarlas
+  devuelve basura sin dar error visible. Y aun bien puesta, `TIME_ELAPSED`
+  mide desde que la GPU procesa el principio hasta que procesa el final, así
+  que con la pestaña oculta recoge también el tiempo en que la tarjeta estaba
+  haciendo otra cosa: cientos de milisegundos en una escena que va suelta.
+- **Mirar el hueco entre fotogramas sin más.** Se cuantiza al refresco: en un
+  panel de 120 Hz, todo lo que cueste entre 25 y 33 ms sale como 33,3 y no
+  distingue una mejora del 20%.
+
+Lo que sí funciona: un navegador de verdad con la tarjeta de verdad —sin
+ventana, macOS pinta con SwiftShader y el número no significa nada—, pintando
+K veces dentro del mismo fotograma y dividiendo. El hueco se va muy por encima
+del refresco y queda resolución de sobra.
+
+### Una trampa que no se ve venir
+
+Añadir seis iteraciones de sección áurea al pase de hilos multiplicó por ocho
+el coste **en un encuadre y no en el otro**: 8 ms con la cámara lejos, 88 ms con
+la cámara cerca. No era el trabajo de más —son doce senos por arco—, era que el
+estado vivo dentro del bucle pasó de caber en registros a no caber, y el
+compilador cambió de estrategia. Se arregló soltando lo que ya no hacía falta
+—el eje, el centro y el radio del arco, que sólo se usaban para calcular los
+coeficientes— antes de entrar en el afinado.
+
+Si un cambio pequeño en un bucle de shader multiplica el coste, mirar primero
+cuántas cosas siguen vivas dentro.
+
+### Lo demás
+
+Tres niveles en `CALIDAD`, y se baja solo: el vigilante mide lo que tarda la
+tarjeta —no los fps, que mezclan el coste de la escena con el del resto de la
 página— y baja de nivel si la mediana se pasa del objetivo. Sólo baja: subir en
 caliente haría que el objeto cambiara de nitidez cada dos segundos.
+
+**Pero no juzga durante la travesía.** Ese plano es el más caro con diferencia
+—la cámara dentro del objeto, las tres membranas llenando el encuadre y la
+retícula del interior entera— y dura un par de segundos. Dejar que el vigilante
+opine ahí significaba que un solo viaje por el agujero bajaba la calidad del
+sitio entero y ya no volvía a subir, cuando el resto de la película va sobrada.
 
 Y antes que todo eso: **si lo dibuja la CPU, no se dibuja**. Una máquina
 virtual, un portátil con la aceleración desactivada o un navegador en modo de
@@ -162,26 +295,10 @@ rayos no va "más lenta": deja la página agarrotada, con el scroll a tirones y
 los botones sin responder. Se detecta por el nombre del renderizador y se pasa
 directamente a la silueta en SVG, que es el mismo objeto y va instantánea.
 
-Lo que más ahorra, por orden:
-
-1. **Los pasos del volumen.** En calidad alta son cincuenta y seis, no los
-   ciento y pico que harían falta si los hilos se integraran: como salen por
-   distancia mínima, lo único que queda a pasos es la vaina, los anillos y el
-   trasfondo, que son todos suaves.
-2. **La sombra proyectada.** Es el gasto extra más caro porque se paga por cada
-   píxel que toca el objeto. En calidad baja va a cero, y el volumen lo siguen
-   dando el especular y el borde.
-3. **No evaluar lo que no existe.** Los puntos del logo, el campo interior y el
-   cono de energía dirigida sólo se calculan cuando su magnitud no es cero.
-4. **Una sola pasada por los arcos.** El bucle del volumen calcula la distancia
-   a cada hilo una vez y la usa para dos cosas: sumar la vaina y quedarse con el
-   mínimo.
-5. **Pausa fuera de pantalla.** El estado sigue avanzando —al volver no puede
-   aparecer congelado— pero no se pinta.
-
-La calidad alta se pinta a resolución completa. Reescalar es lo primero que se
-nota cuando lo que falta es nitidez, así que lo que se recorta es todo lo demás
-antes que eso.
+La calidad alta pinta a 1,6 píxeles de dispositivo por píxel de CSS, no a los 2
+de una pantalla retina. Con la cobertura analítica del borde, el filo no viene
+de la resolución sino de cómo se calcula, y esas cuatro décimas de más se
+gastan mejor en pasos y en hilos: a 2,0 la travesía se iba a 35 fps.
 
 Y hay una salida de emergencia: un solo fotograma por encima de 125 ms no es un
 pico, es un equipo que no puede, y ahí se baja de nivel al momento en vez de

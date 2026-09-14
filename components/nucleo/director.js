@@ -162,6 +162,10 @@ export class Director {
        scroll.
 
        Con movimiento reducido no hay obertura: se entra con la luz puesta. */
+    this.arriba = 0;
+    this.recorrido = 0;
+    this.alto = 0;
+
     this.obertura = 2.4;
     this.OBERTURA = 2.4;
     this.HASTA = 0.075;
@@ -173,16 +177,40 @@ export class Director {
     }
   }
 
+  /**
+   * Dónde está la película, sin tocar la maquetación.
+   *
+   * Medía con getBoundingClientRect() en cada fotograma, y eso obliga al
+   * navegador a recalcular la maquetación sesenta veces por segundo. Con la
+   * página que hay debajo —doce mil píxeles de alto— eso cuesta más que
+   * pintar la escena entera.
+   *
+   * La posición y la altura del bloque sólo cambian cuando cambia el tamaño
+   * de la ventana, así que se miden entonces y aquí sólo se lee el scroll,
+   * que es un número que el navegador ya tiene.
+   */
   medir() {
+    if (this.recorrido <= 0) return 0;
+    return Math.min(1, Math.max(0, (window.scrollY - this.arriba) / this.recorrido));
+  }
+
+  /** Vuelve a medir la caja de la película. Sólo al montar y al redimensionar. */
+  remedir() {
     const caja = this.pelicula.getBoundingClientRect();
-    const recorrido = caja.height - window.innerHeight;
-    if (recorrido <= 0) return 0;
-    return Math.min(1, Math.max(0, -caja.top / recorrido));
+    this.arriba = caja.top + window.scrollY;
+    this.recorrido = caja.height - window.innerHeight;
+    this.alto = window.innerHeight;
   }
 
   montar() {
     this.vivo = true;
     this.ultimo = performance.now();
+    this.remedir();
+
+    /* La caja sólo cambia al redimensionar. Se vuelve a medir ahí y no en
+       cada fotograma. */
+    this.alRedimensionar = () => this.remedir();
+    window.addEventListener("resize", this.alRedimensionar, { passive: true });
 
     /* Si se entra a media página —un enlace a #planes, o el navegador
        recuperando la posición anterior— no hay obertura que valga: la
@@ -292,6 +320,7 @@ export class Director {
   desmontar() {
     this.vivo = false;
     cancelAnimationFrame(this.raf);
+    if (this.alRedimensionar) window.removeEventListener("resize", this.alRedimensionar);
   }
 }
 

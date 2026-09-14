@@ -41,13 +41,17 @@ export function contornos(escala = 100, muestras = 74) {
       const rr = m.radio + m.ondaR[1] * Math.cos(m.ondaR[0] * phi + m.centro);
       const zz = m.z + m.zAmp * Math.sin(phi + m.centro);
 
-      /* Afilado en las dos puntas y costillas, con los MISMOS números que el
-         shader. Estuvieron distintos un rato y el respaldo dibujaba unas
-         puntas de sierra que no se parecían a nada: la alternativa sin WebGL
-         tiene que ser el mismo objeto, no un primo lejano. */
-      const tap = Math.pow(Math.max(Math.sin(Math.PI * u), 0), 0.62);
-      const th = m.grosor * tap *
-        (0.986 + 0.014 * Math.sin(u * Math.PI * 2 * m.costillas + m.centro));
+      /* Afilado en las dos puntas, con la MISMA curva que el shader. Estuvo
+         distinta un rato y el respaldo dibujaba unas puntas que no se parecían
+         a nada: la alternativa sin WebGL tiene que ser el mismo objeto, no un
+         primo lejano.
+
+         El shader la calcula a partir de k —la posición dentro del arco medida
+         con cosenos, para ahorrarse un arcotangente por paso— y aquí, que se
+         resuelve una vez en el servidor, se llega a lo mismo desde u. */
+      const k = Math.max(0, 1 - Math.pow(2 * u - 1, 2));
+      const sn = Math.sqrt(k);
+      const th = m.grosor * sn * (1.62 - 0.62 * sn);
 
       const centro = girar([Math.cos(phi) * rr, Math.sin(phi) * rr, zz],
         m.inclina[0], m.inclina[1]);

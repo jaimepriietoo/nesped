@@ -51,6 +51,8 @@ export class NucleoRender {
     this.raf = 0;
     this.ultimo = 0;
     this.muestras = [];
+    this.seguidos = 0;
+    this.calentando = VIGILANCIA.calentar;
     this.destinos = {};
     this.progs = {};
   }
@@ -76,6 +78,22 @@ export class NucleoRender {
 
     this.medioFloat = !!gl.getExtension("EXT_color_buffer_half_float") ||
                       !!gl.getExtension("EXT_color_buffer_float");
+
+    /* El cronómetro de la propia tarjeta.
+
+       Es la única forma honesta de saber si la escena es demasiado cara. El
+       hueco entre fotogramas sirve de aproximación, pero se dispara también
+       cuando el navegador ralentiza el bucle por motivos que no tienen nada
+       que ver con lo que se está pintando —modo de bajo consumo, una pestaña
+       que el sistema considera de segunda, un panel empotrado— y entonces se
+       baja de calidad en un equipo que iba sobrado. Esto mide lo que tarda la
+       tarjeta y nada más. */
+    this.reloj = gl.getExtension("EXT_disjoint_timer_query_webgl2");
+    /* Una sola consulta, reutilizada. Crear y destruir un objeto de WebGL en
+       cada fotograma es basura que recoger sesenta veces por segundo, y una
+       pausa del recolector en mitad de una escena se ve. */
+    this.consulta = this.reloj ? gl.createQuery() : null;
+    this.pendiente = false;
 
     /* Si no hay GPU de verdad, no se marcha nada.
 
@@ -188,7 +206,8 @@ export class NucleoRender {
     if (!this.vivo) return;
     this.raf = requestAnimationFrame(this.fotograma);
 
-    const dt = Math.min(0.05, (ahora - this.ultimo) / 1000) || 0.016;
+    const intervalo = ahora - this.ultimo;
+    const dt = Math.min(0.05, intervalo / 1000) || 0.016;
     this.ultimo = ahora;
 
     /* Pausa fuera de pantalla. Un raymarch corriendo detrás de una pestaña
@@ -200,10 +219,60 @@ export class NucleoRender {
       return;
     }
 
-    const t0 = performance.now();
     this.pintar(dt);
-    this.vigilar(performance.now() - t0);
+
+    /* Qué se le da al vigilante.
+
+       Con cronómetro de tarjeta, lo que ha tardado la tarjeta: es lo único
+       que depende de lo cara que sea la escena. Cronometrar con un reloj
+       normal alrededor de pintar() no mide nada, porque las llamadas a WebGL
+       encolan trabajo y vuelven enseguida —salían décimas de milisegundo yendo
+       a cuatro fotogramas por segundo, y el vigilante no bajaba jamás.
+
+       Sin cronómetro se cae al hueco entre fotogramas, que lo recoge todo
+       pero también recoge lo que no es culpa de la escena. */
+    /* Y cuándo NO se le da nada: mientras se atraviesa la apertura.
+
+       Ese plano es, con diferencia, el más caro de la película —la cámara
+       está dentro del objeto, las tres membranas llenan el encuadre y la
+       retícula del interior se muestrea entera— y dura un par de segundos.
+       Dejar que el vigilante juzgue ahí significa que un solo viaje por el
+       agujero baja la calidad del sitio ENTERO y ya no vuelve a subir, que es
+       exactamente lo contrario de lo que se quiere: el resto de la película
+       va sobrado. Se juzga por lo que dura, no por el pico. */
+    const atravesando = this.direccion && this.direccion.dentro > 0.25;
+
+    if (!atravesando) {
+      if (this.reloj) {
+        const gpu = this.leerReloj();
+        if (gpu !== null) this.vigilar(gpu, VIGILANCIA.objetivoGpuMs);
+      } else {
+        this.vigilar(intervalo, VIGILANCIA.objetivoMs);
+      }
+    } else if (this.reloj) {
+      this.leerReloj();      // se lee y se tira: la consulta ha de quedar libre
+    }
   };
+
+  /**
+   * Lee el cronómetro de la tarjeta si ya hay resultado.
+   * @returns {number|null} milisegundos, o null si aún no está listo.
+   */
+  leerReloj() {
+    const gl = this.gl;
+    const ext = this.reloj;
+    if (!ext || !this.pendiente) return null;
+
+    // Un cambio de contexto en la GPU invalida la medida: se tira.
+    if (gl.getParameter(ext.GPU_DISJOINT_EXT)) {
+      this.pendiente = false;
+      return null;
+    }
+    if (!gl.getQueryParameter(this.consulta, gl.QUERY_RESULT_AVAILABLE)) return null;
+
+    this.pendiente = false;
+    return gl.getQueryParameter(this.consulta, gl.QUERY_RESULT) / 1e6;
+  }
 
   pintar(dt) {
     const gl = this.gl;
@@ -213,13 +282,36 @@ export class NucleoRender {
     const d = this.direccion;
     const cfg = CALIDAD[this.nivel];
 
+    /* Sólo se cronometra cuando no hay ninguna medida pendiente: el
+       cronómetro admite una consulta a la vez. */
+    const cronometrando = this.reloj && !this.pendiente;
+    if (cronometrando) gl.beginQuery(this.reloj.TIME_ELAPSED_EXT, this.consulta);
+
     this.pasada(this.progs.nucleo, this.uNucleo, this.destinos.escena, (u) => {
       const D = this.destinos.escena;
       gl.uniform2f(u.get("uRes"), D.ancho, D.alto);
       gl.uniform1f(u.get("uTiempo"), est ? est.t : performance.now() / 1000);
 
-      gl.uniform3f(u.get("uCam"), d.cam[0], d.cam[1], d.cam[2]);
-      gl.uniform3f(u.get("uMira"), d.mira[0], d.mira[1], d.mira[2]);
+      /* Deriva de cámara.
+
+         Cuando nadie dirige —el núcleo anclado en su esquina, el icono del
+         portal, el banco de pruebas— la cámara se mueve sola: unas centésimas
+         de unidad en una órbita de medio minuto. Es lo que separa "un objeto
+         renderizado" de "un objeto que está ahí": basta con que la silueta
+         cambie un poco para que el ojo lo lea como presente.
+
+         Durante la película no se aplica, porque ahí la cámara ya tiene quien
+         la lleve y sumarle una deriva sería pelearse con el encuadre. */
+      const t = est ? est.t : 0;
+      const dv = d.deriva ? 1 : 0;
+      gl.uniform3f(u.get("uCam"),
+        d.cam[0] + dv * Math.sin(t * 0.21) * 0.085,
+        d.cam[1] + dv * Math.sin(t * 0.17 + 1.3) * 0.055,
+        d.cam[2] + dv * Math.sin(t * 0.13 + 2.1) * 0.04);
+      gl.uniform3f(u.get("uMira"),
+        d.mira[0] + dv * Math.sin(t * 0.11 + 0.7) * 0.02,
+        d.mira[1] + dv * Math.sin(t * 0.15 + 2.6) * 0.02,
+        d.mira[2]);
       gl.uniform1f(u.get("uFov"), d.fov);
 
       const g = (k, def) => (v && v[k] !== undefined ? v[k] : def);
@@ -299,6 +391,11 @@ export class NucleoRender {
       gl.uniform1f(u.get("uFondo"), d.fondo === undefined ? 1 : d.fondo);
       gl.uniform2f(u.get("uRes"), this.lienzo.width, this.lienzo.height);
     });
+
+    if (cronometrando) {
+      gl.endQuery(this.reloj.TIME_ELAPSED_EXT);
+      this.pendiente = true;
+    }
   }
 
   /**
@@ -312,16 +409,30 @@ export class NucleoRender {
    * carga oscilase, y ver el objeto cambiando de nitidez cada dos segundos es
    * peor que tenerlo un punto por debajo de lo que aguanta el equipo.
    */
-  vigilar(ms) {
-    /* Salida de emergencia. Un fotograma que tarda más de un octavo de
-       segundo no es un pico: es que este equipo no puede con esto. Esperar a
-       reunir la muestra completa serían varios segundos de página agarrotada,
-       y lo primero que hace alguien con una web agarrotada es cerrarla. */
+  vigilar(ms, objetivo) {
+    /* Los primeros fotogramas tras montar o tras cambiar de nivel llevan
+       dentro la compilación del shader y la creación de los búferes. Medirlos
+       haría que el vigilante bajase de calidad por el arranque. */
+    if (this.calentando > 0) { this.calentando -= 1; return; }
+
+    /* Salida de emergencia: dos fotogramas SEGUIDOS por encima de un octavo
+       de segundo. Esperar a reunir la muestra completa serían varios segundos
+       de página agarrotada, y lo primero que hace alguien con una web
+       agarrotada es cerrarla.
+
+       Pero uno solo no vale: una pausa del recolector de basura o un
+       recálculo de estilos en otra parte de la página dan ese tirón sin que
+       la escena tenga nada que ver, y bajar de calidad por eso es una pérdida
+       permanente a cambio de un accidente. */
     if (ms > VIGILANCIA.urgente) {
-      this.muestras.length = 0;
-      this.bajarNivel(ms);
+      this.seguidos += 1;
+      if (this.seguidos >= 2) {
+        this.muestras.length = 0;
+        this.bajarNivel(ms);
+      }
       return;
     }
+    this.seguidos = 0;
 
     const m = this.muestras;
     m.push(ms);
@@ -331,7 +442,7 @@ export class NucleoRender {
     const mediana = orden[orden.length >> 1];
     m.length = 0;
 
-    if (mediana <= VIGILANCIA.objetivoMs) return;
+    if (mediana <= objetivo) return;
     this.bajarNivel(mediana);
   }
 
@@ -340,6 +451,8 @@ export class NucleoRender {
     if (i < 0 || i >= NIVELES.length - 1) return;
 
     this.nivel = NIVELES[i + 1];
+    this.calentando = VIGILANCIA.calentar;
+    this.seguidos = 0;
     try {
       this.construir();
       this.destinos.escena = null;
@@ -357,6 +470,7 @@ export class NucleoRender {
     if (!gl) return;
     for (const k of Object.keys(this.destinos)) borrarDestino(gl, this.destinos[k]);
     for (const k of Object.keys(this.progs)) gl.deleteProgram(this.progs[k]);
+    if (this.consulta) gl.deleteQuery(this.consulta);
     if (this.vao) gl.deleteVertexArray(this.vao);
     /* Un contexto WebGL abandonado no se recoge al momento y el navegador
        sólo admite unos pocos: sin esto, navegar entre pantallas del portal

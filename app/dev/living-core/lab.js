@@ -31,6 +31,7 @@ export function Lab() {
   useEffect(() => {
     const d = direccion.current;
     if (!d) return;
+    d.deriva = true;
     d.revelado = valores.revelado;
     d.barrido = valores.barrido;
     d.dentro = valores.dentro;

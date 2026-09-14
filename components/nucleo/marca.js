@@ -55,8 +55,10 @@ export function NucleoMarca({ estado = "IDLE", tam = 40, etiqueta }) {
     // portada deja el objeto en la mitad del hueco.
     d.cam[2] = 2.95;
     d.fov = 0.62;
-    // Sin fondo: se mezcla en `screen` y cualquier valor se vería como disco.
+    // Sin fondo: el lienzo va con alfa y cualquier valor se vería como disco.
     d.fondo = 0;
+    // Y la cámara se mueve sola: aquí no hay película que la dirija.
+    d.deriva = true;
     direccion.current = d;
   }
 

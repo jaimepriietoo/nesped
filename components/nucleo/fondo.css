@@ -1,0 +1,63 @@
+/* =========================================================================
+   Nesped de fondo.
+
+   Cubre su contenedor, va por detrás de todo y no captura el puntero. La
+   atenuación la pone `--luz` sobre el propio lienzo y no un velo encima:
+   un velo semitransparente sobre negro levanta los negros y lo que era
+   obsidiana pasa a ser gris.
+   ========================================================================= */
+
+/* Fijo y no absoluto: en /registro el formulario puede ser más alto que la
+   pantalla, y un fondo que se va con el scroll deja de ser un fondo. */
+.nsp-fondo {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--bg, #000);
+}
+
+.nsp-fondo-nucleo {
+  width: 100%;
+  height: 100%;
+  opacity: var(--luz, 0.5);
+  /* La opacidad la anima quien lo use —al entrar, al acertar la contraseña—
+     y siempre sobre transform/opacity: son las dos que el compositor resuelve
+     sin volver a maquetar. */
+  transition: opacity 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Un degradado desde abajo para que el pie y la letra pequeña se lean sobre
+   el objeto sin tener que apagarlo entero. */
+.nsp-fondo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    135% 105% at 50% 46%,
+    transparent 0%,
+    transparent 52%,
+    rgba(0, 0, 0, 0.42) 82%,
+    rgba(0, 0, 0, 0.82) 100%
+  );
+}
+
+/* Apartado del centro, para que no quede entero detrás de la tarjeta. Se
+   hace aquí y no moviendo la cámara: girar la mirada cambia la perspectiva
+   del objeto, y lo que hace falta es sólo correrlo. */
+.nsp-fondo[data-sitio="izquierda"] .nsp-fondo-nucleo {
+  transform: translate3d(-17%, 0, 0);
+}
+
+@media (max-width: 860px) {
+  /* En vertical no sobra ancho por ningún lado: vuelve al centro y baja la
+     luz, que aquí el objeto queda entero debajo del formulario. */
+  .nsp-fondo[data-sitio="izquierda"] .nsp-fondo-nucleo { transform: none; }
+  .nsp-fondo { --luz: 0.42; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nsp-fondo-nucleo { transition: none; }
+}

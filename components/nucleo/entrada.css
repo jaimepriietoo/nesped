@@ -1,0 +1,90 @@
+/* =========================================================================
+   El plano de entrada al portal.
+
+   Encima de todo mientras dura, y sin capturar el puntero en ningún momento:
+   el panel de debajo ya está montado y tiene que poder usarse aunque esto
+   siga retirándose.
+   ========================================================================= */
+
+.nsp-entrada {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 22px;
+  background: #050506;
+  pointer-events: none;
+  animation: nspEntradaLlega 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* La salida: el negro se va y el objeto se encoge un poco, como si se
+   retirara hacia el icono de la columna. Sólo transform y opacity. */
+.nsp-entrada[data-saliendo="1"] {
+  animation: nspEntradaSale 0.42s cubic-bezier(0.55, 0, 0.9, 0.55) both;
+}
+
+@keyframes nspEntradaLlega {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes nspEntradaSale {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+.nsp-entrada-nucleo {
+  animation: nspEntradaNucleo 1.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes nspEntradaNucleo {
+  from { transform: scale(0.88); }
+  to   { transform: scale(1); }
+}
+
+.nsp-entrada[data-saliendo="1"] .nsp-entrada-nucleo {
+  animation: nspEntradaNucleoSale 0.42s cubic-bezier(0.55, 0, 0.9, 0.55) both;
+}
+
+@keyframes nspEntradaNucleoSale {
+  from { transform: scale(1); }
+  to   { transform: scale(0.82); }
+}
+
+.nsp-entrada-dice {
+  margin: 0;
+  text-align: center;
+  animation: nspEntradaTexto 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.22s both;
+}
+
+@keyframes nspEntradaTexto {
+  from { opacity: 0; transform: translate3d(0, 6px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+.nsp-entrada-dice b {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
+.nsp-entrada-dice span {
+  display: block;
+  margin-top: 6px;
+  font-family: "BubbledotICG-FinePos", monospace;
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  color: #8e8e8e;
+}
+
+/* Con movimiento reducido el componente ni se monta, pero si alguien cambia
+   el ajuste con la pantalla ya puesta, que no quede nada girando. */
+@media (prefers-reduced-motion: reduce) {
+  .nsp-entrada,
+  .nsp-entrada-nucleo,
+  .nsp-entrada-dice { animation: none; }
+}

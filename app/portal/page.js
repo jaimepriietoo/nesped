@@ -25,6 +25,7 @@ import {
   tieneFuncion, planQueIncluye, VALOR_BLOQUEADO,
 } from "@/lib/planes";
 import { NucleoMarca, estadoDe } from "@/components/nucleo/marca";
+import { EntradaNesped } from "@/components/nucleo/entrada";
 import "./portal.css";
 
 /* ── utilidades ──────────────────────────────────────────────────────── */
@@ -2969,6 +2970,11 @@ export default function PortalV3() {
 
   return (
     <div className="pv3">
+      {/* Nesped abre la puerta. Va por encima, no captura el puntero y se
+          desmonta solo: el armazón de debajo ya está montado desde el primer
+          fotograma, así que esto no retrasa nada. */}
+      <EntradaNesped />
+
       <div className="pv3-layout">
         <aside className="pv3-side">
           <div className="pv3-brand">
@@ -3028,8 +3034,16 @@ export default function PortalV3() {
                 dice lo que está pasando de verdad, y lo dice dos veces: en
                 texto para quien lee, y en el núcleo de la izquierda para quien
                 lo capta de un vistazo. */}
-            <span className="pv3-live" data-estado={estadoNucleo}>
-              <span className="pv3-dot" /> {TEXTO_ESTADO[estadoNucleo]}
+            {/* Nesped, diciendo lo que hace. Dos veces y a propósito: el
+                punto y el rótulo para quien lo capta de un vistazo, y la
+                frase para quien quiere saber por qué. Antes ponía "EN
+                DIRECTO" pasara lo que pasara, que es lo mismo que no decir
+                nada. */}
+            <span className="pv3-live" data-estado={estadoNucleo} role="status">
+              <span className="pv3-live-cab">
+                <span className="pv3-dot" /> {TEXTO_ESTADO[estadoNucleo]}
+              </span>
+              <span className="pv3-live-dice">{FRASE_ESTADO[estadoNucleo] || FRASE_ESTADO.IDLE}</span>
             </span>
           </div>
 

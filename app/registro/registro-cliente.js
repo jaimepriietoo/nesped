@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { FondoNesped } from "@/components/nucleo/fondo";
 import { useSearchParams } from "next/navigation";
 import { Inter } from "next/font/google";
 import "@/components/v3/v3.css";
@@ -9,9 +10,6 @@ import { LONGITUD_MINIMA_PASSWORD } from "@/lib/server/passwords";
 import { PLANES } from "@/lib/planes";
 
 const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600"], display: "swap" });
-
-const VIDEO_SRC =
-  "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260809_012548_ef22562c-c0ae-4816-ad9d-f8922af4e6a7.mp4";
 
 
 
@@ -38,6 +36,13 @@ export default function Registro() {
   /* Igual que en /login: hasta que React no hidrata, un clic hace un envío
      nativo y el navegador recarga perdiendo lo escrito. */
   const [listo, setListo] = useState(false);
+
+  /* Lo mismo que en /login: el objeto dice lo que está pasando de verdad en
+     esta pantalla, no una animación de bienvenida. */
+  const estadoNucleo = yaRegistrado ? "SUCCESS"
+    : error ? "ATTENTION"
+      : enviando ? "THINKING"
+        : "IDLE";
   useEffect(() => { setListo(true); }, []);
 
   const cortaLaContrasena = password.length > 0 && password.length < LONGITUD_MINIMA_PASSWORD;
@@ -77,11 +82,7 @@ export default function Registro() {
 
   return (
     <div className={`v3-auth ${inter.className}`}>
-      <div className="v3-bg" aria-hidden="true">
-        <video autoPlay muted loop playsInline preload="none" poster="/fonts/poster.svg">
-          <source src={VIDEO_SRC} type="video/mp4" />
-        </video>
-      </div>
+      <FondoNesped estado={estadoNucleo} luz={0.85} sitio="izquierda" />
 
       <div className="v3-auth-card">
         <Link className="v3-logo" href="/" aria-label="Inicio" style={{ marginInline: "auto" }}>

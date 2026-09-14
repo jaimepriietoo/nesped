@@ -760,7 +760,10 @@ html[data-rev="1"] .v3-rev.is-in { opacity: 1; transform: none; }
   overflow: hidden;
 }
 
-.v3-auth > *:not(.v3-bg) { position: relative; z-index: 1; }
+/* El fondo queda fuera: es la capa de atrás, no contenido. Sin excluirlo, la
+   regla lo saca de su posición absoluta, pasa a ocupar sitio en el flujo y
+   empuja la tarjeta media pantalla hacia abajo. */
+.v3-auth > *:not(.v3-bg):not(.nsp-fondo) { position: relative; z-index: 1; }
 
 /* Aquí el velo cubre entero: el formulario tiene que leerse sobre el vídeo. */
 .v3-auth .v3-bg::after {
@@ -770,16 +773,35 @@ html[data-rev="1"] .v3-rev.is-in { opacity: 1; transform: none; }
   backdrop-filter: blur(2px);
 }
 
+/* La tarjeta, con el material de la marca: obsidiana con un filo de luz
+   arriba, como las membranas.
+
+   Sin `backdrop-filter`. Lo llevaba, y detrás ya no hay un vídeo sino un
+   lienzo que se repinta: desenfocar el fondo obliga al compositor a releer
+   ese lienzo en cada fotograma, que es exactamente el motivo por el que este
+   código dejó de usar `mix-blend-mode` sobre el núcleo. El velo lo da ahora
+   un degradado opaco, que cuesta cero y además deja el texto con más
+   contraste del que tenía. */
 .v3-auth-card {
+  position: relative;
   width: min(420px, 100%);
   display: flex;
   flex-direction: column;
   padding: clamp(26px, 4vw, 34px);
   border: 1px solid var(--line);
   border-radius: 26px;
-  background: rgba(10, 10, 12, 0.72);
-  backdrop-filter: blur(22px);
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+  background:
+    linear-gradient(180deg, rgba(20, 21, 24, 0.94), rgba(6, 6, 8, 0.97));
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.62);
+  overflow: hidden;
+}
+
+.v3-auth-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22) 22%, rgba(126, 227, 189, 0.4) 50%, rgba(255, 255, 255, 0.22) 78%, transparent);
 }
 
 .v3-auth-title {

@@ -13,24 +13,67 @@
   font-display: swap;
 }
 
+/* El portal ya no es un panel de administración con los colores de la marca:
+   es el interior de Nesped. El mismo material de la portada —obsidiana, filo
+   de luz, un verde que significa algo— y el mismo objeto respirando dentro.
+
+   Los cambios que llegan a las treinta pantallas de golpe van aquí, en las
+   variables, y no repetidos abajo. */
 .pv3 {
-  --bg: #000000;
+  --bg: #050506;
   --panel: rgba(255, 255, 255, 0.035);
-  --line: rgba(255, 255, 255, 0.1);
+  --line: rgba(255, 255, 255, 0.09);
+  /* El filo. En la portada la luz revela la geometría rozándola por un
+     borde; aquí hace lo mismo sobre el borde superior de cada superficie. */
+  --filo: rgba(255, 255, 255, 0.16);
   --text: #ffffff;
   --muted: #8e8e8e;
   --dim: #b8b8b8;
-  --pill-dark: #28282a;
+  --pill-dark: #1b1b1e;
   --ok: #7ee3bd;
   --warn: #fbbf24;
   --bad: #ff9b9b;
+  /* La energía. Se usa donde significa algo —lo que Nesped ha deducido, lo
+     que está haciendo ahora— y en ningún sitio más: un verde repartido por
+     toda la pantalla deja de querer decir nada. */
+  --energia: #7ee3bd;
   --font-display: "BubbledotICG-FinePos", monospace;
+  --curva: cubic-bezier(0.22, 1, 0.36, 1);
 
+  position: relative;
   min-height: 100vh;
   background: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
 }
+
+/* El campo.
+
+   Nesped no está sólo en el icono de la esquina: la pantalla entera está
+   dentro de él. Son dos manchas muy tenues ancladas donde vive el objeto
+   —la columna— que respiran despacio. Nivel 1 de movimiento: si te fijas lo
+   ves, y si no te fijas no te distrae del trabajo, que es a lo que se viene.
+
+   Va en un pseudoelemento fijo y no en un lienzo: cuesta cero y no compite
+   con el núcleo de verdad por la tarjeta gráfica. */
+.pv3::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(52% 44% at 8% 22%, rgba(126, 227, 189, 0.055), transparent 70%),
+    radial-gradient(46% 40% at 2% 78%, rgba(126, 227, 189, 0.032), transparent 72%);
+  animation: pv3Respira 14s ease-in-out infinite;
+}
+
+@keyframes pv3Respira {
+  0%, 100% { opacity: 0.72; transform: translate3d(0, 0, 0) scale(1); }
+  50%      { opacity: 1;    transform: translate3d(0, -1.2%, 0) scale(1.04); }
+}
+
+.pv3-layout { position: relative; z-index: 1; }
 
 .pv3 *, .pv3 *::before, .pv3 *::after { box-sizing: border-box; }
 .pv3 a { color: inherit; text-decoration: none; }
@@ -49,6 +92,22 @@
   padding: 20px 12px;
   border-right: 1px solid var(--line);
   overflow-y: auto;
+  /* La columna es el lado por el que Nesped está. Un poco más oscura que el
+     contenido y con la luz cayendo desde arriba, como el objeto. */
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.032), transparent 38%);
+}
+
+/* La espina: una línea de luz en el canto derecho de la columna que se
+   apaga hacia abajo. Es el mismo gesto del filo de las tarjetas a otra
+   escala, y es lo que hace que la columna se lea como un canto de material
+   y no como un borde de tabla. */
+.pv3-side::after {
+  content: "";
+  position: absolute;
+  inset: 0 -1px 0 auto;
+  width: 1px;
+  background: linear-gradient(180deg, var(--filo), rgba(126, 227, 189, 0.22) 26%, transparent 76%);
+  pointer-events: none;
 }
 
 @media (max-width: 1000px) {
@@ -58,7 +117,12 @@
   }
 }
 
-.pv3-brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 20px; }
+.pv3-brand {
+  display: flex; align-items: center; gap: 11px;
+  padding: 4px 8px 18px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+}
 
 .pv3-mark {
   display: grid; place-items: center; width: 36px; height: 36px;
@@ -97,8 +161,8 @@
 .pv3-nav:hover { background: rgba(255, 255, 255, 0.05); color: #fff; }
 
 .pv3-nav[data-on="true"] {
-  background: rgba(255, 255, 255, 0.09);
-  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.14);
   color: #fff;
 }
 
@@ -136,12 +200,53 @@
 
 .pv3-sub { margin: 8px 0 0; font-size: 13.5px; color: var(--muted); }
 
+/* Lo que Nesped dice de sí mismo. Deja de ser una píldora de "en directo"
+   —que es lo que pone cualquier panel— y pasa a ser un renglón de estado con
+   su frase: el rótulo para el vistazo, la frase para el porqué. */
 .pv3-live {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 7px 13px; border-radius: 999px;
-  border: 1px solid rgba(126, 227, 189, 0.3); background: rgba(126, 227, 189, 0.09);
-  font-family: var(--font-display); font-size: 11px; letter-spacing: 0.08em;
+  display: inline-flex; flex-direction: column; align-items: flex-end; gap: 4px;
+  max-width: 280px;
+  padding: 9px 14px; border-radius: 14px;
+  border: 1px solid rgba(126, 227, 189, 0.24);
+  background: linear-gradient(180deg, rgba(126, 227, 189, 0.1), rgba(126, 227, 189, 0.03));
   color: var(--ok);
+  text-align: right;
+}
+
+.pv3-live-cab {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--font-display); font-size: 11px; letter-spacing: 0.08em;
+}
+
+.pv3-live-dice {
+  font-size: 11.5px; line-height: 1.45; letter-spacing: 0;
+  color: var(--dim);
+}
+
+/* Cuando algo pide atención o algo ha fallado, el marco deja de ser verde.
+   El color es información, no decoración: si el borde sigue verde mientras
+   el texto dice que hay un problema, gana el color. */
+.pv3-live[data-estado="ATTENTION"] {
+  border-color: rgba(251, 191, 36, 0.3);
+  background: linear-gradient(180deg, rgba(251, 191, 36, 0.1), rgba(251, 191, 36, 0.03));
+  color: var(--warn);
+}
+
+.pv3-live[data-estado="ERROR"] {
+  border-color: rgba(255, 155, 155, 0.32);
+  background: linear-gradient(180deg, rgba(255, 155, 155, 0.1), rgba(255, 155, 155, 0.03));
+  color: var(--bad);
+}
+
+.pv3-live[data-estado="THINKING"] {
+  border-color: var(--line);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent);
+  color: var(--dim);
+}
+
+@media (max-width: 720px) {
+  .pv3-live { align-items: flex-start; text-align: left; max-width: none; }
+  .pv3-live-dice { display: none; }
 }
 
 .pv3-dot {
@@ -173,14 +278,41 @@
 }
 
 .pv3-card {
+  position: relative;
   padding: 18px;
   border: 1px solid var(--line); border-radius: 18px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.012));
-  transition: border-color 0.4s ease, transform 0.4s cubic-bezier(0.22,1,0.36,1);
-  animation: pv3In 0.55s cubic-bezier(0.22,1,0.36,1) both;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.008) 42%, rgba(0, 0, 0, 0.25));
+  transition: border-color 0.4s ease, transform 0.4s var(--curva);
+  animation: pv3In 0.55s var(--curva) both;
+  overflow: hidden;
 }
 
-.pv3-card:hover { border-color: rgba(255,255,255,0.24); transform: translateY(-2px); }
+/* El filo de luz del borde superior. Es lo que en la portada separa una
+   membrana de cristal ahumado de un rectángulo con un degradado encima: la
+   luz no ilumina la superficie, la roza por un canto. */
+.pv3-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--filo) 18%, var(--filo) 82%, transparent);
+  opacity: 0.8;
+  transition: opacity 0.4s ease, background 0.4s ease;
+}
+
+.pv3-card:hover { border-color: rgba(255, 255, 255, 0.2); transform: translateY(-2px); }
+.pv3-card:hover::before { opacity: 1; }
+
+/* Y cuando lo que hay dentro lo ha deducido Nesped —y no es un dato que ya
+   estaba en la tabla— el filo se enciende en verde. Es la misma regla que en
+   la portada: el color de la energía significa algo o no se usa. */
+.pv3-card[data-nesped="1"]::before {
+  background: linear-gradient(90deg, transparent, var(--energia) 20%, var(--energia) 80%, transparent);
+  opacity: 0.55;
+}
+
+.pv3-card[data-nesped="1"]:hover::before { opacity: 0.9; }
 
 .pv3-lab {
   font-family: var(--font-display); font-size: 11px; letter-spacing: 0.08em;

@@ -2,15 +2,13 @@
 import Link from "next/link";
 
 import { Suspense, useEffect, useState } from "react";
+import { FondoNesped } from "@/components/nucleo/fondo";
 import { useSearchParams } from "next/navigation";
 import { Inter } from "next/font/google";
 import "@/components/v3/v3.css";
 import { Logo } from "@/components/v3/chrome";
 
 const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600"], display: "swap" });
-
-const VIDEO_SRC =
-  "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260809_012548_ef22562c-c0ae-4816-ad9d-f8922af4e6a7.mp4";
 
 /**
  * Acceso con el mismo flujo real que /login: credenciales → 2FA por correo.
@@ -30,6 +28,27 @@ function Acceso() {
   const [debugCode, setDebugCode] = useState("");
   /* La tarjeta se retira antes de navegar. */
   const [saliendo, setSaliendo] = useState(false);
+  /* Si hay alguien escribiendo en un campo ahora mismo. */
+  const [escribiendo, setEscribiendo] = useState(false);
+
+  /*
+   * Qué hace Nesped detrás del formulario.
+   *
+   * No es una animación de bienvenida: es el mismo objeto de la portada
+   * diciendo con los mismos once estados lo que está pasando de verdad en
+   * esta pantalla. Quien haya visto la web reconoce que está comprobando algo
+   * sin leer una palabra, que es justo lo que la gramática tiene que
+   * conseguir.
+   *
+   * El orden importa: primero lo que ya se ha resuelto —acertar, fallar—,
+   * después lo que está en curso, y al final lo que sólo es esperar.
+   */
+  const estadoNucleo = saliendo ? "ACTING"
+    : error ? "ATTENTION"
+      : loading || resending ? "THINKING"
+        : escribiendo ? "LISTENING"
+          : step === "verify" ? "UNDERSTANDING"
+            : "IDLE";
 
   /*
    * Entrar al portal, con la transición entre medias.
@@ -162,11 +181,7 @@ function Acceso() {
 
   return (
     <div className="v3-auth" data-saliendo={saliendo ? "1" : undefined}>
-      <div className="v3-bg" aria-hidden="true">
-        <video autoPlay muted loop playsInline preload="none" poster="/fonts/poster.svg">
-          <source src={VIDEO_SRC} type="video/mp4" />
-        </video>
-      </div>
+      <FondoNesped estado={estadoNucleo} luz={saliendo ? 1 : 0.92} sitio="izquierda" />
 
       <div className="v3-auth-card">
         <Link className="v3-logo" href="/" aria-label="Inicio" style={{ marginInline: "auto" }}>
@@ -194,6 +209,8 @@ function Acceso() {
                 placeholder="tu@empresa.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                onFocus={() => setEscribiendo(true)}
+                onBlur={() => setEscribiendo(false)}
                 required
               />
             </div>
@@ -208,6 +225,8 @@ function Acceso() {
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onFocus={() => setEscribiendo(true)}
+                onBlur={() => setEscribiendo(false)}
                 required
               />
             </div>
@@ -228,6 +247,8 @@ function Acceso() {
                 placeholder="000000"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
+                onFocus={() => setEscribiendo(true)}
+                onBlur={() => setEscribiendo(false)}
                 required
               />
             </div>

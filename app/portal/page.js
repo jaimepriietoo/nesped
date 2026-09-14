@@ -684,7 +684,7 @@ function Historial({ items, campo, vacio }) {
  * Un número que no se puede discutir no se usa para decidir, y el objetivo
  * aquí es que alguien decida a quién llama esta tarde.
  */
-function Inteligencia({ datos, estado = "IDLE" }) {
+function Inteligencia({ datos }) {
   /* El armazón ya enseña su esqueleto mientras carga; esto sólo cubre el caso
      de que la llamada falle y no llegue nada. */
   if (!datos) return <Vacio>No hemos podido leer el estado de tus datos.</Vacio>;
@@ -696,22 +696,6 @@ function Inteligencia({ datos, estado = "IDLE" }) {
 
   return (
     <div className="pv3-view">
-      {/* Nesped, del tamaño al que se le ve la estructura.
-
-          En la barra lateral vive a treinta y ocho píxeles, que es una marca:
-          a ese tamaño no caben ni los hilos ni el relieve y se pinta en SVG.
-          Aquí pasa de los noventa y seis y se monta de verdad, con la misma
-          geometría y los mismos once estados de la portada. Va en esta
-          pantalla y no en todas: es donde Nesped afirma cosas, así que es
-          donde tiene sentido verle pensar. */}
-      <div className="pv3-nucleo">
-        <NucleoMarca estado={estado} tam={116} etiqueta={`Nesped: ${TEXTO_ESTADO[estado] || "en directo"}`} />
-        <div className="pv3-nucleo-dice">
-          <b>{TEXTO_ESTADO[estado] || "EN DIRECTO"}</b>
-          <span>{FRASE_ESTADO[estado] || FRASE_ESTADO.IDLE}</span>
-        </div>
-      </div>
-
       <div className="iq-cabecera">
         <div>
           <h1 className="iq-titular">
@@ -2932,7 +2916,7 @@ export default function PortalV3() {
     }
 
     switch (vista) {
-      case "inteligencia": return <Inteligencia datos={datosVista} estado={estadoNucleo} />;
+      case "inteligencia": return <Inteligencia datos={datosVista} />;
       case "agentes": return <Agentes datos={datosVista} onCambiado={() => recargarSeccion("agentes")} />;
       case "resumen": return <Resumen datos={datos} />;
       case "leads": return <Leads datos={datos} onRecargar={recargar} />;
@@ -3034,16 +3018,33 @@ export default function PortalV3() {
                 dice lo que está pasando de verdad, y lo dice dos veces: en
                 texto para quien lee, y en el núcleo de la izquierda para quien
                 lo capta de un vistazo. */}
-            {/* Nesped, diciendo lo que hace. Dos veces y a propósito: el
-                punto y el rótulo para quien lo capta de un vistazo, y la
-                frase para quien quiere saber por qué. Antes ponía "EN
-                DIRECTO" pasara lo que pasara, que es lo mismo que no decir
-                nada. */}
+            {/* Nesped, en todas las pantallas.
+
+                Vive en la cabecera del armazón y no dentro de cada vista, y
+                eso no es comodidad: la cabecera se pinta una vez y sobrevive
+                al cambio de pantalla, así que hay UN contexto de WebGL para
+                las catorce. Metiéndolo en cada vista habría uno montándose y
+                soltándose en cada clic del menú, que es la forma más cara
+                posible de enseñar el mismo objeto.
+
+                A 104 píxeles pasa del mínimo para marcharlo de verdad: es la
+                Apertura Neural con su geometría y sus once estados, no un
+                icono. Y dice lo que pasa dos veces —el rótulo para el
+                vistazo, la frase para el porqué— porque una gramática que
+                sólo existe como movimiento no existe para quien no la ha
+                visto nunca. */}
             <span className="pv3-live" data-estado={estadoNucleo} role="status">
-              <span className="pv3-live-cab">
-                <span className="pv3-dot" /> {TEXTO_ESTADO[estadoNucleo]}
+              <NucleoMarca
+                estado={estadoNucleo}
+                tam={104}
+                etiqueta={`Nesped: ${TEXTO_ESTADO[estadoNucleo] || "en directo"}`}
+              />
+              <span className="pv3-live-texto">
+                <span className="pv3-live-cab">
+                  <span className="pv3-dot" /> {TEXTO_ESTADO[estadoNucleo]}
+                </span>
+                <span className="pv3-live-dice">{FRASE_ESTADO[estadoNucleo] || FRASE_ESTADO.IDLE}</span>
               </span>
-              <span className="pv3-live-dice">{FRASE_ESTADO[estadoNucleo] || FRASE_ESTADO.IDLE}</span>
             </span>
           </div>
 

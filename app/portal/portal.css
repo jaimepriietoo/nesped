@@ -203,14 +203,24 @@
 /* Lo que Nesped dice de sí mismo. Deja de ser una píldora de "en directo"
    —que es lo que pone cualquier panel— y pasa a ser un renglón de estado con
    su frase: el rótulo para el vistazo, la frase para el porqué. */
+/* Nesped en la cabecera: el objeto y lo que dice, en todas las pantallas.
+
+   El marco es discreto a propósito. Lo que tiene que llamar la atención es
+   el objeto —que se mueve— y el color cuando hay algo que mirar; un recuadro
+   verde encendido alrededor, con el núcleo dentro, serían dos cosas
+   compitiendo por lo mismo. */
 .pv3-live {
-  display: inline-flex; flex-direction: column; align-items: flex-end; gap: 4px;
-  max-width: 280px;
-  padding: 9px 14px; border-radius: 14px;
-  border: 1px solid rgba(126, 227, 189, 0.24);
-  background: linear-gradient(180deg, rgba(126, 227, 189, 0.1), rgba(126, 227, 189, 0.03));
+  display: inline-flex; align-items: center; gap: 14px;
+  max-width: 420px;
+  padding: 10px 16px 10px 10px; border-radius: 18px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.2));
   color: var(--ok);
-  text-align: right;
+}
+
+.pv3-live-texto {
+  display: inline-flex; flex-direction: column; gap: 5px;
+  min-width: 0;
 }
 
 .pv3-live-cab {
@@ -226,26 +236,15 @@
 /* Cuando algo pide atención o algo ha fallado, el marco deja de ser verde.
    El color es información, no decoración: si el borde sigue verde mientras
    el texto dice que hay un problema, gana el color. */
-.pv3-live[data-estado="ATTENTION"] {
-  border-color: rgba(251, 191, 36, 0.3);
-  background: linear-gradient(180deg, rgba(251, 191, 36, 0.1), rgba(251, 191, 36, 0.03));
-  color: var(--warn);
-}
+.pv3-live[data-estado="ATTENTION"] { border-color: rgba(251, 191, 36, 0.28); color: var(--warn); }
+.pv3-live[data-estado="ERROR"] { border-color: rgba(255, 155, 155, 0.3); color: var(--bad); }
+.pv3-live[data-estado="THINKING"] { color: var(--dim); }
 
-.pv3-live[data-estado="ERROR"] {
-  border-color: rgba(255, 155, 155, 0.32);
-  background: linear-gradient(180deg, rgba(255, 155, 155, 0.1), rgba(255, 155, 155, 0.03));
-  color: var(--bad);
-}
-
-.pv3-live[data-estado="THINKING"] {
-  border-color: var(--line);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent);
-  color: var(--dim);
-}
-
-@media (max-width: 720px) {
-  .pv3-live { align-items: flex-start; text-align: left; max-width: none; }
+@media (max-width: 860px) {
+  /* En estrecho la cabecera ya va apretada: queda el objeto y el rótulo, y
+     la frase se cae. El objeto no se quita —es lo que se pidió: en todas las
+     pantallas— pero sí se le deja sitio. */
+  .pv3-live { max-width: none; }
   .pv3-live-dice { display: none; }
 }
 
@@ -1072,41 +1071,6 @@
 }
 
 .pv3-nav[data-on="true"]::after { transform: scaleY(1); }
-
-/* ── Nesped dentro del producto ─────────────────────────────────────────
-   No es un adorno en la esquina: va en Inteligencia, que es la pantalla
-   donde Nesped dice lo que ha deducido, y dice con el mismo lenguaje de la
-   portada si está pensando, si algo va mal o si no ha podido. */
-.pv3-nucleo {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  padding: 18px 20px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent);
-}
-
-.pv3-nucleo-dice { min-width: 0; }
-
-.pv3-nucleo-dice b {
-  display: block;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-
-.pv3-nucleo-dice span {
-  display: block;
-  margin-top: 4px;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: var(--dim);
-}
-
-@media (max-width: 720px) {
-  .pv3-nucleo { gap: 14px; padding: 14px; }
-}
 
 /* Con movimiento reducido no hay entrada ni cascada: el contenido está, y
    estaba desde el principio. El bloque general del fichero ya apaga todas

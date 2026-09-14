@@ -103,6 +103,19 @@ const TEXTO_ESTADO = {
   SPEAKING: "EN LLAMADA",
 };
 
+/* Lo mismo en una frase, para cuando hay sitio para decirlo entero. Es el
+   texto que acompaña al núcleo grande de Inteligencia: el objeto ya lo dice
+   moviéndose, y aquí se dice también con palabras, que es lo que hace que la
+   gramática se aprenda sin manual. */
+const FRASE_ESTADO = {
+  IDLE: "Escuchando. Nada pendiente en este momento.",
+  THINKING: "Leyendo tus datos para poder afirmar algo.",
+  ATTENTION: "Hay algo abierto que conviene que mires.",
+  ERROR: "No he podido leer tus datos. Vuelvo a intentarlo solo.",
+  ACTING: "Ejecutando lo que había que hacer.",
+  SPEAKING: "Atendiendo una llamada ahora mismo.",
+};
+
 function suscripcionAlCorriente(cliente) {
   const estado = String(cliente?.billing_status || "").toLowerCase().trim();
   if (!estado) return true;
@@ -670,7 +683,7 @@ function Historial({ items, campo, vacio }) {
  * Un número que no se puede discutir no se usa para decidir, y el objetivo
  * aquí es que alguien decida a quién llama esta tarde.
  */
-function Inteligencia({ datos }) {
+function Inteligencia({ datos, estado = "IDLE" }) {
   /* El armazón ya enseña su esqueleto mientras carga; esto sólo cubre el caso
      de que la llamada falle y no llegue nada. */
   if (!datos) return <Vacio>No hemos podido leer el estado de tus datos.</Vacio>;
@@ -682,6 +695,22 @@ function Inteligencia({ datos }) {
 
   return (
     <div className="pv3-view">
+      {/* Nesped, del tamaño al que se le ve la estructura.
+
+          En la barra lateral vive a treinta y ocho píxeles, que es una marca:
+          a ese tamaño no caben ni los hilos ni el relieve y se pinta en SVG.
+          Aquí pasa de los noventa y seis y se monta de verdad, con la misma
+          geometría y los mismos once estados de la portada. Va en esta
+          pantalla y no en todas: es donde Nesped afirma cosas, así que es
+          donde tiene sentido verle pensar. */}
+      <div className="pv3-nucleo">
+        <NucleoMarca estado={estado} tam={116} etiqueta={`Nesped: ${TEXTO_ESTADO[estado] || "en directo"}`} />
+        <div className="pv3-nucleo-dice">
+          <b>{TEXTO_ESTADO[estado] || "EN DIRECTO"}</b>
+          <span>{FRASE_ESTADO[estado] || FRASE_ESTADO.IDLE}</span>
+        </div>
+      </div>
+
       <div className="iq-cabecera">
         <div>
           <h1 className="iq-titular">
@@ -2902,7 +2931,7 @@ export default function PortalV3() {
     }
 
     switch (vista) {
-      case "inteligencia": return <Inteligencia datos={datosVista} />;
+      case "inteligencia": return <Inteligencia datos={datosVista} estado={estadoNucleo} />;
       case "agentes": return <Agentes datos={datosVista} onCambiado={() => recargarSeccion("agentes")} />;
       case "resumen": return <Resumen datos={datos} />;
       case "leads": return <Leads datos={datos} onRecargar={recargar} />;
@@ -2954,14 +2983,15 @@ export default function PortalV3() {
             </span>
           </div>
 
-          {VISTAS.map((v) =>
+          {VISTAS.map((v, i) =>
             v.grupo ? (
-              <div key={v.grupo} className="pv3-group">{v.grupo.toUpperCase()}</div>
+              <div key={v.grupo} className="pv3-group" style={{ "--i": i }}>{v.grupo.toUpperCase()}</div>
             ) : (
               <button
                 key={v.id}
                 type="button"
                 className="pv3-nav"
+                style={{ "--i": i }}
                 data-on={vista === v.id}
                 data-plan={vistaIncluida(v.id, plan) ? undefined : "fuera"}
                 onClick={() => abrir(v.id)}
@@ -3008,7 +3038,7 @@ export default function PortalV3() {
           ) : !datos ? (
             <div className="pv3-grid" data-c="4">{[0, 1, 2, 3].map((i) => <div key={i} className="pv3-skel" />)}</div>
           ) : (
-            <Aislante vista={vista}>{contenido()}</Aislante>
+            <Aislante key={vista} vista={vista}>{contenido()}</Aislante>
           )}
         </main>
       </div>

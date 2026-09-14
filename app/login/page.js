@@ -28,6 +28,26 @@ function Acceso() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [debugCode, setDebugCode] = useState("");
+  /* La tarjeta se retira antes de navegar. */
+  const [saliendo, setSaliendo] = useState(false);
+
+  /*
+   * Entrar al portal, con la transición entre medias.
+   *
+   * Son dos páginas distintas y una navegación de verdad, así que no hay
+   * forma de encadenar una animación de una a otra. Lo que sí se puede es que
+   * las dos mitades se lean como un mismo movimiento: aquí la tarjeta se
+   * retira hacia atrás, y al otro lado el portal se construye por orden
+   * —columna, cabecera, contenido—. Entre las dos no se ve un salto en blanco.
+   *
+   * Los 260 ms son el largo de la salida. Si por lo que fuera no llegara a
+   * dispararse el temporizador, la sesión ya está abierta: lo peor que pasa
+   * es que haya que tocar el enlace del portal.
+   */
+  function entrar(destino) {
+    setSaliendo(true);
+    setTimeout(() => window.location.replace(destino), 260);
+  }
 
   /**
    * Hasta que React no ha hidratado, el onSubmit no existe: un clic ahí hace
@@ -75,7 +95,8 @@ function Acceso() {
         return;
       }
 
-      window.location.replace(json.redirectTo || "/portal");
+      entrar(json.redirectTo || "/portal");
+      return;
     } catch {
       setError("Error iniciando sesión");
     } finally {
@@ -103,7 +124,8 @@ function Acceso() {
         return;
       }
 
-      window.location.replace(json.redirectTo || "/portal");
+      entrar(json.redirectTo || "/portal");
+      return;
     } catch {
       setError("Error verificando el código");
     } finally {
@@ -139,7 +161,7 @@ function Acceso() {
   }
 
   return (
-    <div className="v3-auth">
+    <div className="v3-auth" data-saliendo={saliendo ? "1" : undefined}>
       <div className="v3-bg" aria-hidden="true">
         <video autoPlay muted loop playsInline preload="none" poster="/fonts/poster.svg">
           <source src={VIDEO_SRC} type="video/mp4" />

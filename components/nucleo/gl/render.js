@@ -48,6 +48,12 @@ export class NucleoRender {
     this.nivel = opciones.nivel || "alta";
     this.vivo = false;
     this.visible = true;
+    /* Quien monta la escena puede apagarla: la portada lo hace al terminar la
+       película, porque a partir de ahí Nesped ya no está en pantalla y seguir
+       marchando rayos por debajo de un objeto invisible es batería a cambio
+       de nada. Es distinto de `visible`, que lo lleva el observador de
+       intersección y no sabe nada de la narración. */
+    this.pausado = false;
     this.raf = 0;
     this.ultimo = 0;
     this.muestras = [];
@@ -218,7 +224,7 @@ export class NucleoRender {
        o bajo tres pantallazos de scroll es calor y batería a cambio de nada.
        El estado sigue avanzando —cuando vuelva no puede aparecer congelado—
        pero no se pinta. */
-    if (!this.visible || document.hidden) {
+    if (!this.visible || this.pausado || document.hidden) {
       if (this.estado) this.estado.avanzar(dt);
       return;
     }

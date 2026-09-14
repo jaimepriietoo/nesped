@@ -1092,9 +1092,18 @@ html[data-rev="1"] .v3-rev.is-in { opacity: 1; transform: none; }
 .v3-escucha-info { flex: 1; min-width: 0; }
 .v3-escucha-tiempo { font-family: var(--font-display); font-size: 12px; color: var(--v3-muted); white-space: nowrap; }
 
+/* La onda de la señal. Ocupa el sitio que antes ocupaba el aire entre la
+   cabecera del reproductor y la barra de avance: no añade altura, la llena. */
+.v3-escucha-onda {
+  display: block;
+  width: 100%;
+  height: 56px;
+  margin-top: 14px;
+}
+
 .v3-escucha-barra {
   height: 3px;
-  margin-top: 18px;
+  margin-top: 10px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.1);
   overflow: hidden;
@@ -1469,3 +1478,140 @@ html[data-rev="1"] .v3-rev.is-in { opacity: 1; transform: none; }
 .v3-tabla-planes td[data-hi="1"] { background: rgba(255, 255, 255, 0.035); }
 .v3-si { color: hsl(var(--acento)); }
 .v3-no { color: rgba(255, 255, 255, 0.22); }
+
+/* =========================================================================
+   Cifras y microinteracciones
+
+   Nivel uno de movimiento: dos, tres, cinco píxeles. Nada de aquí llama la
+   atención por sí solo; lo que hace es que la página conteste cuando la
+   tocas, que es la diferencia entre una web y una captura de pantalla.
+   ========================================================================= */
+
+.v3-cifras {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(14px, 2.2vw, 30px);
+  margin-top: 38px;
+  padding-top: 26px;
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 720px) {
+  .v3-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.v3-cifra b {
+  display: block;
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 3.4vw, 2.5rem);
+  font-weight: 400;
+  color: #fff;
+  letter-spacing: -0.01em;
+  /* Las cifras usan cifras de ancho fijo: sin esto, al contar, el número
+     salta de anchura en cada fotograma y la fila entera baila. */
+  font-variant-numeric: tabular-nums;
+}
+
+.v3-cifra span {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+
+/* ── Respuesta magnética ─────────────────────────────────────────────────
+   Tres píxeles hacia arriba y un punto de luz en el borde. Se nota que
+   contesta; no se nota que se mueve. */
+.v3 .v3-btn {
+  transition:
+    transform 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.32s ease,
+    background 0.25s ease,
+    border-color 0.25s ease;
+}
+
+.v3 .v3-btn:hover { transform: translateY(-3px); }
+.v3 .v3-btn:active { transform: translateY(-1px); }
+
+.v3 .v3-btn--white:hover { box-shadow: 0 10px 30px rgba(255, 255, 255, 0.14); }
+
+/* ── Tarjetas ────────────────────────────────────────────────────────────
+   Sólo el borde y una sombra. Nada de escalar la tarjeta: escalar reescribe
+   el texto de dentro y se ve el reencuadre de las letras. */
+.v3 .v3-card {
+  transition: border-color 0.35s ease, box-shadow 0.35s ease, transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.v3 .v3-card:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+  transform: translateY(-2px);
+}
+
+/* El plan recomendado respira: un ciclo de nueve segundos en el borde. Es el
+   único elemento de toda la parte de abajo que se mueve solo, y por eso el
+   ojo va ahí. */
+.v3-plan--hi {
+  animation: v3Recomendado 9s ease-in-out infinite;
+}
+
+@keyframes v3Recomendado {
+  0%, 100% { border-color: rgba(126, 227, 189, 0.28); }
+  50% { border-color: rgba(126, 227, 189, 0.62); }
+}
+
+/* ── Preguntas ───────────────────────────────────────────────────────────
+   El acordeón nativo abre de golpe. Animar la altura de un contenido que no
+   se conoce se hace con una fila de rejilla de 0fr a 1fr: es la única forma
+   de interpolar "hasta donde llegue" sin medir nada con JavaScript. */
+.v3 .v3-pregunta {
+  transition: border-color 0.3s ease, background 0.3s ease;
+}
+
+.v3 .v3-pregunta:hover { border-color: rgba(255, 255, 255, 0.2); }
+
+.v3 .v3-pregunta > summary + * {
+  display: grid;
+  grid-template-rows: 1fr;
+}
+
+.v3 .v3-pregunta .v3-pregunta-mas {
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.v3 .v3-pregunta[open] .v3-pregunta-mas { transform: rotate(45deg); }
+
+/* ── Chips ───────────────────────────────────────────────────────────────
+   Al pasar por encima se encienden en el verde de la marca. */
+.v3 .v3-chip {
+  transition: border-color 0.3s ease, color 0.3s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.v3 .v3-chip:hover {
+  border-color: rgba(126, 227, 189, 0.5);
+  color: #7ee3bd;
+  transform: translateY(-2px);
+}
+
+/* ── Los pasos de "cómo funciona" ────────────────────────────────────────
+   El número se ilumina al acercarse a su paso: marca por dónde vas. */
+.v3 .v3-paso .v3-paso-n {
+  transition: color 0.35s ease, transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.v3 .v3-paso:hover .v3-paso-n {
+  color: #7ee3bd;
+  transform: translateX(3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v3-plan--hi { animation: none; }
+  .v3 .v3-btn,
+  .v3 .v3-card,
+  .v3 .v3-chip,
+  .v3 .v3-paso .v3-paso-n,
+  .v3 .v3-pregunta .v3-pregunta-mas { transition: none; }
+  .v3 .v3-btn:hover,
+  .v3 .v3-card:hover,
+  .v3 .v3-chip:hover { transform: none; }
+}

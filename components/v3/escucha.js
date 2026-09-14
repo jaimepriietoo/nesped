@@ -38,9 +38,16 @@ function reloj(segundos) {
  *   Avisa de quién está hablando en cada momento. Lo usa la portada para que
  *   el núcleo escuche cuando habla el cliente y hable cuando habla el agente:
  *   el estado visual de Nesped no se inventa, sale de lo que está sonando.
+ * @param {(amplitud: number) => void} alVibrar
+ *   La fuerza de la voz en este instante, de cero a uno, sesenta veces por
+ *   segundo. Con esto los pulsos de Nesped al hablar coinciden con lo que se
+ *   oye en vez de seguir un ritmo inventado, que es toda la diferencia entre
+ *   "palpita" y "está hablando".
  */
-export function EscuchaLlamada({ alSonar }) {
+export function EscuchaLlamada({ alSonar, alVibrar }) {
   const audio = useRef(null);
+  const onda = useRef(null);
+  const analizador = useRef(null);
   const [sonando, setSonando] = useState(false);
   const [posicion, setPosicion] = useState(0);
   const [duracion, setDuracion] = useState(0);
@@ -67,11 +74,41 @@ export function EscuchaLlamada({ alSonar }) {
     };
   }, []);
 
+  /**
+   * Engancha el análisis de la señal la primera vez que alguien pulsa.
+   *
+   * No antes: crear un contexto de audio sin que nadie lo haya pedido lo deja
+   * suspendido en la mayoría de navegadores, y algunos lo cuentan como
+   * reproducción automática. Después del primer gesto arranca sin pelea.
+   */
+  function engancharAnalisis() {
+    if (analizador.current || !audio.current) return;
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    try {
+      const ctx = new Ctx();
+      const fuente = ctx.createMediaElementSource(audio.current);
+      const an = ctx.createAnalyser();
+      an.fftSize = 1024;
+      an.smoothingTimeConstant = 0.72;
+      fuente.connect(an);
+      /* Y del analizador a los altavoces: en cuanto el elemento pasa por el
+         grafo de audio, deja de sonar solo. */
+      an.connect(ctx.destination);
+      analizador.current = { ctx, an, datos: new Uint8Array(an.fftSize) };
+    } catch {
+      // Sin análisis se sigue oyendo igual: la onda es un extra, no el audio.
+      analizador.current = null;
+    }
+  }
+
   function alternar() {
     const el = audio.current;
     if (!el) return;
     if (el.paused) {
       setCargando(true);
+      engancharAnalisis();
+      analizador.current?.ctx.resume?.();
       el.play().then(() => setSonando(true)).catch(() => setCargando(false));
     } else {
       el.pause();
@@ -96,6 +133,67 @@ export function EscuchaLlamada({ alSonar }) {
   useEffect(() => {
     alSonar?.(quien);
   }, [quien, alSonar]);
+
+  /**
+   * Dibuja la onda mientras suena.
+   *
+   * Es la señal de verdad, no una animación con forma de onda: se lee la
+   * muestra del analizador en cada fotograma. Por eso los silencios son
+   * silencios y las eses se ven. Y de paso sale de aquí la fuerza de la voz
+   * que mueve los pulsos del núcleo.
+   *
+   * El bucle sólo existe mientras hay reproducción; al parar, se apaga.
+   */
+  useEffect(() => {
+    if (!sonando) {
+      alVibrar?.(-1);
+      return undefined;
+    }
+    let raf = 0;
+    const pintar = () => {
+      raf = requestAnimationFrame(pintar);
+      const lienzo = onda.current;
+      const a = analizador.current;
+      if (!lienzo || !a) return;
+
+      a.an.getByteTimeDomainData(a.datos);
+
+      const ancho = lienzo.clientWidth;
+      const alto = lienzo.clientHeight;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      if (lienzo.width !== Math.round(ancho * dpr)) {
+        lienzo.width = Math.round(ancho * dpr);
+        lienzo.height = Math.round(alto * dpr);
+      }
+
+      const g = lienzo.getContext("2d");
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      g.clearRect(0, 0, ancho, alto);
+
+      const barras = Math.max(24, Math.floor(ancho / 4));
+      const porBarra = Math.floor(a.datos.length / barras);
+      let suma = 0;
+
+      for (let i = 0; i < barras; i += 1) {
+        let pico = 0;
+        for (let k = 0; k < porBarra; k += 1) {
+          const v = Math.abs(a.datos[i * porBarra + k] - 128) / 128;
+          if (v > pico) pico = v;
+        }
+        suma += pico;
+        const h = Math.max(1, pico * alto * 0.92);
+        const x = (i / barras) * ancho;
+        /* Lo ya reproducido va en el verde de la marca y lo que queda, en
+           gris: la onda hace también de barra de avance. */
+        g.fillStyle = x / ancho <= avance / 100 ? "#7ee3bd" : "rgba(255,255,255,0.22)";
+        g.fillRect(x, (alto - h) / 2, Math.max(1, ancho / barras - 1.6), h);
+      }
+
+      alVibrar?.(Math.min(1, (suma / barras) * 2.6));
+    };
+    raf = requestAnimationFrame(pintar);
+    return () => { cancelAnimationFrame(raf); alVibrar?.(-1); };
+  }, [sonando, avance, alVibrar]);
 
   return (
     <div className="v3-escucha">
@@ -126,9 +224,14 @@ export function EscuchaLlamada({ alSonar }) {
         </div>
 
         <span className="v3-escucha-tiempo">
-          {reloj(posicion)} / {reloj(duracion || 40)}
+          {reloj(posicion)} / {reloj(duracion || 25)}
         </span>
       </div>
+
+      {/* La onda real de lo que está sonando. Cuando no suena nada, queda el
+          hueco vacío: dibujar una onda inventada en silencio sería mentir
+          justo en la pieza que existe para demostrar que esto es verdad. */}
+      <canvas ref={onda} className="v3-escucha-onda" aria-hidden="true" />
 
       <div
         className="v3-escucha-barra"

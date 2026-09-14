@@ -31,10 +31,12 @@ import "@/components/nucleo/pelicula.css";
 import { Footer, Header } from "@/components/v3/chrome";
 import { Rev } from "@/components/v3/rev";
 import { EscuchaLlamada } from "@/components/v3/escucha";
+import { Contador } from "@/components/v3/contador";
 import GUION from "@/components/v3/muestra-guion.json";
 import { NucleoVivo } from "@/components/nucleo/nucleo";
 import { direccionInicial } from "@/components/nucleo/tokens";
 import { ACTOS, CONCEPTOS, MEMORIA, TRABAJO } from "@/components/nucleo/actos";
+import { Revelado } from "@/components/nucleo/texto";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -117,10 +119,10 @@ const PREGUNTAS = [
  * números: enseña el producto trabajando.
  */
 const CIFRAS = [
-  { v: "< 1,2 s", l: "En descolgar" },
-  { v: "100 %", l: "Llamadas atendidas" },
-  { v: "24/7", l: "Sin turnos ni bajas" },
-  { v: "30 días", l: "Grabaciones guardadas" },
+  { hasta: 1.2, dec: 1, antes: "< ", despues: " s", l: "En descolgar" },
+  { hasta: 100, dec: 0, despues: " %", l: "Llamadas atendidas" },
+  { hasta: 24, dec: 0, despues: "/7", l: "Sin turnos ni bajas" },
+  { hasta: 30, dec: 0, despues: " días", l: "Grabaciones guardadas" },
 ];
 
 /* Lo que se lleva quien contrata, en tres frases. Sin tarjetas: la jerarquía
@@ -203,6 +205,33 @@ const acotar = (v) => Math.min(1, Math.max(0, v));
    y de aparecer como dependencias de un efecto que se monta una vez.
    ───────────────────────────────────────────────────────────────────── */
 
+/**
+ * Escribe una propiedad CSS sólo si ha cambiado.
+ *
+ * Parece una tontería y no lo es: cada escritura invalida el estilo de ese
+ * nodo aunque el valor sea el mismo, y aquí hay del orden de cincuenta
+ * escrituras por fotograma repartidas entre diez carteles. Con tres decimales
+ * la mayoría de los fotogramas no cambian nada en la mayoría de los nodos.
+ */
+function poner(el, nombre, valor) {
+  const clave = "__" + nombre;
+  if (el[clave] === valor) return;
+  el[clave] = valor;
+  el.style.setProperty(nombre, valor);
+}
+
+/**
+ * Las listas de nodos se buscan una vez y se guardan en el propio elemento.
+ *
+ * querySelectorAll recorre el árbol, y hacerlo en cada fotograma para los
+ * nueve renglones de la conversación y los seis conceptos es trabajo repetido
+ * sobre algo que no cambia nunca.
+ */
+function cachear(caja, clave, selector) {
+  if (!caja[clave]) caja[clave] = [...caja.querySelectorAll(selector)];
+  return caja[clave];
+}
+
 /* ── Acto III: la voz ─────────────────────────────────────────────────
    El avance del acto se convierte en segundo del audio real, y con ese
    segundo se decide qué frase suena y qué conceptos ya ha separado
@@ -215,19 +244,18 @@ function pintarVoz(carteles, p) {
   const s = acotar((p - tramo.desde) / (tramo.hasta - tramo.desde));
   const segundo = s * FIN_GUION;
 
-  const lineas = caja.querySelectorAll("[data-linea]");
-  lineas.forEach((el) => {
+  cachear(caja, "__lineas", "[data-linea]").forEach((el) => {
     const t = Number(el.dataset.linea);
     const siguiente = Number(el.dataset.hasta);
     const dentro = segundo >= t && segundo < siguiente;
     const pasada = segundo >= siguiente;
-    el.style.setProperty("--a", dentro ? "1" : pasada ? "0.34" : "0");
+    poner(el, "--a", dentro ? "1" : pasada ? "0.34" : "0");
   });
 
-  caja.querySelectorAll("[data-concepto]").forEach((el) => {
+  cachear(caja, "__conceptos", "[data-concepto]").forEach((el) => {
     const en = Number(el.dataset.concepto);
     const a = acotar((segundo - en) / 1.6);
-    el.style.setProperty("--a", a.toFixed(3));
+    poner(el, "--a", a.toFixed(3));
     const vivo = a > 0.75 ? "1" : "0";
     if (el.dataset.vivo !== vivo) el.dataset.vivo = vivo;
   });
@@ -246,15 +274,15 @@ function pintarTrabajo(carteles, direccion, proyectar, p) {
 
   pintarHaces(caja, direccion, proyectar);
 
-  caja.querySelectorAll("[data-paso]").forEach((el) => {
+  cachear(caja, "__pasos", "[data-paso]").forEach((el) => {
     const i = Number(el.dataset.paso);
     /* Cada paso ocupa su tercio y solapa un poco con el siguiente: sin
        solape la cadena se ve como tres cosas sueltas en vez de una. */
     const inicio = 0.14 + i * 0.24;
     const e = acotar((s - inicio + 0.12) / 0.16);
     const a = acotar((s - inicio) / 0.22);
-    el.style.setProperty("--e", e.toFixed(3));
-    el.style.setProperty("--a", a.toFixed(3));
+    poner(el, "--e", e.toFixed(3));
+    poner(el, "--a", a.toFixed(3));
   });
 }
 
@@ -275,43 +303,73 @@ function pintarHaces(caja, direccion, proyectar) {
   const svg = caja.querySelector(".pel-haces");
   if (!svg || !direccion) return;
 
-  const c = caja.getBoundingClientRect();
-  if (c.width < 2 || c.height < 2) return;
+  /* Las cajas de las fichas se miden cuando cambia el tamaño de la ventana,
+     no en cada fotograma.
 
-  const clave = `${Math.round(c.width)}x${Math.round(c.height)}`;
+     getBoundingClientRect() obliga al navegador a recalcular la maquetación, y
+     hacerlo cuatro veces por fotograma sobre una página de doce mil píxeles de
+     alto cuesta más que pintar la escena. Lo único que cambia entre fotogramas
+     es de dónde SALE el haz, que es matemática pura sobre la cámara. */
+  const clave = `${Math.round(window.innerWidth)}x${Math.round(window.innerHeight)}`;
   if (svg.dataset.caja !== clave) {
+    const c = caja.getBoundingClientRect();
+    if (c.width < 2 || c.height < 2) return;
     svg.dataset.caja = clave;
     svg.setAttribute("viewBox", `0 0 ${c.width} ${c.height}`);
+    svg.__ancho = c.width;
+    svg.__alto = c.height;
+    svg.__destinos = [...caja.querySelectorAll(".pel-ficha")].map((ficha) => {
+      const f = ficha.getBoundingClientRect();
+      return {
+        izq: f.left - c.left, der: f.right - c.left,
+        arr: f.top - c.top, abj: f.bottom - c.top,
+      };
+    });
+    svg.__grupos = [...svg.querySelectorAll("g[data-paso]")].map((g) => ({
+      g, rutas: [...g.querySelectorAll("path")],
+    }));
   }
 
-  const origen = proyectar(direccion, c.width, c.height);
+  const origen = proyectar(direccion, svg.__ancho, svg.__alto);
   if (!origen) return;
 
-  caja.querySelectorAll(".pel-ficha").forEach((ficha, i) => {
-    const g = svg.querySelector(`g[data-paso="${i}"]`);
-    if (!g) return;
+  svg.__destinos.forEach((f, i) => {
+    const trazo = svg.__grupos[i];
+    if (!trazo) return;
+
     /* El haz llega al punto del borde de la ficha más cercano al núcleo, no
        siempre a su lado izquierdo. En escritorio las fichas están a la derecha
        y da igual; en móvil están debajo, y apuntar al lado izquierdo dibujaba
        una curva que cruzaba media pantalla para entrar por donde no era. */
-    const f = ficha.getBoundingClientRect();
-    const izq = f.left - c.left;
-    const der = f.right - c.left;
-    const arr = f.top - c.top;
-    const abj = f.bottom - c.top;
-    const dx = Math.min(Math.max(origen.x, izq), der);
-    const dy = Math.min(Math.max(origen.y, arr), abj);
+    const dx = Math.min(Math.max(origen.x, f.izq), f.der);
+    const dy = Math.min(Math.max(origen.y, f.arr), f.abj);
 
     // Curva, no recta: la energía tiene inercia, no puntería.
+    const c1x = origen.x + (dx - origen.x) * 0.5;
+    const c2x = origen.x + (dx - origen.x) * 0.62;
     const d =
       `M${origen.x.toFixed(1)},${origen.y.toFixed(1)} ` +
-      `C${(origen.x + (dx - origen.x) * 0.5).toFixed(1)},${origen.y.toFixed(1)} ` +
-      `${(origen.x + (dx - origen.x) * 0.62).toFixed(1)},${dy.toFixed(1)} ` +
-      `${dx.toFixed(1)},${dy.toFixed(1)}`;
+      `C${c1x.toFixed(1)},${origen.y.toFixed(1)} ` +
+      `${c2x.toFixed(1)},${dy.toFixed(1)} ${dx.toFixed(1)},${dy.toFixed(1)}`;
 
-    const rutas = g.querySelectorAll("path");
-    rutas.forEach((ruta) => ruta.setAttribute("d", d));
-    g.style.setProperty("--largo", rutas[0].getTotalLength().toFixed(1));
+    if (trazo.d !== d) {
+      trazo.d = d;
+      trazo.rutas.forEach((ruta) => ruta.setAttribute("d", d));
+
+      /* Longitud aproximada de la curva, no medida.
+
+         getTotalLength() sobre un trazo que se acaba de cambiar obliga a
+         rehacer su geometría, y es lo único que hacía falta de ella: un
+         número para recortar el trazo. La media entre la cuerda y el
+         perímetro de control se queda a menos de un uno por ciento en curvas
+         tan suaves como estas, y no toca el DOM. */
+      const cuerda = Math.hypot(dx - origen.x, dy - origen.y);
+      const red =
+        Math.hypot(c1x - origen.x, 0) +
+        Math.hypot(c2x - c1x, dy - origen.y) +
+        Math.hypot(dx - c2x, 0);
+      poner(trazo.g, "--largo", ((cuerda + red) * 0.5).toFixed(1));
+    }
   });
 }
 
@@ -338,6 +396,7 @@ export default function Home() {
   const direccion = useRef(direccionInicial());
   const director = useRef(null);
   const ancladoRef = useRef("0");
+  const pieRef = useRef(null);
 
   const guardarCartel = useCallback((id) => (el) => {
     if (el) carteles.current[id] = el;
@@ -358,19 +417,30 @@ export default function Home() {
          obedecer a la cámara: a partir de ahí lo que manda son los hechos del
          producto —qué suena, qué se ha lanzado— y no el scroll. */
       const mirarFinal = () => {
-        const caja = pelicula.current?.getBoundingClientRect();
+        const caja = pelicula.current;
         if (!caja) return;
         /* Se ancla cuando la película ya ha salido de escena de verdad, no
            en el fotograma exacto en que termina. Con el umbral pegado al
            final, el último acto —el cierre, con sus botones— se pintaba sobre
            un núcleo ya recogido en una esquina. */
-        const fin = caja.bottom <= window.innerHeight * 0.5;
+        const fin = window.scrollY + window.innerHeight * 0.5 >= d.arriba + d.recorrido + window.innerHeight;
 
         /* Al asomar el pie, el núcleo se retira. Flotando sobre los enlaces
            legales no aporta nada y estorba a la vista. */
-        const pie = document.querySelector(".v3-footer");
-        const enElPie = fin && pie
-          ? pie.getBoundingClientRect().top < window.innerHeight * 0.85
+        /* Dónde empieza el pie, en coordenadas del documento.
+
+           Se mide una vez y se guarda: leer el rectángulo en cada fotograma
+           fuerza el recálculo de la maquetación de una página de doce mil
+           píxeles. Y se mide con el rectángulo más el scroll, no con
+           offsetTop, porque offsetTop es relativo al contenedor posicionado
+           más cercano —que aquí es el bloque de negocio, no el documento— y
+           con ese número el núcleo se apagaba nada más salir de la película. */
+        if (pieRef.current === null) {
+          const pie = document.querySelector(".v3-footer");
+          pieRef.current = pie ? pie.getBoundingClientRect().top + window.scrollY : 0;
+        }
+        const enElPie = fin && pieRef.current > 0
+          ? window.scrollY + window.innerHeight * 1.15 >= pieRef.current
           : false;
         const modo = !fin ? "0" : enElPie ? "fin" : "1";
         if (modo !== ancladoRef.current) {
@@ -380,7 +450,10 @@ export default function Home() {
 
         if (fin === d.congelado) return;
         d.congelado = fin;
-        if (!fin && direccion.current) direccion.current.fondo = 1;
+        if (!fin && direccion.current) {
+          direccion.current.fondo = 1;
+          direccion.current.deriva = false;
+        }
         if (fin && direccion.current) {
           const dir = direccion.current;
           dir.cam[0] = 0; dir.cam[1] = 0.06; dir.cam[2] = 3.85;
@@ -393,6 +466,8 @@ export default function Home() {
           // Sin fondo: anclado, el lienzo se mezcla con la página y cualquier
           // valor distinto de cero se ve como un rectángulo gris.
           dir.fondo = 0;
+          // Y a partir de aquí la cámara se mueve sola: ya no hay película.
+          dir.deriva = true;
           control.current?.ir("IDLE");
         }
       };
@@ -434,12 +509,20 @@ export default function Home() {
       });
 
       d.montar();
+
+      /* Si cambia el tamaño de la ventana, el pie cambia de sitio. */
+      const alRedimensionar = () => { pieRef.current = null; };
+      window.addEventListener("resize", alRedimensionar, { passive: true });
+
       director.current = d;
       /* Sólo en desarrollo: poder llevar la película a un punto concreto
          desde la consola ahorra recorrer siete pantallas de scroll cada vez
          que se ajusta un fotograma. */
       if (process.env.NODE_ENV !== "production") window.__pelicula = d;
-      soltar = () => d.desmontar();
+      soltar = () => {
+        window.removeEventListener("resize", alRedimensionar);
+        d.desmontar();
+      };
     });
 
     return () => { vivo = false; soltar(); };
@@ -489,6 +572,18 @@ export default function Home() {
     if (quien === "agente") c.ir("SPEAKING");
     else if (quien === "cliente") c.ir("LISTENING");
     else c.ir("IDLE");
+  }, []);
+
+  /**
+   * Y la fuerza de la voz, fotograma a fotograma.
+   *
+   * El shader usa este número como envolvente de los pulsos que salen del
+   * núcleo al hablar. Con él, los pulsos coinciden con lo que se oye; sin él
+   * hay un seno inventado, que se lee como palpitar y no como hablar. Se pasa
+   * -1 cuando no suena nada y el núcleo vuelve a su ritmo propio.
+   */
+  const alVibrarMuestra = useCallback((amplitud) => {
+    control.current?.oirVoz(amplitud);
   }, []);
 
   /* Mismo contrato de siempre: POST { telefono, client_id }. */
@@ -552,11 +647,11 @@ export default function Home() {
               que hay lo descubre la luz, no un fundido de opacidad. */}
           <div ref={guardarCartel("revelacion")} className="pel-cartel" data-sitio="abajo-izq" data-on="0">
             <div>
-              <h1 className="pel-h1 pel-t">
-                Convierte cada llamada
-                <br />
-                en ingreso real
-              </h1>
+              <Revelado
+                como="h1"
+                clase="pel-h1"
+                texto={"Convierte cada llamada\nen ingreso real"}
+              />
               <p className="pel-pie">
                 Voz con IA sobre {INFRAESTRUCTURA.join(" · ")}.
               </p>
@@ -571,7 +666,7 @@ export default function Home() {
           <div ref={guardarCartel("despierta")} className="pel-cartel" data-sitio="medio-der" data-on="0">
             <div>
               <span className="pel-eyebrow">ACTO I</span>
-              <p className="pel-h2 pel-t">Ya está escuchando.</p>
+              <Revelado clase="pel-h2" texto="Ya está escuchando." />
               <p className="pel-pie">
                 No hay nadie de guardia. No hay turno de noche. Cuando suena
                 el teléfono a las once y media, contesta igual que a las diez
@@ -583,14 +678,14 @@ export default function Home() {
           {/* ── II · Entra la voz ────────────────────────────────────── */}
           <div ref={guardarCartel("escucha")} className="pel-cartel" data-sitio="arriba-izq" data-on="0">
             <div>
-              <p className="pel-palabra pel-t">Escucha.</p>
+              <Revelado clase="pel-palabra" texto="Escucha." />
             </div>
           </div>
 
           {/* ── II bis · Atravesamos la apertura ─────────────────────── */}
           <div ref={guardarCartel("dentro")} className="pel-cartel" data-sitio="centro" data-on="0">
             <div>
-              <p className="pel-palabra pel-t">Comprende.</p>
+              <Revelado clase="pel-palabra" texto="Comprende." />
               <p className="pel-pie" style={{ marginInline: "auto" }}>
                 Lo que entra por el teléfono es ruido con palabras dentro.
                 Esto es lo que pasa entre esa frase y un contacto con nombre,
@@ -632,7 +727,7 @@ export default function Home() {
           {/* ── IV · Memoria ─────────────────────────────────────────── */}
           <div ref={guardarCartel("memoria")} className="pel-cartel" data-sitio="abajo-izq" data-on="0">
             <div>
-              <p className="pel-palabra pel-t">Recuerda.</p>
+              <Revelado clase="pel-palabra" texto="Recuerda." />
               <p className="pel-pie">
                 Cada interacción cambia lo que Nesped sabe después. Javier no
                 empieza de cero: ya había llamado.
@@ -650,8 +745,8 @@ export default function Home() {
           {/* ── V · Actúa ────────────────────────────────────────────── */}
           <div ref={guardarCartel("actua")} className="pel-cartel" data-sitio="arriba-izq" data-on="0">
             <div>
-              <p className="pel-h2 pel-t">No sólo responde.</p>
-              <p className="pel-palabra pel-t">Actúa.</p>
+              <Revelado clase="pel-h2" texto="No sólo responde." />
+              <Revelado clase="pel-palabra" texto="Actúa." />
             </div>
           </div>
 
@@ -697,11 +792,10 @@ export default function Home() {
           {/* ── VII · Escala ─────────────────────────────────────────── */}
           <div ref={guardarCartel("escala")} className="pel-cartel" data-sitio="arriba-centro" data-on="0">
             <div>
-              <p className="pel-h2 pel-t">
-                Una inteligencia.
-                <br />
-                Todas las conversaciones.
-              </p>
+              <Revelado
+                clase="pel-h2"
+                texto={"Una inteligencia.\nTodas las conversaciones."}
+              />
               <p className="pel-pie" style={{ marginInline: "auto" }}>
                 No son cien agentes descoordinados. Es el mismo, atendiendo a
                 la vez, con el mismo guion y la misma memoria.
@@ -718,11 +812,7 @@ export default function Home() {
             data-on="0"
           >
             <div>
-              <p className="pel-h2 pel-t">
-                Tu negocio.
-                <br />
-                Siempre activo.
-              </p>
+              <Revelado clase="pel-h2" texto={"Tu negocio.\nSiempre activo."} />
               <div className="pel-botones" style={{ justifyContent: "center" }}>
                 <a className="pel-btn pel-btn--luz" href="#demo">Escúchalo ahora</a>
                 <a className="pel-btn" href="/pricing">Ver planes</a>
@@ -787,12 +877,20 @@ export default function Home() {
             </div>
 
             <Rev d={0.18}>
-              <div className="v3-chips" style={{ marginTop: 34 }}>
-                {CIFRAS.map((c) => (
-                  <span key={c.l} className="v3-chip">
-                    <b style={{ color: "#fff", fontWeight: 500 }}>{c.v}</b>
-                    &nbsp;· {c.l}
-                  </span>
+              <div className="v3-cifras">
+                {CIFRAS.map((c, i) => (
+                  <div key={c.l} className="v3-cifra">
+                    <b>
+                      <Contador
+                        hasta={c.hasta}
+                        decimales={c.dec}
+                        antes={c.antes}
+                        despues={c.despues}
+                        retraso={i * 0.12}
+                      />
+                    </b>
+                    <span>{c.l}</span>
+                  </div>
                 ))}
               </div>
             </Rev>
@@ -805,8 +903,8 @@ export default function Home() {
               <span className="v3-eyebrow">Demo real</span>
               <h2 className="v3-h2">Escúchalo antes de creerte nada.</h2>
               <p className="v3-lede">
-                Cuarenta segundos de una llamada del agente. Ninguna de las dos
-                voces es una persona. Si prefieres oírlo en tu propio móvil,
+                Veinticinco segundos de una llamada del agente. Ninguna de las
+                dos voces es una persona. Si prefieres oírlo en tu propio móvil,
                 déjanos tu número y te llama.
               </p>
             </Rev>
@@ -815,7 +913,7 @@ export default function Home() {
                 formulario: pedir el teléfono es fricción y no todo el mundo la
                 acepta sin haber oído nada primero. */}
             <Rev d={0.06}>
-              <EscuchaLlamada alSonar={alSonarMuestra} />
+              <EscuchaLlamada alSonar={alSonarMuestra} alVibrar={alVibrarMuestra} />
             </Rev>
 
             <div className="v3-grid" data-c="2" style={{ marginTop: 22 }}>

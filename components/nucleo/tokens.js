@@ -65,10 +65,11 @@ export const MEMBRANAS = [
     // sube y baja mientras recorre su arco.
     z: 0.02,
     zAmp: 0.26,
-    // Armónicos del radio: el arco no es un círculo, respira hacia fuera.
+    /* Armónicos del radio: el arco no es un círculo, respira hacia fuera. El
+       primer número es el orden del armónico y tiene que ser 2 o 3: el shader
+       lo desarrolla con fórmulas de ángulo múltiple para no necesitar el
+       ángulo en sí, que costaría un arcotangente por paso de la marcha. */
     ondaR: [2.0, 0.085],
-    // Costillas de grosor. Son las que desaparecen sin luz rasante.
-    costillas: 9.0,
   },
   {
     // (2,3): el arco corto. Es el que rompe la simetría y hace que la
@@ -81,7 +82,6 @@ export const MEMBRANAS = [
     z: 0.46,
     zAmp: 0.30,
     ondaR: [3.0, 0.06],
-    costillas: 5.0,
   },
   {
     // (5,6): arco largo y la más gruesa. Ancla la masa hacia un lado.
@@ -93,7 +93,6 @@ export const MEMBRANAS = [
     z: -0.40,
     zAmp: 0.34,
     ondaR: [2.0, 0.11],
-    costillas: 12.0,
   },
 ];
 
@@ -271,21 +270,50 @@ export const CAMARA = {
    `sombra` es el número de pasos de la sombra proyectada, y es el gasto extra
    más caro que hay: se paga por cada píxel que toca el objeto, encima de la
    marcha principal. En calidad baja va a cero —sin sombra el objeto sigue
-   teniendo volumen porque lo dan el especular y el borde. */
+   teniendo volumen porque lo dan el especular y el borde.
+
+   `hilos` es cuántos filamentos de luz enhebran el vacío. Salen por distancia
+   mínima del rayo, así que no dependen del muestreo: lo único que cuesta uno
+   más es una distancia por paso. Catorce se leen como un manojo; siete, como
+   siete hilos.
+
+   `dprMax` baja de 2 a 1,6, y es una decisión, no un recorte. Pintar a doble
+   densidad es fuerza bruta para tapar los dientes de sierra de la silueta, y
+   esos ya no existen: la marcha calcula la cobertura del borde. Quitando un
+   tercio de los píxeles no se distingue la imagen y se recupera un tercio del
+   tiempo, que se gasta en pasos, hilos y refracción, que sí se ven.
+
+   Estos números salen de medir, no de suponer: en un M3 Pro, el encuadre más
+   caro —el objeto llenando la pantalla— se mide con el cronómetro de la propia
+   tarjeta, y el presupuesto para ir a sesenta son dieciséis milisegundos y
+   medio. Están en components/nucleo/gl/render.js, en leerReloj(). */
 export const CALIDAD = {
-  alta:  { pasos: 110, pasosVol: 56, sombra: 12, escala: 1.0,  dprMax: 2.0, halo: true,  micro: true },
-  media: { pasos: 76, pasosVol: 32, sombra: 10, escala: 0.85, dprMax: 1.5, halo: true,  micro: true },
-  baja:  { pasos: 48, pasosVol: 18, sombra: 0,  escala: 0.65, dprMax: 1.0, halo: false, micro: false },
+  alta:  { pasos: 140, pasosVol: 28, sombra: 14, hilos: 14, escala: 1.0,  dprMax: 1.6,  halo: true,  micro: true },
+  media: { pasos: 110, pasosVol: 22, sombra: 12, hilos: 11, escala: 1.0,  dprMax: 1.3,  halo: true,  micro: true },
+  baja:  { pasos: 80,  pasosVol: 14, sombra: 0,  hilos: 8,  escala: 0.82, dprMax: 1.0,  halo: true,  micro: false },
 };
 
 /* Cuándo bajar de nivel.
 
-   `muestras` es cuántos fotogramas se juntan antes de decidir por la mediana:
-   alto a propósito, porque bajar la calidad por un pico de dos fotogramas se
-   ve peor que el pico. `urgente` es la excepción: un solo fotograma por
-   encima de eso no es un pico, es un equipo que no puede, y ahí se baja al
-   momento en vez de dejar la página agarrotada mientras se reúne la muestra. */
-export const VIGILANCIA = { objetivoMs: 22, urgente: 125, muestras: 30, margen: 0.55 };
+   Lo que se mide es el HUECO entre fotogramas, no lo que tarda la función de
+   pintado: las llamadas a WebGL encolan trabajo para la tarjeta y vuelven
+   enseguida, así que cronometrarlas devuelve décimas de milisegundo aunque la
+   escena vaya a cuatro fotogramas por segundo.
+
+   `objetivoGpuMs` es el umbral cuando hay cronómetro de tarjeta: 13 ms deja
+   sitio para que el navegador componga la página y aun así entre en los 60
+   fotogramas. No se mide durante la travesía de la apertura —el plano más
+   caro de la película, y dura dos segundos—: juzgar ahí bajaba la calidad del
+   sitio entero por un pico, y de ahí no se vuelve a subir. `objetivoMs` es el de reserva, sobre el hueco entre fotogramas,
+   y va más alto porque ahí dentro está todo lo demás que hace la página.
+   `muestras` es cuántas medidas se juntan antes de decidir por la mediana,
+   suficientes para que un pico suelto no cuente y pocas para que la decisión
+   llegue en un par de segundos y no en diez. `urgente` es la excepción: un solo fotograma por encima de
+   eso no es un pico, es un equipo que no puede. Y `calentar` son los primeros
+   fotogramas que se ignoran, que llevan dentro la compilación del shader. */
+export const VIGILANCIA = {
+  objetivoGpuMs: 13, objetivoMs: 22, urgente: 125, muestras: 20, calentar: 12,
+};
 
 /**
  * Estado inicial de la cámara.
@@ -306,6 +334,13 @@ export function direccionInicial() {
     dentro: 0,        // 0 fuera, 1 dentro de la apertura
     escala: 1,        // multiplicador global de exposición
     replica: 0,       // cuántas conversaciones llegan a la vez
+    /* Si la cámara se mueve sola.
+
+       Se enciende cuando nadie la está dirigiendo: el núcleo anclado, el icono
+       del portal, el banco de pruebas. Durante la película va apagada, porque
+       allí la cámara ya tiene guion. */
+    deriva: false,
+
     /* Cuánto se pinta del fondo de la escena.
        A 1 hay una caída radial de dos milésimas: parece nada y es lo que
        permite que en la escena de apertura la refracción distorsione algo

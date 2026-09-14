@@ -150,24 +150,9 @@
   padding-top: clamp(88px, 14vh, 168px);
 }
 
-/* ── Tipografía revelada por la luz ──────────────────────────────────────
-   El texto no aparece con opacidad: lo recorre un frente de luz, igual que
-   al objeto. Es el mismo lenguaje aplicado a las letras, y por eso la
-   portada se lee como una sola cosa y no como un objeto 3D con títulos
-   encima. */
-.pel-t {
-  display: block;
-  background-image: linear-gradient(
-    97deg,
-    var(--luz) 0%,
-    var(--luz) calc(var(--s, 0) * 128% - 16%),
-    rgba(246, 241, 231, 0.07) calc(var(--s, 0) * 128% - 3%),
-    rgba(246, 241, 231, 0.07) 100%
-  );
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
+/* ── Tipografía ─────────────────────────────────────────────────────────
+   El revelado palabra a palabra vive al final de este archivo, con su propio
+   bloque. Aquí sólo están los cuerpos. */
 
 .pel-h1 {
   margin: 0;
@@ -640,4 +625,64 @@
 
   .pel-cartel[data-sitio="medio-der"] .pel-pie,
   .pel-cartel[data-sitio="abajo-der"] .pel-pie { max-width: 34ch; }
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   Tipografía revelada palabra a palabra
+
+   `--s` es por dónde va el acto; `--i`, qué número de palabra es esta; `--n`,
+   cuántas hay. De ahí sale `--propio`: el avance de ESTA palabra, que empieza
+   más tarde cuanto más a la derecha esté y dura una fracción del total.
+
+   Todo se calcula en CSS a partir de una única variable que escribe el
+   director. Si el escalonado se hiciera en JavaScript habría que tocar una
+   propiedad por palabra y por fotograma —del orden de trescientas escrituras—
+   para conseguir exactamente lo mismo.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+ /* Ojo: aquí NO se declara --s.
+
+    Lo escribe el director en el cartel y baja por herencia. Declararlo aquí
+    con valor cero lo tapa, y el texto se queda a oscuras para siempre por
+    mucho que la película avance. */
+.pel-rev {
+  --n: 1;
+}
+
+.pel-rev-linea {
+  display: block;
+}
+
+.pel-rev-pal {
+  --propio: clamp(0, calc((var(--s, 0) * (var(--n) + 2.6) - var(--i)) / 1.9), 1);
+
+  display: inline-block;
+  white-space: pre;
+  /* El frente de luz recorre cada palabra por dentro. */
+  background-image: linear-gradient(
+    97deg,
+    var(--luz) 0%,
+    var(--luz) calc(var(--propio) * 132% - 18%),
+    rgba(246, 241, 231, 0.05) calc(var(--propio) * 132% - 2%),
+    rgba(246, 241, 231, 0.05) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  /* Y sube tres píxeles mientras entra: lo justo para que se note que llega,
+     no lo suficiente para que parezca que se desliza. */
+  transform: translateY(calc((1 - var(--propio)) * 3px));
+}
+
+.pel-rev-pal::after {
+  content: " ";
+}
+
+/* Con movimiento reducido no hay escalonado ni desplazamiento: el texto está
+   puesto y se lee. */
+@media (prefers-reduced-motion: reduce) {
+  .pel-rev-pal {
+    --propio: 1;
+    transform: none;
+  }
 }

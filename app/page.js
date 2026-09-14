@@ -37,6 +37,7 @@ import { NucleoVivo } from "@/components/nucleo/nucleo";
 import { direccionInicial } from "@/components/nucleo/tokens";
 import { ACTOS, CONCEPTOS, MEMORIA, TRABAJO } from "@/components/nucleo/actos";
 import { Revelado } from "@/components/nucleo/texto";
+import { SenalContinua, pintarSenal } from "@/components/nucleo/senal";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -234,23 +235,15 @@ function cachear(caja, clave, selector) {
 
 /* ── Acto III: la voz ─────────────────────────────────────────────────
    El avance del acto se convierte en segundo del audio real, y con ese
-   segundo se decide qué frase suena y qué conceptos ya ha separado
-   Nesped. La animación no inventa una conversación: recorre la que está
-   publicada en el sitio. */
+   segundo se decide qué ha separado ya Nesped. Los conceptos no están
+   repartidos a ojo: cada uno lleva el segundo de la llamada publicada en el
+   que se dice, así que lo que se ve aparecer es lo que de verdad se oye. */
 function pintarVoz(carteles, p) {
   const caja = carteles.current.voz;
   if (!caja || caja.dataset.on !== "1") return;
   const tramo = ACTOS.voz;
   const s = acotar((p - tramo.desde) / (tramo.hasta - tramo.desde));
   const segundo = s * FIN_GUION;
-
-  cachear(caja, "__lineas", "[data-linea]").forEach((el) => {
-    const t = Number(el.dataset.linea);
-    const siguiente = Number(el.dataset.hasta);
-    const dentro = segundo >= t && segundo < siguiente;
-    const pasada = segundo >= siguiente;
-    poner(el, "--a", dentro ? "1" : pasada ? "0.34" : "0");
-  });
 
   cachear(caja, "__conceptos", "[data-concepto]").forEach((el) => {
     const en = Number(el.dataset.concepto);
@@ -383,6 +376,7 @@ export default function Home() {
 
   const raiz = useRef(null);
   const pelicula = useRef(null);
+  const senal = useRef(null);
   const escenario = useRef(null);
   const barra = useRef(null);
   const carteles = useRef({});
@@ -396,7 +390,8 @@ export default function Home() {
   const direccion = useRef(direccionInicial());
   const director = useRef(null);
   const ancladoRef = useRef("0");
-  const pieRef = useRef(null);
+  /* El temporizador que apaga el motor cuando el fundido final ha acabado. */
+  const apagar = useRef(0);
 
   const guardarCartel = useCallback((id) => (el) => {
     if (el) carteles.current[id] = el;
@@ -413,9 +408,16 @@ export default function Home() {
     import("@/components/nucleo/director").then(({ Director, avanceActo, proyectarNucleo }) => {
       if (!vivo || !pelicula.current) return;
 
-      /* Al terminar la película el núcleo se ancla en una esquina y deja de
-         obedecer a la cámara: a partir de ahí lo que manda son los hechos del
-         producto —qué suena, qué se ha lanzado— y no el scroll. */
+      /* La película termina, y Nesped termina con ella.
+
+         Antes se quedaba anclado en una esquina el resto de la página,
+         despierto, reaccionando a la muestra de llamada. Sonaba bien y no lo
+         era: por debajo seguía corriendo una marcha de rayos a pantalla
+         completa mientras se leen precios y preguntas frecuentes, y un objeto
+         flotando sobre el texto no añade nada que el texto no diga ya. Ahora
+         se disuelve con el último plano y el motor se apaga. Donde Nesped
+         vuelve a estar vivo es donde tiene sentido que lo esté: dentro del
+         portal, trabajando. */
       const mirarFinal = () => {
         const caja = pelicula.current;
         if (!caja) return;
@@ -425,24 +427,7 @@ export default function Home() {
            un núcleo ya recogido en una esquina. */
         const fin = window.scrollY + window.innerHeight * 0.5 >= d.arriba + d.recorrido + window.innerHeight;
 
-        /* Al asomar el pie, el núcleo se retira. Flotando sobre los enlaces
-           legales no aporta nada y estorba a la vista. */
-        /* Dónde empieza el pie, en coordenadas del documento.
-
-           Se mide una vez y se guarda: leer el rectángulo en cada fotograma
-           fuerza el recálculo de la maquetación de una página de doce mil
-           píxeles. Y se mide con el rectángulo más el scroll, no con
-           offsetTop, porque offsetTop es relativo al contenedor posicionado
-           más cercano —que aquí es el bloque de negocio, no el documento— y
-           con ese número el núcleo se apagaba nada más salir de la película. */
-        if (pieRef.current === null) {
-          const pie = document.querySelector(".v3-footer");
-          pieRef.current = pie ? pie.getBoundingClientRect().top + window.scrollY : 0;
-        }
-        const enElPie = fin && pieRef.current > 0
-          ? window.scrollY + window.innerHeight * 1.15 >= pieRef.current
-          : false;
-        const modo = !fin ? "0" : enElPie ? "fin" : "1";
+        const modo = fin ? "fin" : "0";
         if (modo !== ancladoRef.current) {
           ancladoRef.current = modo;
           setAnclado(modo);
@@ -450,25 +435,21 @@ export default function Home() {
 
         if (fin === d.congelado) return;
         d.congelado = fin;
-        if (!fin && direccion.current) {
-          direccion.current.fondo = 1;
-          direccion.current.deriva = false;
-        }
-        if (fin && direccion.current) {
-          const dir = direccion.current;
-          dir.cam[0] = 0; dir.cam[1] = 0.06; dir.cam[2] = 3.85;
-          dir.mira[0] = 0; dir.mira[1] = 0; dir.mira[2] = 0;
-          dir.fov = 0.58;
-          dir.revelado = 1;
-          dir.dentro = 0;
-          dir.replica = 0;
-          dir.escala = 1;
-          // Sin fondo: anclado, el lienzo se mezcla con la página y cualquier
-          // valor distinto de cero se ve como un rectángulo gris.
-          dir.fondo = 0;
-          // Y a partir de aquí la cámara se mueve sola: ya no hay película.
-          dir.deriva = true;
-          control.current?.ir("IDLE");
+
+        /* El motor se apaga cuando el fundido ha terminado, no en el mismo
+           fotograma: apagarlo antes deja el último cuadro congelado a la
+           vista mientras se desvanece, que es justo lo que se quería evitar.
+           Y al volver a entrar se enciende sin esperar a nada. */
+        clearTimeout(apagar.current);
+        const motor = control.current?.motor;
+        if (fin) {
+          apagar.current = setTimeout(() => {
+            if (ancladoRef.current === "fin" && control.current?.motor) {
+              control.current.motor.pausado = true;
+            }
+          }, 900);
+        } else if (motor) {
+          motor.pausado = false;
         }
       };
 
@@ -478,6 +459,7 @@ export default function Home() {
         buscarMaquina: () => control.current?.maquina || null,
         antesDeCada: mirarFinal,
         alAvanzar: (p) => {
+          pintarSenal(senal.current, p);
           if (barra.current) barra.current.style.setProperty("--p", p.toFixed(4));
 
           /* La cabecera se atenúa sólo en la primera pantalla. Vuelve entera
@@ -497,8 +479,12 @@ export default function Home() {
                avanzar en el mismo sentido que el scroll, y la presencia
                tiene que subir al entrar y bajar al salir. */
             const s = acotar((p - tramo.desde) / (tramo.hasta - tramo.desde));
-            el.style.setProperty("--v", v.toFixed(3));
-            el.style.setProperty("--s", s.toFixed(3));
+            poner(el, "--v", v.toFixed(3));
+            poner(el, "--s", s.toFixed(3));
+            const entrada = acotar((p - tramo.desde) / 0.022);
+            const salida = acotar((p - tramo.hasta + 0.01) / 0.023);
+            poner(el, "--entrada", entrada.toFixed(3));
+            poner(el, "--salida", salida.toFixed(3));
             const on = v > 0.02 ? "1" : "0";
             if (el.dataset.on !== on) el.dataset.on = on;
           }
@@ -510,17 +496,13 @@ export default function Home() {
 
       d.montar();
 
-      /* Si cambia el tamaño de la ventana, el pie cambia de sitio. */
-      const alRedimensionar = () => { pieRef.current = null; };
-      window.addEventListener("resize", alRedimensionar, { passive: true });
-
       director.current = d;
       /* Sólo en desarrollo: poder llevar la película a un punto concreto
          desde la consola ahorra recorrer siete pantallas de scroll cada vez
          que se ajusta un fotograma. */
       if (process.env.NODE_ENV !== "production") window.__pelicula = d;
       soltar = () => {
-        window.removeEventListener("resize", alRedimensionar);
+        clearTimeout(apagar.current);
         d.desmontar();
       };
     });
@@ -641,6 +623,7 @@ export default function Home() {
 
       <div ref={pelicula} className="pel-pelicula">
         <div className="pel-plano">
+          <SenalContinua referencia={senal} />
 
           {/* ── 00 · La oscuridad ────────────────────────────────────────
               No hay hero. Durante un instante parece que no hay nada, y lo
@@ -694,26 +677,20 @@ export default function Home() {
             </div>
           </div>
 
-          {/* ── III · La voz se convierte en significado ─────────────── */}
+          {/* ── III · La voz se convierte en significado ───────────────
+              Aquí no se reproduce la conversación: eso está más abajo, con el
+              audio de verdad y se puede escuchar. Lo que pasa en este plano es
+              lo otro, lo que no se oye —que de una frase suelta salgan los
+              datos con los que se trabaja después—, y con la transcripción
+              delante nadie lo miraba: se ponía a leer. */}
           <div ref={guardarCartel("voz")} className="pel-cartel" data-sitio="abajo-izq" data-on="0">
             <div>
-              <span className="pel-eyebrow">LLAMADA REAL · NINGUNA DE LAS DOS VOCES ES UNA PERSONA</span>
-              <div className="pel-voz">
-                {GUION.map((l, i) => (
-                  <div
-                    key={l.t}
-                    className="pel-linea"
-                    data-quien={l.quien}
-                    data-linea={l.t}
-                    data-hasta={GUION[i + 1] ? GUION[i + 1].t : FIN_GUION}
-                  >
-                    <span className="pel-quien">
-                      {l.quien === "agente" ? "NESPED" : "CLIENTE"}
-                    </span>
-                    <span className="pel-dice">{l.texto}</span>
-                  </div>
-                ))}
-              </div>
+              <Revelado clase="pel-h2" texto="No oye palabras." />
+              <Revelado clase="pel-palabra" texto="Entiende." />
+              <p className="pel-pie">
+                De una sola frase salen el qué, el dónde, la prisa y el nombre.
+                Sin formularios y sin que nadie los teclee después.
+              </p>
               <div className="pel-conceptos">
                 {CONCEPTOS.map((c) => (
                   <span key={c.t} className="pel-concepto" data-concepto={c.en} data-vivo="0">

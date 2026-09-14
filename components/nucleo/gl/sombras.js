@@ -11,7 +11,7 @@
    cambia allí, no aquí.
    ========================================================================= */
 
-import { COLOR, MEMBRANAS, VACIO } from "../tokens";
+import { COLOR, MEMBRANAS, MOVIMIENTO, VACIO } from "../tokens.js";
 
 const f = (n) => {
   const s = Number(n).toFixed(5);
@@ -56,6 +56,7 @@ out vec4 salida;
 
 uniform vec2  uRes;
 uniform float uTiempo;
+uniform vec4 uArticula[3];
 
 /* Cámara. La landing la mueve como una cámara de cine; el portal la deja
    quieta. Se pasan posición y objetivo en vez de una matriz porque lo único
@@ -163,6 +164,9 @@ float ruido3(vec3 x) {
 float hoja(vec3 p, float cCen, float sCen, float cosMedio, float senMedio,
            float medioAng, float radio, float grosor, vec2 inclina,
            float z0, float zAmp, float ondaAmp, int ondaN, float abre, float idx) {
+  vec4 articulacion = uArticula[int(idx)];
+  p.xy *= mat2(articulacion.x, -articulacion.y, articulacion.y, articulacion.x);
+  p.z -= articulacion.w;
   p.yz *= giro(inclina.x);
   p.xz *= giro(inclina.y);
 
@@ -203,7 +207,7 @@ float hoja(vec3 p, float cCen, float sCen, float cosMedio, float senMedio,
   /* La respiración no escala el objeto: recorre el arco como una onda. Una
      escala uniforme se lee como "zoom"; esto se lee como que algo grande
      coge aire. */
-  if (uRespira > 0.001) rr += sin(uFase + idx * 2.1) * (0.55 + 0.45 * cp) * 0.016 * uRespira;
+  rr += articulacion.z * (0.55 + 0.45 * cp);
 
   vec3 c = vec3(cp * rr, sp * rr, zz);
 
@@ -821,7 +825,7 @@ vec3 sombrear(vec3 p, vec3 n, vec3 rd) {
      brillos se quedan clavados en el mismo sitio y lo que era una pieza con
      material pasa a ser una imagen fija. Con ella, los reflejos recorren las
      hojas despacio y el objeto sigue vivo aunque no pase nada. */
-  float barrido = uBarrido + uTiempo * 0.035;
+  float barrido = uBarrido + sin(uTiempo * 0.38) * ${f(MOVIMIENTO.luz)};
 
   vec3 lClave  = normalize(vec3(cos(barrido) * 0.9, 0.78, sin(barrido) * 0.9 + 0.4));
   vec3 lContra = normalize(vec3(-cos(barrido) * 0.8, 0.2, -0.85));
@@ -845,7 +849,7 @@ vec3 sombrear(vec3 p, vec3 n, vec3 rd) {
   /* Capa 1 — el barniz. Muy estrecho y estirado a lo largo de la hoja. Es el
      filo del brillo, el que dibuja por dónde va la superficie. */
   float barniz = wardAniso(n, lClave, v, tg, bt, 0.035, 0.22);
-  col += C_LUZ * clamp(barniz, 0.0, 20.0) * 0.048 * sombra * uRevelado;
+  col += C_LUZ * clamp(barniz, 0.0, 20.0) * 0.062 * sombra * uRevelado;
 
   /* Capa 2 — el satinado. Ancho y débil: es el que hace que la membrana se
      despegue del fondo en las zonas donde no le da la clave de lleno. */
@@ -1167,7 +1171,7 @@ void main() {
          —tapado por la membrana, o fuera de la esfera— sólo se ve media
          campana. */
       float entero = smoothstep(0.0, 0.09, min(tm - t0, t1 - tm)) * 0.5 + 0.5;
-      float vaina = exp(-dm * 90.0) * sqrt(3.14159 / (90.0 * curva)) * 0.075 * entero;
+      float vaina = exp(-dm * 90.0) * sqrt(3.14159 / (90.0 * curva)) * 0.038 * entero;
 
       acum += tono * pesoHilos(pm) * vaina * velo(pm) * 1.55;
 
@@ -1177,7 +1181,8 @@ void main() {
       float suyo = 0.62 + 0.38 * sin(fj * 2.4 + uTiempo * 0.3);
       float hondo = exp(-max(0.0, tm - length(uCam)) * 0.55);
 
-      float apriete = mix(2600.0, 1700.0, clamp(uDentro, 0.0, 1.0));
+      float pixel = max(0.0001, tm * uFov / uRes.y);
+      float apriete = min(mix(${f(MOVIMIENTO.filoExterior)}, ${f(MOVIMIENTO.filoInterior)}, clamp(uDentro, 0.0, 1.0)), 1.0 / (pixel * pixel));
       acum += tono * exp(-dm * apriete) * brilloHilo * suyo * hondo * velo(pm);
     }
   }
@@ -1251,6 +1256,7 @@ out vec4 salida;
 uniform sampler2D uBase;
 uniform sampler2D uHalo;
 uniform float uFuerzaHalo;
+uniform float uNitidez;
 uniform float uFondo;
 uniform vec2 uRes;
 
@@ -1262,7 +1268,17 @@ vec3 tono(vec3 x) {
 }
 
 void main() {
-  vec3 col = texture(uBase, uv).rgb + texture(uHalo, uv).rgb * uFuerzaHalo;
+  vec3 base = texture(uBase, uv).rgb;
+  vec2 texel = 1.0 / vec2(textureSize(uBase, 0));
+  vec3 a = texture(uBase, uv + vec2(texel.x, 0.0)).rgb;
+  vec3 b = texture(uBase, uv - vec2(texel.x, 0.0)).rgb;
+  vec3 c = texture(uBase, uv + vec2(0.0, texel.y)).rgb;
+  vec3 d = texture(uBase, uv - vec2(0.0, texel.y)).rgb;
+  // Reconstrucción acotada: recupera el filo sin halos sobre el negro.
+  vec3 minimo = min(base, min(min(a, b), min(c, d)));
+  vec3 maximo = max(base, max(max(a, b), max(c, d)));
+  base = clamp(base + (base - (a + b + c + d) * 0.25) * uNitidez, minimo, maximo);
+  vec3 col = base + texture(uHalo, uv).rgb * uFuerzaHalo;
   col = tono(col);
 
   /* De lineal a pantalla.

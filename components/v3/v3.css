@@ -1615,3 +1615,65 @@ html[data-rev="1"] .v3-rev.is-in { opacity: 1; transform: none; }
   .v3 .v3-card:hover,
   .v3 .v3-chip:hover { transform: none; }
 }
+
+/* ═════════════════════════════════════════════════════════════════════════
+   Entrar al área de clientes
+
+   Son dos páginas y una navegación de verdad, así que no hay forma de
+   encadenar una animación de la una a la otra. Lo que sí se puede es que las
+   dos mitades se lean como un mismo movimiento: aquí la tarjeta llega desde
+   abajo y, al acertar la contraseña, se retira hacia atrás; al otro lado el
+   portal se construye por orden. Entre las dos no queda un salto en blanco.
+
+   Sólo `transform` y `opacity`: el compositor las resuelve sin volver a
+   maquetar ni a pintar, y por eso esto va a la tasa del monitor y no a la
+   que le deje el resto de la página.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+.v3-auth-card {
+  animation: v3AuthEntra 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes v3AuthEntra {
+  from { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Los campos, en cascada corta. Es lo que convierte "ha aparecido un
+   formulario" en "te está pidiendo esto, y después esto". */
+.v3-auth-form > * {
+  animation: v3AuthCampo 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.v3-auth-form > *:nth-child(1) { animation-delay: 0.1s; }
+.v3-auth-form > *:nth-child(2) { animation-delay: 0.15s; }
+.v3-auth-form > *:nth-child(3) { animation-delay: 0.2s; }
+.v3-auth-form > *:nth-child(n + 4) { animation-delay: 0.24s; }
+
+@keyframes v3AuthCampo {
+  from { opacity: 0; transform: translate3d(0, 8px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* La salida. Hacia atrás y no hacia un lado: hacia un lado se lee como
+   "siguiente pantalla" y esto no es la siguiente pantalla, es entrar. */
+.v3-auth[data-saliendo="1"] .v3-auth-card {
+  animation: v3AuthSale 0.26s cubic-bezier(0.55, 0, 0.9, 0.55) both;
+}
+
+@keyframes v3AuthSale {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translate3d(0, -8px, 0) scale(0.97); }
+}
+
+.v3-auth[data-saliendo="1"] .v3-bg { opacity: 0; transition: opacity 0.26s ease; }
+
+@media (prefers-reduced-motion: reduce) {
+  .v3-auth-card,
+  .v3-auth-form > *,
+  .v3-auth[data-saliendo="1"] .v3-auth-card {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}

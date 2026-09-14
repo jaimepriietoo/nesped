@@ -827,3 +827,168 @@
   font-size: 11px; padding: 2px 7px; border-radius: 4px;
   border: 1px solid var(--line); color: var(--muted);
 }
+
+/* ═════════════════════════════════════════════════════════════════════════
+   Entrar, y cambiar de pantalla
+
+   El portal aparecía de golpe, entero y a la vez. Funcionaba, pero se leía
+   como un volcado: no había forma de saber por dónde empezar a mirar.
+
+   Todo lo que hay aquí se mueve con `transform` y `opacity` y nada más. Son
+   las dos propiedades que el compositor resuelve sin volver a maquetar ni a
+   pintar, así que la animación va en su hilo y sesenta por segundo es el
+   suelo, no el objetivo. En cuanto se anima un `height`, un `top` o un
+   `filter`, cada fotograma vuelve a pasar por maquetación y ahí ya no hay
+   sesenta que valgan por muy corta que sea la curva.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+/* La misma curva para todo lo que entra: sale deprisa y frena largo. Repetir
+   la curva es lo que hace que ocho elementos distintos se lean como un solo
+   movimiento y no como ocho animaciones que coinciden. */
+.pv3 { --pv3-curva: cubic-bezier(0.22, 1, 0.36, 1); }
+
+/* ── Entrada ────────────────────────────────────────────────────────────
+   Primero la columna, después la cabecera, después el contenido. Es el orden
+   en el que se mira una pantalla que no se conoce: dónde estoy, qué es esto,
+   qué dice. */
+.pv3-side {
+  animation: pv3EntraLado 0.5s var(--pv3-curva) both;
+}
+
+@keyframes pv3EntraLado {
+  from { opacity: 0; transform: translate3d(-14px, 0, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Los apartados del menú caen en cascada. El retraso lo pone el índice que
+   escribe el propio componente, así que añadir una pantalla al menú no
+   obliga a tocar el CSS. */
+.pv3-side .pv3-nav,
+.pv3-side .pv3-group {
+  animation: pv3EntraItem 0.42s var(--pv3-curva) both;
+  animation-delay: calc(0.1s + var(--i, 0) * 0.022s);
+}
+
+@keyframes pv3EntraItem {
+  from { opacity: 0; transform: translate3d(-10px, 0, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+.pv3-brand { animation: pv3EntraItem 0.5s var(--pv3-curva) both; }
+
+.pv3-top {
+  animation: pv3EntraArriba 0.5s var(--pv3-curva) 0.08s both;
+}
+
+@keyframes pv3EntraArriba {
+  from { opacity: 0; transform: translate3d(0, -10px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── Cambio de pantalla ─────────────────────────────────────────────────
+   El contenido se remonta al cambiar de vista —la clave del aislante es la
+   vista—, así que estas animaciones vuelven a correr solas en cada salto y
+   no hace falta ni un estado ni un temporizador en JavaScript.
+
+   Las tarjetas entran escalonadas por su posición en la rejilla. Veintidós
+   milésimas entre una y otra: suficiente para que el ojo siga el orden,
+   demasiado poco para que nadie espere. */
+/* La cascada sale del orden en el DOM, no de un índice escrito a mano.
+   Son tres mil líneas de pantallas: pedirle a cada tarjeta que declare su
+   posición sería tocar todas para conseguir algo que el selector ya sabe. */
+.pv3-view > * { animation: pv3EntraBloque 0.44s var(--pv3-curva) both; }
+.pv3-view > *:nth-child(1) { animation-delay: 0s; }
+.pv3-view > *:nth-child(2) { animation-delay: 0.04s; }
+.pv3-view > *:nth-child(3) { animation-delay: 0.08s; }
+.pv3-view > *:nth-child(4) { animation-delay: 0.12s; }
+.pv3-view > *:nth-child(5) { animation-delay: 0.16s; }
+.pv3-view > *:nth-child(n + 6) { animation-delay: 0.2s; }
+
+@keyframes pv3EntraBloque {
+  from { opacity: 0; transform: translate3d(0, 10px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+.pv3-grid > .pv3-card { animation: pv3EntraTarjeta 0.46s var(--pv3-curva) both; }
+.pv3-grid > .pv3-card:nth-child(1) { animation-delay: 0.05s; }
+.pv3-grid > .pv3-card:nth-child(2) { animation-delay: 0.086s; }
+.pv3-grid > .pv3-card:nth-child(3) { animation-delay: 0.122s; }
+.pv3-grid > .pv3-card:nth-child(4) { animation-delay: 0.158s; }
+.pv3-grid > .pv3-card:nth-child(n + 5) { animation-delay: 0.19s; }
+
+@keyframes pv3EntraTarjeta {
+  from { opacity: 0; transform: translate3d(0, 12px, 0) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* La pantalla activa del menú: la marca no salta de un sitio a otro, se
+   desliza. Es lo único del menú que se mueve, y por eso se ve. */
+.pv3-nav { position: relative; }
+
+.pv3-nav::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--ok);
+  transform: scaleY(0);
+  transform-origin: center;
+  transition: transform 0.32s var(--pv3-curva);
+}
+
+.pv3-nav[data-on="true"]::after { transform: scaleY(1); }
+
+/* ── Nesped dentro del producto ─────────────────────────────────────────
+   No es un adorno en la esquina: va en Inteligencia, que es la pantalla
+   donde Nesped dice lo que ha deducido, y dice con el mismo lenguaje de la
+   portada si está pensando, si algo va mal o si no ha podido. */
+.pv3-nucleo {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent);
+}
+
+.pv3-nucleo-dice { min-width: 0; }
+
+.pv3-nucleo-dice b {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.pv3-nucleo-dice span {
+  display: block;
+  margin-top: 4px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--dim);
+}
+
+@media (max-width: 720px) {
+  .pv3-nucleo { gap: 14px; padding: 14px; }
+}
+
+/* Con movimiento reducido no hay entrada ni cascada: el contenido está, y
+   estaba desde el principio. El bloque general del fichero ya apaga todas
+   las animaciones del portal, así que aquí sólo hace falta que nada quede a
+   medio camino con `both`. */
+@media (prefers-reduced-motion: reduce) {
+  .pv3-side,
+  .pv3-side .pv3-nav,
+  .pv3-side .pv3-group,
+  .pv3-brand,
+  .pv3-top,
+  .pv3-view > *,
+  .pv3-grid > .pv3-card {
+    opacity: 1;
+    transform: none;
+  }
+}

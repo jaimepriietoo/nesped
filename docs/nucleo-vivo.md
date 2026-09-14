@@ -337,3 +337,27 @@ Dos ayudas más, las dos sólo en desarrollo:
   marcha aunque la dibuje la CPU. Es la única manera de revisar el objeto desde
   un navegador sin tarjeta, que es con lo que se hacen las capturas
   automatizadas.
+
+## Revisión de movimiento y definición — septiembre de 2026
+
+Las tres membranas articulan su posición con fases diferentes. El renderer
+calcula sus rotaciones y respiración una vez por fotograma y las pasa al
+shader; no se añaden senos por paso de raymarch. `MOVIMIENTO` reúne amplitud,
+profundidad, ritmo, iluminación, halo y reconstrucción del filo.
+
+La señal de `senal.js` transforma una onda en relaciones de contexto y una
+salida dirigida. Comparte el avance del director, admite retroceso y no usa
+estado React por fotograma. Las trazas continuas se pausan fuera de su acto y
+se desactivan con movimiento reducido. La composición móvil reserva la zona
+superior para la señal y la inferior para la conversación.
+
+El presupuesto de GPU se mide también dentro del portal. Interior y exterior
+recuerdan su calidad por separado, de forma que el plano más costoso no
+reduzca permanentemente la definición del resto de la película. Los destinos
+WebGL conservan su referencia hasta liberarse al redimensionar.
+
+En desarrollo, el canvas expone `data-frame-ms`, `data-gpu-ms` y
+`data-calidad` para inspección. Son medias recientes, no una garantía de FPS
+en todos los dispositivos; los cálculos de diagnóstico se eliminan en
+producción. Las pruebas de rendimiento unitarias cubren la recuperación de
+calidad al salir y la conservación de los recursos hasta su liberación.

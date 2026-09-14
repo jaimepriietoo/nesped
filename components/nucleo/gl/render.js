@@ -12,11 +12,11 @@
    fps sin provocar un solo repintado del árbol.
    ========================================================================= */
 
-import { CALIDAD, VIGILANCIA, direccionInicial } from "../tokens";
+import { CALIDAD, MOVIMIENTO, VIGILANCIA, direccionInicial } from "../tokens.js";
 import {
   VS_CUAD, borrarDestino, crearDestino, programa, uniformes,
-} from "./gl";
-import { FS_BORRON, FS_BRILLO, FS_COMPONER, fsNucleo } from "./sombras";
+} from "./gl.js";
+import { FS_BORRON, FS_BRILLO, FS_COMPONER, fsNucleo } from "./sombras.js";
 
 const NIVELES = ["alta", "media", "baja"];
 
@@ -48,6 +48,12 @@ export class NucleoRender {
     this.nivel = opciones.nivel || "alta";
     this.vivo = false;
     this.visible = true;
+    /* Quien monta la escena puede apagarla: la portada lo hace al terminar la
+       película, porque a partir de ahí Nesped ya no está en pantalla y seguir
+       marchando rayos por debajo de un objeto invisible es batería a cambio
+       de nada. Es distinto de `visible`, que lo lleva el observador de
+       intersección y no sabe nada de la narración. */
+    this.pausado = false;
     this.raf = 0;
     this.ultimo = 0;
     this.muestras = [];
@@ -55,6 +61,10 @@ export class NucleoRender {
     this.calentando = VIGILANCIA.calentar;
     this.destinos = {};
     this.progs = {};
+    this.articulacion = new Float32Array(12);
+    this.medidas = { frames: [], gpu: [], ultimo: 0 };
+    this.contexto = "exterior";
+    this.nivelesEscena = { exterior: this.nivel, interior: this.nivel };
   }
 
   montar() {
@@ -214,12 +224,33 @@ export class NucleoRender {
        o bajo tres pantallazos de scroll es calor y batería a cambio de nada.
        El estado sigue avanzando —cuando vuelva no puede aparecer congelado—
        pero no se pinta. */
-    if (!this.visible || document.hidden) {
+    if (!this.visible || this.pausado || document.hidden) {
       if (this.estado) this.estado.avanzar(dt);
       return;
     }
 
+    const contexto = this.direccion.dentro > 0.25 ? "interior" : "exterior";
+    if (contexto !== this.contexto) {
+      this.contexto = contexto;
+      this.muestras.length = 0;
+      this.calentando = VIGILANCIA.calentar;
+      if (this.nivel !== this.nivelesEscena[contexto]) {
+        this.cambiarNivel(this.nivelesEscena[contexto]);
+      }
+    }
     this.pintar(dt);
+
+    if (process.env.NODE_ENV !== "production" && intervalo < 200) {
+      this.medidas.frames.push(intervalo);
+      if (this.medidas.frames.length > 120) this.medidas.frames.shift();
+      if (ahora - this.medidas.ultimo > 1000) {
+        const media = (lista) => lista.length ? lista.reduce((a, b) => a + b, 0) / lista.length : 0;
+        this.lienzo.dataset.frameMs = media(this.medidas.frames).toFixed(2);
+        this.lienzo.dataset.gpuMs = media(this.medidas.gpu).toFixed(2);
+        this.lienzo.dataset.calidad = this.nivel;
+        this.medidas.ultimo = ahora;
+      }
+    }
 
     /* Qué se le da al vigilante.
 
@@ -231,26 +262,19 @@ export class NucleoRender {
 
        Sin cronómetro se cae al hueco entre fotogramas, que lo recoge todo
        pero también recoge lo que no es culpa de la escena. */
-    /* Y cuándo NO se le da nada: mientras se atraviesa la apertura.
-
-       Ese plano es, con diferencia, el más caro de la película —la cámara
-       está dentro del objeto, las tres membranas llenan el encuadre y la
-       retícula del interior se muestrea entera— y dura un par de segundos.
-       Dejar que el vigilante juzgue ahí significa que un solo viaje por el
-       agujero baja la calidad del sitio ENTERO y ya no vuelve a subir, que es
-       exactamente lo contrario de lo que se quiere: el resto de la película
-       va sobrado. Se juzga por lo que dura, no por el pico. */
-    const atravesando = this.direccion && this.direccion.dentro > 0.25;
-
-    if (!atravesando) {
-      if (this.reloj) {
-        const gpu = this.leerReloj();
-        if (gpu !== null) this.vigilar(gpu, VIGILANCIA.objetivoGpuMs);
-      } else {
-        this.vigilar(intervalo, VIGILANCIA.objetivoMs);
+    // El usuario puede detenerse dentro: ese plano también debe respetar
+    // el presupuesto. La mediana ya descarta un pico aislado.
+    if (this.reloj) {
+      const gpu = this.leerReloj();
+      if (gpu !== null) {
+        if (process.env.NODE_ENV !== "production") {
+          this.medidas.gpu.push(gpu);
+          if (this.medidas.gpu.length > 60) this.medidas.gpu.shift();
+        }
+        this.vigilar(gpu, VIGILANCIA.objetivoGpuMs);
       }
-    } else if (this.reloj) {
-      this.leerReloj();      // se lee y se tira: la consulta ha de quedar libre
+    } else {
+      this.vigilar(intervalo, VIGILANCIA.objetivoMs);
     }
   };
 
@@ -303,6 +327,18 @@ export class NucleoRender {
          Durante la película no se aplica, porque ahí la cámara ya tiene quien
          la lleve y sumarle una deriva sería pelearse con el encuadre. */
       const t = est ? est.t : 0;
+      const actividad = v ? v.agita + v.entra * 0.4 + v.sale * 0.3 : 0;
+      const presencia = 0.55 + actividad * 0.45;
+      for (let i = 0; i < 3; i += 1) {
+        const fase = t * MOVIMIENTO.frecuencia + i * MOVIMIENTO.desfase;
+        const angulo = Math.sin(fase) * MOVIMIENTO.giro * presencia;
+        const k = i * 4;
+        this.articulacion[k] = Math.cos(angulo);
+        this.articulacion[k + 1] = Math.sin(angulo);
+        this.articulacion[k + 2] = Math.sin((est ? est.fase : t) + i * 2.1) * MOVIMIENTO.respiracion * (v ? v.respira : 1);
+        this.articulacion[k + 3] = Math.sin(fase + 0.8) * MOVIMIENTO.profundidad * presencia;
+      }
+      gl.uniform4fv(u.get("uArticula"), this.articulacion);
       const dv = d.deriva ? 1 : 0;
       gl.uniform3f(u.get("uCam"),
         d.cam[0] + dv * Math.sin(t * 0.21) * 0.085,
@@ -387,7 +423,8 @@ export class NucleoRender {
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, (this.destinos.haloA || this.destinos.escena).tex);
       gl.uniform1i(u.get("uHalo"), 1);
-      gl.uniform1f(u.get("uFuerzaHalo"), cfg.halo ? 0.62 : 0);
+      gl.uniform1f(u.get("uFuerzaHalo"), cfg.halo ? MOVIMIENTO.halo : 0);
+      gl.uniform1f(u.get("uNitidez"), MOVIMIENTO.nitidez);
       gl.uniform1f(u.get("uFondo"), d.fondo === undefined ? 1 : d.fondo);
       gl.uniform2f(u.get("uRes"), this.lienzo.width, this.lienzo.height);
     });
@@ -450,12 +487,16 @@ export class NucleoRender {
     const i = NIVELES.indexOf(this.nivel);
     if (i < 0 || i >= NIVELES.length - 1) return;
 
-    this.nivel = NIVELES[i + 1];
+    this.nivelesEscena[this.contexto] = NIVELES[i + 1];
+    this.cambiarNivel(NIVELES[i + 1], ms);
+  }
+
+  cambiarNivel(nivel, ms) {
+    this.nivel = nivel;
     this.calentando = VIGILANCIA.calentar;
     this.seguidos = 0;
     try {
       this.construir();
-      this.destinos.escena = null;
       this.redimensionar();
       this.alCambiarCalidad(this.nivel, ms);
     } catch (e) {

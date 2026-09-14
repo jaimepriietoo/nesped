@@ -34,6 +34,8 @@
    `estado` es a qué se parece Nesped en ese punto: se mezclan los dos
    estados vecinos con el mismo avance que la cámara, así que Nesped no
    "cambia de estado" en la portada, lo atraviesa. */
+import { MOVIMIENTO } from "./tokens";
+
 export const CLAVES = [
   // ACTO 0 — La oscuridad. Nesped ya está ahí; no hay luz que lo revele.
   { p: 0.000, cam: [0.00, 0.04, 5.20], mira: [-0.42, -0.28, 0], fov: 0.50,
@@ -261,7 +263,8 @@ export class Director {
     /* La cámara llega con retraso a donde ha llegado la rueda. Es un muelle,
        no una interpolación por fotograma: así el retraso dura lo mismo en un
        monitor de 60 Hz que en uno de 144. */
-    const k = 26, c = 2 * Math.sqrt(26) * 0.9;
+    const k = MOVIMIENTO.camaraRigidez;
+    const c = 2 * Math.sqrt(k) * MOVIMIENTO.camaraAmortiguacion;
     const a = (this.p - this.pSuave) * k - this.vel * c;
     this.vel += a * dt;
     this.pSuave += this.vel * dt;

@@ -37,51 +37,19 @@
     opacity 0.8s ease;
 }
 
-/* Terminada la película, el núcleo se recoge a una esquina y se queda ahí,
-   despierto. Sigue siendo el mismo objeto y el mismo estado: mientras se lee
-   el precio, Nesped escucha la muestra de llamada y responde. */
-.pel-escenario[data-anclado="1"],
-.pel-escenario[data-anclado="fin"] {
-  /* Por encima del contenido, no detrás.
+/* Terminada la película, Nesped se disuelve.
 
-     El bloque de negocio lleva fondo negro sólido para que el texto tenga
-     contraste, así que con el lienzo por debajo el núcleo anclado
-     simplemente desaparecía. Aquí flota encima, sin capturar el puntero, y
-     por debajo de la cabecera. */
-  z-index: 3;
-  inset: auto 24px 24px auto;
-  width: clamp(150px, 17vw, 230px);
-  height: clamp(150px, 17vw, 230px);
-  opacity: 0.92;
-}
+   Antes se recogía a una esquina y seguía ahí el resto de la página. Se
+   quitó por dos razones y la segunda pesa más: por debajo seguía corriendo
+   una marcha de rayos a pantalla completa mientras se leen precios y
+   preguntas, y un objeto flotando sobre el texto no dice nada que el texto no
+   diga mejor. El plano se cierra donde tiene que cerrarse.
 
-/* Al llegar al pie se retira. Un objeto flotando encima de la letra pequeña
-   y los enlaces legales no aporta nada y estorba a la vista. */
+   El fundido es largo a propósito —un segundo— para que se lea como que la
+   escena termina y no como que algo se ha apagado. */
 .pel-escenario[data-anclado="fin"] {
   opacity: 0;
-}
-
-/* Anclado, el lienzo deja de ser un rectángulo.
-
-   WebGL escribe negro opaco, así que sobre el contenido se veía un cuadrado
-   negro con el objeto dentro. Con `screen` sobre un sitio negro, el negro
-   desaparece y sólo queda lo que Nesped emite.
-
-   La transparencia la pone el propio shader por alfa: `mix-blend-mode` hacía
-   lo mismo pero obligaba al compositor a releer el lienzo en cada fotograma,
-   y el driver lo avisa como parada de GPU. Aquí sólo hay que quitar el fondo
-   negro del envoltorio para que se vea la página. */
-.pel-escenario[data-anclado="1"] .nsp,
-.pel-escenario[data-anclado="fin"] .nsp {
-  background: transparent;
-}
-
-@media (max-width: 720px) {
-  .pel-escenario[data-anclado="1"] {
-    inset: auto 12px 12px auto;
-    width: 116px;
-    height: 116px;
-  }
+  transition: opacity 1s cubic-bezier(0.33, 0, 0.2, 1);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -124,6 +92,51 @@
 }
 
 .pel-cartel[data-on="0"] { visibility: hidden; }
+
+/* La tipografía cruza un plano de corte, con la misma dirección al volver. */
+@media (prefers-reduced-motion: no-preference) {
+  .pel-cartel > div:not(.pel-empuja) {
+    clip-path: inset(0 0 calc((1 - var(--entrada, 1)) * 100%) 0);
+    transform: perspective(1100px)
+      translate3d(0, calc(var(--salida, 0) * -22px), calc(var(--salida, 0) * -65px))
+      rotateX(calc(var(--salida, 0) * 3deg));
+    transform-origin: center bottom;
+  }
+  .pel-cartel:first-of-type > div { clip-path: none; }
+}
+
+.pel-senal {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: var(--presencia, 0);
+  overflow: visible;
+  contain: layout style;
+}
+.pel-senal[data-visible="0"] { visibility: hidden; }
+.pel-senal path { fill: none; vector-effect: non-scaling-stroke; }
+.pel-senal-base { stroke: rgba(246, 241, 231, 0.18); stroke-width: 0.8; }
+.pel-senal-flujo {
+  stroke: #b9ead7;
+  stroke-width: 1.15;
+  stroke-linecap: round;
+  stroke-dasharray: 9 91;
+  animation: pel-transmitir 4.8s linear infinite;
+  animation-delay: calc(var(--capa) * -1.6s);
+}
+.pel-senal[data-visible="0"] .pel-senal-flujo { animation-play-state: paused; }
+.pel-senal text { fill: #d0ded8; font-size: 10px; letter-spacing: 2px; }
+.pel-senal circle { fill: #7ee3bd; }
+@keyframes pel-transmitir { to { stroke-dashoffset: -100; } }
+@media (max-width: 720px) {
+  .pel-senal { top: 7%; height: 65%; }
+  .pel-senal text { font-size: 16px; letter-spacing: 1px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pel-senal-flujo { animation: none; stroke-dasharray: none; opacity: 0.4; }
+}
 
 /* El ancho máximo es para el TEXTO: una columna de más de setenta caracteres
    no se lee. No puede aplicarse a todo hijo del cartel, porque el lienzo de
@@ -249,39 +262,9 @@
    Las frases son las de la llamada real que ya está en el sitio, con sus
    tiempos. No hay guion inventado para la portada: si la muestra cambia,
    esto cambia con ella. */
-.pel-voz {
-  display: grid;
-  gap: 10px;
-  width: min(560px, 86vw);
-}
 
-.pel-linea {
-  display: grid;
-  grid-template-columns: 64px minmax(0, 1fr);
-  gap: 14px;
-  align-items: baseline;
-  /* Cada frase entra cuando le toca y se atenúa después: la conversación
-     avanza, no se acumula en una pila de burbujas. */
-  opacity: calc(0.12 + var(--a, 0) * 0.88);
-  transform: translateX(calc((1 - var(--a, 0)) * 8px));
-  transition: opacity 0.28s linear, transform 0.28s linear;
-}
 
-.pel-quien {
-  font-family: var(--display);
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  color: var(--tenue);
-  text-align: right;
-}
 
-.pel-linea[data-quien="agente"] .pel-quien { color: var(--energia); }
-
-.pel-dice {
-  font-size: clamp(0.95rem, 1.5vw, 1.12rem);
-  line-height: 1.45;
-  color: #e9e9e9;
-}
 
 /* Los conceptos que Nesped separa de lo que oye. No son etiquetas puestas
    encima: salen de la frase y se quedan orbitando. */
@@ -432,7 +415,14 @@
   justify-content: inherit;
 }
 
-.pel-btn {
+/* `.pel a` y no `.pel-btn` a secas, y no es manía de especificidad.
+
+   v3.css lleva `.v3 a { color: inherit }`, que puntúa una clase MÁS un
+   elemento y por tanto gana a `.pel-btn`. Resultado: los dos botones del
+   cierre heredaban el blanco de `.pel`, y el que va sobre el relleno claro
+   salía blanco sobre crema —invisible— aunque aquí pusiera negro desde el
+   primer día. Se veía en pantalla y no se veía leyendo el fichero. */
+.pel a.pel-btn {
   display: inline-grid;
   place-items: center;
   height: 46px;
@@ -448,15 +438,15 @@
               border-color 0.3s ease, background 0.3s ease, color 0.3s ease;
 }
 
-.pel-btn:hover { transform: translateY(-3px); border-color: rgba(255, 255, 255, 0.3); }
+.pel a.pel-btn:hover { transform: translateY(-3px); border-color: rgba(255, 255, 255, 0.3); }
 
-.pel-btn--luz {
+.pel a.pel-btn--luz {
   background: var(--luz);
   border-color: var(--luz);
-  color: #000;
+  color: #0a0a0a;
 }
 
-.pel-btn--luz:hover { background: #fff; border-color: #fff; }
+.pel a.pel-btn--luz:hover { background: #fff; border-color: #fff; color: #000; }
 
 /* ── Cabecera durante la apertura ───────────────────────────────────────
    Nada de barra de navegación enorme en la primera pantalla: se atenúa
@@ -509,10 +499,9 @@
    pero recorre mucho menos espacio. */
 @media (prefers-reduced-motion: reduce) {
   .pel-pelicula { height: 420vh; }
-  .pel-linea,
   .pel-concepto,
   .pel-ficha,
-  .pel-btn { transition: none; }
+  .pel a.pel-btn { transition: none; }
   .pel-empuja i { animation: none; }
 }
 
@@ -588,10 +577,6 @@
      escritorio; aquí todo va al filo izquierdo. */
   .pel-conceptos { justify-content: flex-start !important; }
 
-  .pel-voz { width: 100%; }
-  .pel-linea { grid-template-columns: 50px minmax(0, 1fr); gap: 9px; }
-  .pel-quien { font-size: 9px; }
-  .pel-dice { font-size: 0.9rem; line-height: 1.35; }
 
   /* La secuencia de trabajo es lo que más se graba en vertical: fichas a todo
      ancho y los haces bajando desde la apertura, que queda justo encima. */

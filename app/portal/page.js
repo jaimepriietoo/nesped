@@ -3023,7 +3023,7 @@ export default function PortalV3() {
                 Vive en la cabecera del armazón y no dentro de cada vista, y
                 eso no es comodidad: la cabecera se pinta una vez y sobrevive
                 al cambio de pantalla, así que hay UN contexto de WebGL para
-                las catorce. Metiéndolo en cada vista habría uno montándose y
+                las once. Metiéndolo en cada vista habría uno montándose y
                 soltándose en cada clic del menú, que es la forma más cara
                 posible de enseñar el mismo objeto.
 

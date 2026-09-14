@@ -59,7 +59,9 @@ estado.js        máquina de estados: integra muelles, fuera de React
 silueta.js       la misma geometría resuelta en 2D
 respaldo.js      Nesped en SVG, sin WebGL y con movimiento reducido
 nucleo.js        <NucleoVivo>: monta el lienzo y decide QUÉ hace Nesped
-marca.js         <NucleoMarca>: la versión de icono, para el producto
+marca.js         <NucleoMarca>: la versión contenida, para el producto
+fondo.js         <FondoNesped>: el objeto ocupando el fondo de una pantalla
+entrada.js       <EntradaNesped>: el plano de una vez al entrar al portal
 director.js      la película: claves de cámara y avance por scroll
 gl/gl.js         lo mínimo de WebGL2
 gl/sombras.js    los shaders
@@ -361,3 +363,115 @@ En desarrollo, el canvas expone `data-frame-ms`, `data-gpu-ms` y
 en todos los dispositivos; los cálculos de diagnóstico se eliminan en
 producción. Las pruebas de rendimiento unitarias cubren la recuperación de
 calidad al salir y la conservación de los recursos hasta su liberación.
+
+## Nesped fuera de la película — dónde está y por qué ahí
+
+La portada era el único sitio donde Nesped tenía cuerpo. Ahora lo tiene en
+todo el recorrido, y cada sitio tiene su razón.
+
+**La puerta** (`/login`, `/registro`). Antes había de fondo un vídeo de
+archivo servido desde un CDN ajeno. Eso no es identidad —lo puede poner
+cualquiera, y lo pone cualquiera—, cuesta descargar y no sabe nada de lo que
+pasa en la pantalla. Ahora está `<FondoNesped>`, que es el objeto de verdad y
+reacciona: **escucha** mientras hay un campo con el foco, **piensa** mientras
+se comprueba la contraseña, se **desestabiliza** si no vale y **ejecuta** al
+acertar. Al acertar, la tarjeta se retira y la navegación espera 260 ms.
+
+**La entrada** (`<EntradaNesped>`, en el armazón del portal). Un plano de
+1,2 s que cose el corte en blanco entre dos páginas distintas, que era donde
+se rompía lo único que sostiene la identidad: que Nesped es el mismo en la
+portada, en la puerta y dentro. No captura el puntero, el panel se monta
+debajo desde el primer fotograma, se desmonta para soltar el contexto de
+WebGL, no se repite en la misma sesión y con movimiento reducido no aparece.
+
+**El portal**, en la cabecera del armazón y no dentro de cada vista. La
+cabecera se pinta una vez y sobrevive al cambio de pantalla, así que hay UN
+contexto de WebGL para las once; dentro de cada vista habría uno montándose y
+soltándose en cada clic del menú.
+
+### El umbral de los 96 píxeles
+
+`marca.js` no monta WebGL por debajo de `MINIMO_WEBGL = 96`: a ese tamaño no
+caben ni los hilos ni el relieve, y en cambio sí cuesta un contexto y un bucle
+permanentes. Por eso el icono de la columna (38 px) es la silueta en SVG y el
+de la cabecera (104 px) es el objeto marchado. Si alguien sube o baja ese
+número, lo que cambia no es el aspecto: es cuántos contextos de WebGL hay
+abiertos en una pantalla de trabajo.
+
+### El estilo del portal
+
+Deja de ser un panel de administración con los colores de la marca y pasa a
+ser el interior de Nesped: obsidiana, un filo de luz en el canto superior de
+cada superficie —la luz roza la geometría, no la ilumina de frente—, una
+espina de luz en la columna y un campo muy tenue que respira detrás de todo,
+en un pseudoelemento y no en un lienzo, para no competir con el núcleo por la
+tarjeta gráfica.
+
+El verde se usa donde significa algo y en ningún sitio más: el filo de una
+tarjeta se enciende cuando lo que hay dentro lo ha deducido Nesped y no
+estaba ya en la tabla (`data-nesped="1"`), y el marco de la cabecera deja de
+ser verde cuando algo pide atención o algo ha fallado. Si el color dice una
+cosa y el texto otra, gana el color.
+
+## Cuatro trampas que costaron encontrar
+
+Las cuatro se ven en pantalla y no se ven leyendo el fichero. Van aquí para
+que la quinta vez no cueste lo mismo.
+
+**La cascada de `.v3 a`.** `v3.css` lleva `.v3 a { color: inherit }`, que
+puntúa una clase MÁS un elemento y por tanto gana a cualquier regla de una
+sola clase sobre un enlace. Los dos botones del cierre de la película
+heredaban el blanco de `.pel` y el que va sobre relleno claro salía blanco
+sobre crema —invisible— aunque su CSS pusiera negro desde el primer día.
+Cualquier enlace con estilo propio dentro de `.v3` necesita `.pel a.loquesea`
+o equivalente.
+
+**`.v3-auth > *:not(.v3-bg)`.** Esa regla fuerza `position: relative` a todo
+lo que no sea el fondo declarado. Un fondo nuevo que no esté en la lista deja
+de estar absolutamente posicionado, pasa a ocupar sitio en el flujo y empuja
+la tarjeta media pantalla hacia abajo.
+
+**`backdrop-filter` sobre el núcleo.** Desenfocar el fondo obliga al
+compositor a releer lo que hay detrás en cada fotograma. Detrás de la tarjeta
+de acceso ya no hay un vídeo sino un lienzo que se repinta, así que es el
+mismo problema por el que este código dejó de usar `mix-blend-mode` sobre el
+núcleo. El velo lo da un degradado opaco: cuesta cero y da más contraste.
+
+**Los efectos se invocan dos veces en desarrollo.** React lo hace a propósito
+para destapar justo esta clase de fallo. El plano de entrada marcaba en
+`sessionStorage` que ya se había visto en la primera pasada, y la segunda
+encontraba la marca puesta y decidía no enseñarlo: no se veía NUNCA en
+desarrollo y sí en producción, que es la peor manera de tener un fallo.
+Cualquier guarda de "sólo una vez" tiene que cachear la decisión, no
+consumirla.
+
+## Cómo se comprueba esto sin engañarse
+
+Tres maneras de medir mal, las tres probadas aquí: cronometrar `pintar()` con
+un reloj normal (las llamadas a WebGL encolan y vuelven enseguida), envolver N
+fotogramas en una consulta de tiempo de la tarjeta (`pintar()` ya abre la
+suya, y anidarlas devuelve basura sin dar error), y mirar el hueco entre
+fotogramas a secas (se cuantiza al refresco: en un panel de 120 Hz, todo lo
+que cueste entre 25 y 33 ms sale como 33,3).
+
+Lo que sí funciona: un navegador de verdad con la tarjeta de verdad —sin
+ventana, macOS pinta con SwiftShader y el número no significa nada— y, para
+bajar del refresco, pintar K veces dentro del mismo fotograma y dividir.
+
+Y un aviso para quien automatice capturas: **el capturador se queda colgado
+mientras el lienzo está pintando.** No es un problema de la página —la puerta
+va a 8,3 ms de mediana y atiende un clic en 42— sino de cómo lee el surface.
+Se resuelve de dos maneras: parando el motor un instante (`motor.pausado`) o
+capturando por CDP con `Page.captureScreenshot({ fromSurface: false })`.
+
+## Dónde está cada cosa medida — septiembre de 2026
+
+| sitio                                    | mediana | peor |
+| ---------------------------------------- | ------- | ---- |
+| película, peor momento (la travesía)     | 16,6 ms | —    |
+| película, el resto                       | 1,4–12 ms | —  |
+| la puerta, núcleo a pantalla completa    | 8,3 ms  | 9,4  |
+| el portal, cambiando de pantalla         | 8,3 ms  | 9,6  |
+
+A 2288×1440 en un MacBook con M3 Pro. Para repetirlo, el método está en la
+sección anterior.

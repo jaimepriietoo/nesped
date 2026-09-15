@@ -1,4 +1,5 @@
 import { reservarGeneracionIA } from "@/lib/server/ai-budget";
+import { conRegistroIA } from "@/lib/server/ia";
 import { respuestaSiPausado } from "@/lib/server/interruptores";
 import OpenAI from "openai";
 import { memoriaDeLead } from "@/lib/server/datos";
@@ -43,11 +44,13 @@ Responde SOLO con JSON válido:
 
   try {
     await reservarGeneracionIA(client?.id);
-    const response = await openai.responses.create({
+    const response = await conRegistroIA({ clientId: client?.id, uso: "sugerencia", modelo: "gpt-5-mini", promptVersion: "sugerencia-v1" }, () =>
+      openai.responses.create({
       max_output_tokens: 1200,
       model: "gpt-5-mini",
       input: prompt.slice(0, 16000),
-    });
+    })
+    );
 
     const text = response.output_text?.trim() || "{}";
     const parsed = JSON.parse(text);

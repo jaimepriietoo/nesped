@@ -1,4 +1,5 @@
 import { reservarGeneracionIA } from "@/lib/server/ai-budget";
+import { conRegistroIA } from "@/lib/server/ia";
 import { guardarEvento } from "@/lib/server/bandeja-webhooks";
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
@@ -273,7 +274,8 @@ ${message}
 `;
 
   await reservarGeneracionIA(lead?.client_id);
-  const completion = await getOpenAI().chat.completions.create({
+  const completion = await conRegistroIA({ clientId: lead?.client_id, uso: "whatsapp-clasificar", modelo: "gpt-4o-mini", promptVersion: "wa-clasificar-v1" }, () =>
+      getOpenAI().chat.completions.create({
     max_tokens: 1000,
     model: "gpt-4o-mini",
     temperature: 0.2,
@@ -289,7 +291,8 @@ ${message}
         content: prompt.slice(0, 16000),
       },
     ],
-  });
+  })
+    );
 
   return safeJsonParse(completion.choices?.[0]?.message?.content || "{}", {
     intent: "otro",
@@ -474,7 +477,8 @@ Devuélveme solo la respuesta final que enviarías por WhatsApp.
   }
 
   await reservarGeneracionIA(lead?.client_id);
-  const completion = await getOpenAI().chat.completions.create({
+  const completion = await conRegistroIA({ clientId: lead?.client_id, uso: "whatsapp-responder", modelo: "gpt-4o-mini", promptVersion: "wa-responder-v1" }, () =>
+      getOpenAI().chat.completions.create({
     max_tokens: 1000,
     model: "gpt-4o-mini",
     temperature: 0.75,
@@ -489,7 +493,8 @@ Devuélveme solo la respuesta final que enviarías por WhatsApp.
         content: prompt.slice(0, 16000),
       },
     ],
-  });
+  })
+    );
 
   return completion.choices?.[0]?.message?.content?.trim() || fallbackReply;
 }

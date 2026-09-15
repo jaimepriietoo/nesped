@@ -1,4 +1,5 @@
 import { reservarGeneracionIA } from "@/lib/server/ai-budget";
+import { conRegistroIA } from "@/lib/server/ia";
 import { respuestaSiPausado } from "@/lib/server/interruptores";
 import { getPortalContext } from "@/lib/portal-auth";
 import { evaluarInteligencia } from "@/lib/server/inteligencia";
@@ -137,7 +138,8 @@ export async function POST(req) {
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 20000, maxRetries: 0 });
 
     await reservarGeneracionIA(ctx.clientId);
-    const respuesta = await openai.responses.create({
+    const respuesta = await conRegistroIA({ clientId: ctx.clientId, uso: "copiloto", modelo: MODELO, promptVersion: "copiloto-v1" }, () =>
+      openai.responses.create({
       max_output_tokens: 1200,
       model: MODELO,
       instructions: INSTRUCCIONES,
@@ -156,7 +158,8 @@ export async function POST(req) {
         "",
         `PREGUNTA DEL USUARIO: ${limpiarTextoAjeno(texto, 500)}`,
       ].join("\n"),
-    });
+    })
+    );
 
     return Response.json({
       success: true,

@@ -140,7 +140,9 @@ async function procesar(req) {
     const hechos = [];
     const fallidos = [];
 
-    for (const trabajo of trabajos) {
+    /* Cada trabajo por su cuenta: uno que revienta no se lleva por delante a
+       los demás del lote, y uno que se retrasa tampoco los retrasa. */
+    const ejecutar = async (trabajo) => {
       const oficio = OFICIOS[trabajo.tipo];
 
       if (!oficio) {
@@ -148,7 +150,7 @@ async function procesar(req) {
            veces no hará que aparezca la función que falta. */
         await fallar(trabajo, new SinArreglo(`Tipo desconocido: ${trabajo.tipo}`));
         fallidos.push({ id: trabajo.id, motivo: "tipo desconocido", reintenta: false });
-        continue;
+        return;
       }
 
       try {
@@ -158,8 +160,6 @@ async function procesar(req) {
         await terminar(trabajo.id, resultado?.aviso || null);
         hechos.push(trabajo.id);
       } catch (err) {
-        /* Un trabajo que revienta no puede llevarse por delante a los demás
-           del lote. Se anota y se sigue. */
         const resultado = await fallar(trabajo, err);
         fallidos.push({
           id: trabajo.id,
@@ -167,6 +167,20 @@ async function procesar(req) {
           reintenta: resultado.reintenta,
         });
       }
+    };
+
+    /* De tres en tres, no de uno en uno ni los diez a la vez.
+
+       Los trabajos son casi todos espera de red —un informe por correo, una
+       copia de grabación, un webhook que habla con OpenAI—, así que en serie
+       la pasada tardaba la suma de todas las esperas: Sentry lo marcaba como
+       "Consecutive HTTP". Todos a la vez sería peor de otra manera: diez
+       trabajos de la misma empresa golpeando al mismo proveedor a la vez es
+       justo lo que abre los cortacircuitos. Tres es el punto en que la pasada
+       cabe en el tiempo de una función y ningún proveedor lo nota. */
+    const A_LA_VEZ = 3;
+    for (let i = 0; i < trabajos.length; i += A_LA_VEZ) {
+      await Promise.all(trabajos.slice(i, i + A_LA_VEZ).map(ejecutar));
     }
 
     return Response.json({

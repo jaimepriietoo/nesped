@@ -49,6 +49,11 @@ test("la portada responde: el menú se abre", async ({ page }) => {
 });
 
 test("pricing enseña precios reales y lleva al checkout", async ({ page }) => {
+  /* Los precios salen de Stripe y de ningún otro sitio: sin clave no hay
+     cifra que comprobar, y la prueba lo dice en vez de fallar por un motivo
+     que no es un fallo. En CI la clave entra como secreto del repositorio. */
+  test.skip(!process.env.STRIPE_SECRET_KEY, "sin STRIPE_SECRET_KEY no hay precios reales que comprobar");
+
   await page.goto("/pricing");
 
   await expect(

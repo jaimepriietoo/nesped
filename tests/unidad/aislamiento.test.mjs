@@ -124,33 +124,60 @@ test("toda excepción lleva su motivo escrito", () => {
   }
 });
 
-test("el envoltorio filtra por la columna correcta según la tabla", async () => {
+/*
+ * Con el cliente REAL de supabase-js, no con un doble.
+ *
+ * La versión anterior de esta prueba usaba un cliente de mentira que tenía
+ * `.eq()` nada más salir de `.from()`. El real no lo tiene —`.eq()` aparece
+ * después de `.select()`/`.update()`/…— y el envoltorio reventaba en la
+ * primera consulta de verdad. La prueba estaba en verde y el código no
+ * funcionaba: exactamente lo que una prueba con dobles puede esconder. Aquí
+ * se construye un cliente real apuntando a ninguna parte y se mira la
+ * consulta que PostgREST enviaría, sin enviarla.
+ */
+async function clienteReal() {
+  const { createClient } = await import("@supabase/supabase-js");
+  return createClient("https://sin-salida.supabase.co", "clave-de-prueba");
+}
+
+/* La URL que saldría hacia PostgREST: es donde se ve el filtro. */
+const urlDe = (consulta) => String(consulta.url);
+
+test("el envoltorio filtra por la columna correcta según la tabla, con el cliente real", async () => {
   const { datosDeLaEmpresa } = await import("../../lib/server/datos-cliente.js");
+  const datos = datosDeLaEmpresa(await clienteReal(), "mi-empresa");
 
-  const llamadas = [];
-  const falso = {
-    from(tabla) {
-      const eslabon = {
-        eq(columna, valor) {
-          llamadas.push({ tabla, columna, valor });
-          return eslabon;
-        },
-      };
-      return eslabon;
-    },
-  };
+  assert.match(urlDe(datos.from("leads").select("*")), /client_id=eq\.mi-empresa/);
+  // En `clients` la empresa ES la fila: el filtro va por id, no por client_id.
+  assert.match(urlDe(datos.from("clients").select("id")), /id=eq\.mi-empresa/);
+  // Y una tabla global pasa sin tocar.
+  assert.doesNotMatch(urlDe(datos.from("cortacircuitos").select("*")), /mi-empresa/);
 
-  const datos = datosDeLaEmpresa(falso, "mi-empresa");
+  // update y delete llevan el filtro igual: no se puede tocar lo de otros.
+  assert.match(urlDe(datos.from("leads").update({ status: "won" })), /client_id=eq\.mi-empresa/);
+  assert.match(urlDe(datos.from("leads").delete()), /client_id=eq\.mi-empresa/);
 
-  datos.from("leads");
-  datos.from("clients");
-  datos.from("una_tabla_global");
+  // Se puede seguir encadenando después, que es lo que hacen las rutas.
+  const encadenada = datos.from("leads").select("*").eq("status", "new").order("created_at");
+  assert.match(urlDe(encadenada), /client_id=eq\.mi-empresa/);
+  assert.match(urlDe(encadenada), /status=eq\.new/);
+});
 
-  assert.deepEqual(llamadas, [
-    { tabla: "leads", columna: "client_id", valor: "mi-empresa" },
-    // En `clients` la empresa ES la fila: el filtro va por id, no por client_id.
-    { tabla: "clients", columna: "id", valor: "mi-empresa" },
-  ]);
+test("insertar y upsert escriben la empresa en la fila, y no dejan escribir en otra", async () => {
+  const { datosDeLaEmpresa } = await import("../../lib/server/datos-cliente.js");
+  const datos = datosDeLaEmpresa(await clienteReal(), "mi-empresa");
+
+  const cuerpoDe = (consulta) => consulta.body;
+
+  assert.deepEqual(cuerpoDe(datos.from("leads").insert({ nombre: "Ana" })), { nombre: "Ana", client_id: "mi-empresa" });
+  assert.deepEqual(
+    cuerpoDe(datos.from("leads").insert([{ nombre: "Ana" }, { nombre: "Bea" }])),
+    [{ nombre: "Ana", client_id: "mi-empresa" }, { nombre: "Bea", client_id: "mi-empresa" }],
+  );
+  assert.deepEqual(cuerpoDe(datos.from("lead_memory").upsert({ lead_id: "x" })), { lead_id: "x", client_id: "mi-empresa" });
+
+  // Una fila que ya trae OTRA empresa no se corrige en silencio: se lanza.
+  assert.throws(() => datos.from("leads").insert({ nombre: "Ana", client_id: "otra" }), /otra empresa/);
 });
 
 test("sin empresa no se puede construir: falla en vez de devolverlo todo", async () => {

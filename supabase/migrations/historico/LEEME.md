@@ -8,7 +8,7 @@ Los ficheros `../2026*_fase*.sql` son otra cosa: explican **por qué** se hizo
 cada cambio. Estos de aquí son el **qué**, tal cual se aplicó.
 
 Última actualización: 2026-09-15
-Migraciones publicadas: 41 de 42
+Migraciones publicadas: 42 de 43
 
 ## Lo que NO está aquí, y por qué
 

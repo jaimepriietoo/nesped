@@ -1,5 +1,5 @@
 import { reservarGeneracionIA } from "@/lib/server/ai-budget";
-import { Pausado } from "@/lib/server/interruptores";
+import { guardarEvento } from "@/lib/server/bandeja-webhooks";
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { getSupabase } from "@/lib/supabase";
@@ -648,28 +648,41 @@ function selectProductTierFromAnalysis(lead, analysis) {
   return "basic";
 }
 
-export async function POST(req) {
-  try {
-    /* Twilio manda un formulario, no JSON, y el mensaje ES el webhook: no hay
-       un `event_type` que mirar como en Telnyx. Lo que sí hay son avisos de
-       estado de mensajes que hemos enviado nosotros, y esos llegan por la
-       misma puerta con `Body` vacío. */
-    const rawPayload = await req.text();
-    const campos = Object.fromEntries(new URLSearchParams(rawPayload));
+/* La respuesta de la función de proceso: el mismo objeto que antes salía
+   por HTTP, para que quien lo lea desde la cola vea lo mismo. */
+const respuesta = (cuerpo, init) => ({ ...cuerpo, status: init?.status || 200 });
 
-    if (!esWebhookDeTwilio(req, campos)) {
-      return NextResponse.json(
-        { success: false, message: "Firma de webhook inválida" },
-        { status: 403 }
-      );
-    }
+/**
+ * Procesa un mensaje entrante de WhatsApp ya verificado.
+ *
+ * Es el cuerpo del webhook de siempre, sacado a una función para que lo
+ * ejecute la cola de trabajos y no la petición de Twilio. Recibe los campos
+ * del formulario tal cual llegaron y devuelve lo que antes era la respuesta
+ * HTTP. Todo lo que hace de cara al cliente —contestar por WhatsApp, apuntar
+ * el evento— lo hace por API, así que procesarlo en diferido no cambia lo que
+ * ve nadie, sólo cuándo.
+ *
+ * Antes de nada se reclama el MessageSid: si este mismo mensaje ya se
+ * procesó —un reintento de Twilio, un reproceso desde administración— no se
+ * contesta dos veces.
+ */
+export async function procesarMensajeEntrante(campos) {
+  const messageSid = String(campos.MessageSid || campos.SmsSid || "").trim();
+  if (messageSid) {
+    const { data: primeraVez, error } = await supabase.rpc("reclamar_webhook", {
+      p_proveedor: "twilio-whatsapp",
+      p_evento_id: messageSid,
+    });
+    if (error) throw new Error(error.message || "No se pudo reclamar el mensaje");
+    if (primeraVez === false) return respuesta({ success: true, duplicated: true });
+  }
 
     const parsed = leerWebhookDeMensajeria(campos);
 
     /* Sin texto es un aviso de estado, no un mensaje de nadie. Se contesta
        bien para que Twilio no lo reintente. */
     if (!String(parsed.text || "").trim()) {
-      return NextResponse.json({ success: true, ignored: true });
+      return respuesta({ success: true, ignored: true });
     }
 
     const inboundMessage = String(parsed.text || "").trim();
@@ -678,12 +691,12 @@ export async function POST(req) {
     const phone = normalizePhone(from);
 
     if (!phone || !inboundMessage) {
-      return NextResponse.json({ success: false, message: "Faltan datos" });
+      return respuesta({ success: false, message: "Faltan datos" });
     }
 
     const clientContext = await resolveClientContext(to);
     if (!clientContext?.id) {
-      return NextResponse.json(
+      return respuesta(
         { success: false, message: "No se pudo resolver el cliente del webhook" },
         { status: 400 }
       );
@@ -799,19 +812,50 @@ await sendWhatsapp(phone, finalReply);
 });
 }
 
-    return NextResponse.json({
+    return respuesta({
       success: true,
       analysis,
       reply,
       clientId: clientContext.id,
     });
-  } catch (err) {
-    /* Con la IA en pausa no se contesta al mensaje y no es un error: es
-       exactamente lo que hace el interruptor. Twilio recibe un 200 y no
-       reintenta; el mensaje entrante ya quedó guardado en el contacto. */
-    if (err instanceof Pausado) {
-      return NextResponse.json({ success: false, pausado: true, message: err.message });
+}
+
+export async function POST(req) {
+  try {
+    /* Twilio manda un formulario, no JSON, y el mensaje ES el webhook: no hay
+       un `event_type` que mirar como en Telnyx. Lo que sí hay son avisos de
+       estado de mensajes que hemos enviado nosotros, y esos llegan por la
+       misma puerta con `Body` vacío. */
+    const rawPayload = await req.text();
+    const campos = Object.fromEntries(new URLSearchParams(rawPayload));
+
+    if (!esWebhookDeTwilio(req, campos)) {
+      return NextResponse.json(
+        { success: false, message: "Firma de webhook inválida" },
+        { status: 403 }
+      );
     }
+
+    /* Sin texto es un aviso de estado, no un mensaje de nadie. Se contesta
+       bien para que Twilio no lo reintente, y no se guarda: no hay nada que
+       procesar. */
+    if (!String(leerWebhookDeMensajeria(campos).text || "").trim()) {
+      return NextResponse.json({ success: true, ignored: true });
+    }
+
+    /* Aquí acaba lo que hace la petición. Lo demás —buscar el contacto, leer
+       el historial, preguntar a OpenAI, contestar— lo hace la cola. Twilio
+       recibe su 2xx en milisegundos, y un proveedor lento en medio ya no es
+       un timeout que se convierte en reintento. */
+    const guardado = await guardarEvento({
+      proveedor: "twilio-whatsapp",
+      tipo: "mensaje",
+      eventoId: String(campos.MessageSid || campos.SmsSid || "") || null,
+      payload: campos,
+    });
+
+    return NextResponse.json({ success: true, encolado: guardado.encolado, evento: guardado.id });
+  } catch (err) {
     console.error("Webhook WhatsApp error:", err);
     return NextResponse.json({
       success: false,

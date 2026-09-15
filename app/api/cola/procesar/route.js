@@ -5,6 +5,7 @@ import { logEvent } from "@/lib/server/observability.mjs";
 import { enviarInforme } from "@/lib/server/informes";
 import { pasadaDeMantenimiento } from "@/lib/server/mantenimiento";
 import { copiarGrabacion } from "@/lib/server/grabaciones";
+import { procesarEvento } from "@/lib/server/bandeja-webhooks";
 import { getSupabase } from "@/lib/supabase";
 
 /**
@@ -54,6 +55,11 @@ const OFICIOS = {
       callSid: t.datos?.callSid,
       clientId: t.client_id,
     }),
+
+  /* Un webhook guardado en la bandeja: ElevenLabs al colgar, un WhatsApp.
+     El endpoint sólo verificó la firma y lo guardó; el trabajo de verdad es
+     éste, con los reintentos de la cola. */
+  webhook: (t) => procesarEvento(t.datos?.evento_id),
 
   /**
    * Mover lo viejo al archivo y pasar la retención.

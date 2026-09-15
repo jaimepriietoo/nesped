@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 
 export async function POST(req) {
   try {
@@ -11,7 +12,7 @@ export async function POST(req) {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin", "manager", "agent"])) {
+    if (!puede(ctx.role, "inbox.reply")) {
       return NextResponse.json(
         { success: false, message: "Sin permisos" },
         { status: 403 }

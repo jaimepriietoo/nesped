@@ -4,7 +4,8 @@ import { logEvent, observeRoute } from "@/lib/server/observability.mjs";
 import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 import { conCortacircuitos, noEsDelProveedor } from "@/lib/server/cortacircuitos";
 import { exigirLlamadasPermitidas, respuestaSiPausado } from "@/lib/server/interruptores";
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { toE164 } from "@/lib/server/phone";
 
 function normalizePhone(value = "") {
@@ -122,7 +123,7 @@ async function handlePost(req) {
     const body = await req.json();
     const telefono = normalizePhone(body.telefono);
     const ctx = await getPortalContext();
-    if (ctx.ok && !hasRole(ctx.role, ["owner", "admin", "manager"])) {
+    if (ctx.ok && !puede(ctx.role, "voice.demo")) {
       return Response.json({ success: false, message: "Sin permisos para llamar" }, { status: 403 });
     }
     const clientId = ctx.ok ? ctx.clientId : "demo";

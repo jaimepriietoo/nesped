@@ -1,4 +1,5 @@
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 
 function csvEscape(value = "") {
   const text = String(value ?? "");
@@ -18,7 +19,7 @@ export async function GET() {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin", "manager"])) {
+    if (!puede(ctx.role, "audit.export")) {
       return Response.json(
         { success: false, message: "Sin permisos para exportar auditoría" },
         { status: 403 }

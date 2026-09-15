@@ -1,4 +1,5 @@
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { logEvent, observeRoute } from "@/lib/server/observability.mjs";
 import { requireSameOrigin, requireRateLimitAsync } from "@/lib/server/security";
 import { comprobarUrlExterna, peticionExternaSegura } from "@/lib/server/url-segura";
@@ -20,7 +21,7 @@ async function handlePost(req) {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin", "manager"])) {
+    if (!puede(ctx.role, "api.test")) {
       return Response.json(
         { success: false, message: "Sin permisos para probar webhooks" },
         { status: 403 }

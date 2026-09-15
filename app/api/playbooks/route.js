@@ -1,5 +1,6 @@
 import { requireSameOrigin } from "@/lib/server/security";
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { playbooksPorSector } from "@/lib/server/datos";
 import {
   getDefaultPlaybookWorkspace,
@@ -104,7 +105,7 @@ export async function PATCH(req) {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin", "manager"])) {
+    if (!puede(ctx.role, "playbooks.manage")) {
       return Response.json(
         { success: false, message: "Sin permisos para actualizar playbooks" },
         { status: 403 }

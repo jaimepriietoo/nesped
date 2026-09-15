@@ -1,5 +1,6 @@
 import { requireSameOrigin } from "@/lib/server/security";
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { exigirContactoPropio } from "@/lib/server/pertenencia";
  
 export async function GET(req) {
@@ -34,7 +35,7 @@ export async function POST(req) {
     if (originError) return originError;
     const ctx = await getPortalContext();
     if (!ctx.ok) return Response.json({ success: false, message: ctx.message }, { status: 401 });
-    if (!hasRole(ctx.role, ["owner", "admin", "manager", "agent"])) return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
+    if (!puede(ctx.role, "crm.edit")) return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
  
     const { lead_id, body: commentBody } = await req.json();
 

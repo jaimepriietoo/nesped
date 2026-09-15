@@ -1,4 +1,5 @@
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { evaluarAgentes, MODOS } from "@/lib/server/agentes";
 import { requireSameOrigin } from "@/lib/server/security";
 
@@ -48,7 +49,7 @@ export async function PATCH(req) {
     if (!ctx.ok) {
       return Response.json({ success: false, message: ctx.message }, { status: 401 });
     }
-    if (!hasRole(ctx.role, ["owner", "admin"])) {
+    if (!puede(ctx.role, "agents.manage")) {
       return Response.json(
         { success: false, message: "Solo el propietario puede cambiar cómo actúan los agentes." },
         { status: 403 }

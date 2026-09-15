@@ -1,5 +1,6 @@
 import { enviarCorreo } from "@/lib/server/correo";
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { requireSameOrigin } from "@/lib/server/security";
 import { enviarSms, enviarWhatsApp } from "@/lib/server/twilio";
 
@@ -20,7 +21,7 @@ export async function POST(req) {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin", "manager", "agent"])) {
+    if (!puede(ctx.role, "inbox.reply")) {
       return Response.json(
         { success: false, message: "Sin permisos para responder conversaciones" },
         { status: 403 }

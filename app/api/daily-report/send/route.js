@@ -1,4 +1,5 @@
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { requireSameOrigin } from "@/lib/server/security";
 import { encolar } from "@/lib/server/cola";
 
@@ -20,7 +21,7 @@ export async function POST(req) {
     if (originError) return originError;
     const ctx = await getPortalContext();
     if (!ctx.ok) return Response.json({ success: false, message: ctx.message }, { status: 401 });
-    if (!hasRole(ctx.role, ["owner", "admin", "manager"])) return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
+    if (!puede(ctx.role, "reports.send")) return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
 
     /* La clave lleva la fecha: pulsar el botón cinco veces la misma mañana no
        manda cinco correos, y mañana sí se puede volver a pedir. */

@@ -1,5 +1,6 @@
 import { requireSameOrigin } from "@/lib/server/security";
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { saveNextBestAction } from "@/lib/server/next-best-action-service";
  
 export async function POST(req) {
@@ -8,7 +9,7 @@ export async function POST(req) {
     if (originError) return originError;
     const ctx = await getPortalContext();
     if (!ctx.ok) return Response.json({ success: false, message: ctx.message }, { status: 401 });
-    if (!hasRole(ctx.role, ["owner","admin","manager","agent"])) return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
+    if (!puede(ctx.role, "ai.use")) return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
  
     const body = await req.json();
     const { leadId } = body;

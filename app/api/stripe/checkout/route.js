@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { urlDeSitio } from "@/lib/server/sitio";
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { requireSameOrigin } from "@/lib/server/security";
 import { exigirContactoPropio } from "@/lib/server/pertenencia";
 import {
@@ -32,7 +33,7 @@ export async function POST(req) {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin", "manager", "agent"])) {
+    if (!puede(ctx.role, "billing.checkout")) {
       return NextResponse.json(
         { success: false, message: "Sin permisos para crear un checkout" },
         { status: 403 }
@@ -63,7 +64,7 @@ export async function POST(req) {
     }
 
     const isClientPlanCheckout = !leadId;
-    if (isClientPlanCheckout && !hasRole(ctx.role, ["owner", "admin"])) {
+    if (isClientPlanCheckout && !puede(ctx.role, "billing.manage")) {
       return NextResponse.json({ success: false, message: "Sin permisos de facturación" }, { status: 403 });
     }
 

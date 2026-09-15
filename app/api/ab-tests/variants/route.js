@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { variantes, crearVariante } from "@/lib/server/datos";
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { requireSameOrigin } from "@/lib/server/security";
 
 export async function GET() {
@@ -43,7 +44,7 @@ export async function POST(req) {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin", "manager"])) {
+    if (!puede(ctx.role, "experiments.manage")) {
       return NextResponse.json(
         { success: false, message: "Sin permisos para crear variantes" },
         { status: 403 }

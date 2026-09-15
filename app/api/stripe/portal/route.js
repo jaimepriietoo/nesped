@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { urlDeSitio } from "@/lib/server/sitio";
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { requireSameOrigin } from "@/lib/server/security";
 import {
   resolveClientStripeCustomer,
@@ -28,7 +29,7 @@ export async function POST(req) {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin"])) {
+    if (!puede(ctx.role, "billing.manage")) {
       return NextResponse.json(
         { success: false, message: "Sin permisos para abrir billing" },
         { status: 403 }

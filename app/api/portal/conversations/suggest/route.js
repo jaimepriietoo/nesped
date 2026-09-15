@@ -3,7 +3,8 @@ import { conRegistroIA } from "@/lib/server/ia";
 import { respuestaSiPausado } from "@/lib/server/interruptores";
 import OpenAI from "openai";
 import { memoriaDeLead } from "@/lib/server/datos";
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import {
   getDefaultPlaybookWorkspace,
   parsePlaybookWorkspace,
@@ -84,7 +85,7 @@ export async function POST(req) {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin", "manager", "agent"])) {
+    if (!puede(ctx.role, "inbox.reply")) {
       return Response.json(
         { success: false, message: "Sin permisos para pedir sugerencias IA" },
         { status: 403 }

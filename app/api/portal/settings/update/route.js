@@ -1,4 +1,5 @@
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { safeUpsertClientSettings } from "@/lib/client-settings";
 import { requireSameOrigin } from "@/lib/server/security";
 
@@ -27,7 +28,7 @@ export async function PATCH(req) {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin"])) {
+    if (!puede(ctx.role, "settings.manage")) {
       return Response.json(
         { success: false, message: "Sin permisos para actualizar ajustes" },
         { status: 403 }

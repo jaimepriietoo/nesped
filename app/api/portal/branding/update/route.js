@@ -1,4 +1,5 @@
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { requireSameOrigin } from "@/lib/server/security";
 
 function withValue(value, transform = (item) => item) {
@@ -18,7 +19,7 @@ export async function PATCH(req) {
 
     const ctx = await getPortalContext();
     if (!ctx.ok) return Response.json({ success: false, message: ctx.message }, { status: 401 });
-    if (!hasRole(ctx.role, ["owner","admin"])) return Response.json({ success: false, message: "Sin permisos de admin" }, { status: 403 });
+    if (!puede(ctx.role, "brand.manage")) return Response.json({ success: false, message: "Sin permisos de admin" }, { status: 403 });
  
     const body = await req.json();
     const payload = cleanObject({

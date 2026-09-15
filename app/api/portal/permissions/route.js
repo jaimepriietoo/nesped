@@ -1,5 +1,6 @@
 import { filasDePermisos, fijarPermisosDeUsuario } from "@/lib/server/datos";
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { requireSameOrigin } from "@/lib/server/security";
 import {
   buildPermissionMatrix,
@@ -56,7 +57,7 @@ export async function PATCH(req) {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin"])) {
+    if (!puede(ctx.role, "users.manage")) {
       return Response.json(
         { success: false, message: "Sin permisos para editar permisos finos" },
         { status: 403 }

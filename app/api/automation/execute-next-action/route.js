@@ -1,4 +1,5 @@
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { executeNextBestAction } from "@/lib/server/next-best-action-service";
 import { requireSameOrigin } from "@/lib/server/security";
 
@@ -18,7 +19,7 @@ export async function POST(req) {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin", "manager", "agent"])) {
+    if (!puede(ctx.role, "automations.run")) {
       return Response.json(
         { success: false, message: "Sin permisos para ejecutar la acción" },
         { status: 403 }

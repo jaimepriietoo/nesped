@@ -1,4 +1,5 @@
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { requireSameOrigin, requireRateLimitAsync } from "@/lib/server/security";
 import { resolveTxt } from "node:dns/promises";
 
@@ -19,7 +20,7 @@ export async function POST(req) {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin"])) {
+    if (!puede(ctx.role, "settings.manage")) {
       return Response.json(
         { success: false, message: "Sin permisos para conectar dominio" },
         { status: 403 }

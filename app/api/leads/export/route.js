@@ -1,4 +1,5 @@
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 
 /**
  * Descarga los contactos en CSV.
@@ -64,7 +65,7 @@ export async function GET() {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin", "manager"])) {
+    if (!puede(ctx.role, "crm.export")) {
       return Response.json(
         { success: false, message: "Sin permisos para exportar contactos" },
         { status: 403 }

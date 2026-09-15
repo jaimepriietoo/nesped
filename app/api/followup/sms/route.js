@@ -1,4 +1,5 @@
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { enviarSms } from "@/lib/server/twilio";
 
 function normalizePhone(value) {
@@ -16,7 +17,7 @@ export async function POST(req) {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin", "manager", "agent"])) {
+    if (!puede(ctx.role, "inbox.reply")) {
       return Response.json(
         { success: false, message: "Sin permisos para enviar SMS" },
         { status: 403 }

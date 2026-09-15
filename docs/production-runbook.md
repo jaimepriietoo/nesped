@@ -126,6 +126,14 @@ npm run smoke -- https://tu-dominio.com
   - `SENTRY_ORG`
   - `SENTRY_PROJECT`
 
+Palancas de emergencia (sin desplegar):
+
+- `WEBHOOKS_EN_LINEA=si` — los webhooks de ElevenLabs y WhatsApp se procesan
+  dentro de la petición, como antes de la bandeja. Para cuando la cola esté
+  parada y haya que atenderlos ya. Quitarla cuando la cola vuelva.
+- `ajustes_plataforma` (tabla) — `pausa_global`, `pausa_ia`, `pausa_llamadas`;
+  ver `docs/cuando-se-cae-algo.md`.
+
 ## 9. Incident checklist
 
 If production breaks:

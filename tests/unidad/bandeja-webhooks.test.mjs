@@ -45,6 +45,17 @@ test("la cola tiene un ejecutor para los webhooks y administración puede reinte
   assert.match(admin, /requireSameOrigin\(/, "el reintento es una escritura: origen comprobado");
 });
 
+test("Stripe se guarda en la bandeja y se procesa en la misma petición; si lo esencial falla, suelta la reclamación", () => {
+  const ruta = leer("app/api/stripe/webhook/route.js");
+  assert.match(ruta, /guardarEvento\(\{[\s\S]*proveedor: "stripe"[\s\S]*enLinea: true/);
+  assert.doesNotMatch(ruta, /processStripeWebhookEvent\(/, "la ruta no procesa por su cuenta: lo hace la bandeja");
+  const bandeja = leer("lib/server/bandeja-webhooks.js");
+  assert.match(bandeja, /stripe: async/);
+  assert.match(bandeja, /WEBHOOKS_EN_LINEA/, "hay palanca de vuelta atrás");
+  const servicio = leer("lib/server/stripe-webhook-service.js");
+  assert.match(servicio, /webhooks_procesados"\)\.delete\(\)/, "si activar el plan falla, el reintento tiene que poder volver a intentarlo");
+});
+
 test("cada proveedor reclama su identificador antes de tener efectos", () => {
   assert.match(leer("lib/server/stripe-webhook-service.js"), /reclamar_webhook/);
   assert.match(leer("lib/server/elevenlabs.js"), /p_proveedor: "elevenlabs"/);

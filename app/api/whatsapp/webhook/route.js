@@ -14,6 +14,7 @@ import {
 } from "@/lib/server/twilio";
 import { toE164 } from "@/lib/server/phone";
 import { observeRoute } from "@/lib/server/observability.mjs";
+import { MensajeTwilio, validar } from "@/lib/server/esquemas";
 
 let openai = null;
 const supabase = getSupabase();
@@ -834,6 +835,10 @@ async function manejarPOST(req) {
        misma puerta con `Body` vacío. */
     const rawPayload = await req.text();
     const campos = Object.fromEntries(new URLSearchParams(rawPayload));
+    /* Se comprueba la forma, pero se sigue con los campos tal cual llegaron:
+       la firma de Twilio se calcula sobre ellos sin tocar. */
+    const leido = validar(MensajeTwilio, campos, { mensaje: "Mensaje no válido" });
+    if (leido.respuesta) return leido.respuesta;
 
     if (!esWebhookDeTwilio(req, campos)) {
       return NextResponse.json(

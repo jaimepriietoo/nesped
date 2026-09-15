@@ -7,6 +7,7 @@ import {
 import { consumirCodigo } from "@/lib/server/codigos-recuperacion";
 import { observeRoute } from "@/lib/server/observability.mjs";
 import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
+import { SegundoFactor, validar } from "@/lib/server/esquemas";
 
 async function handlePost(req) {
   const originError = requireSameOrigin(req);
@@ -18,8 +19,9 @@ async function handlePost(req) {
     keyParts: [challenge.email], includeIp: false,
   });
   if (limited) return limited;
-  const body = await req.json().catch(() => ({}));
-  const code = String(body.code || "").trim();
+  const leido = validar(SegundoFactor, await req.json().catch(() => ({})), { mensaje: "Código no válido" });
+  if (leido.respuesta) return leido.respuesta;
+  const { code } = leido.datos;
   // El contador está en la base de datos; repetir una cookie no lo reinicia.
   const attempt = await tomarIntentoTwoFactor(challenge);
   if (!attempt) return Response.json({ success: false, message: "La verificación ha caducado." }, { status: 400 });

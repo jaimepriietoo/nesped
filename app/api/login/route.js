@@ -11,6 +11,7 @@ import { logEvent, observeRoute } from "@/lib/server/observability.mjs";
 import { avisarDeAcceso } from "@/lib/server/aviso-acceso.mjs";
 import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 import { sendTwoFactorCode } from "@/lib/server/two-factor.mjs";
+import { Login, validar } from "@/lib/server/esquemas";
 
 async function handlePost(req) {
   try {
@@ -29,17 +30,9 @@ async function handlePost(req) {
     if (ipRateLimitError) return ipRateLimitError;
 
     const supabase = getSupabase();
-    const body = await req.json();
-    const email = String(body?.email || "").trim().toLowerCase();
-    const password = String(body?.password || "");
-    const nextPath = String(body?.next || "").trim();
-
-    if (!email || !password) {
-      return Response.json(
-        { success: false, message: "Faltan email o contraseña" },
-        { status: 400 }
-      );
-    }
+    const leido = validar(Login, await req.json().catch(() => ({})), { mensaje: "Faltan email o contraseña" });
+    if (leido.respuesta) return leido.respuesta;
+    const { email, password, next: nextPath } = leido.datos;
 
     const emailRateLimitError = await requireRateLimitAsync(req, {
       namespace: "login:email",

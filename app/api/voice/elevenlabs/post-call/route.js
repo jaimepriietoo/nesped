@@ -1,6 +1,7 @@
 import { verifyElevenLabsWebhookSignature } from "@/lib/server/elevenlabs";
 import { guardarEvento } from "@/lib/server/bandeja-webhooks";
 import { observeRoute } from "@/lib/server/observability.mjs";
+import { PostCallElevenLabs, validar } from "@/lib/server/esquemas";
 
 /**
  * ElevenLabs avisa de que una llamada ha terminado.
@@ -29,12 +30,16 @@ async function manejarPOST(req) {
     );
   }
 
-  let payload;
+  let crudo;
   try {
-    payload = rawBody ? JSON.parse(rawBody) : {};
+    crudo = rawBody ? JSON.parse(rawBody) : {};
   } catch {
     return Response.json({ success: false, message: "Cuerpo no válido" }, { status: 400 });
   }
+  /* Se comprueba la forma de lo que se usa; el resto del evento pasa tal cual. */
+  const leido = validar(PostCallElevenLabs, crudo, { mensaje: "Evento no válido" });
+  if (leido.respuesta) return leido.respuesta;
+  const payload = leido.datos;
 
   /* Sólo interesa la transcripción final; el resto de tipos se contesta bien
      y no se guarda, igual que hacía el procesado. */

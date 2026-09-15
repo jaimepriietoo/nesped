@@ -1,7 +1,8 @@
 import { executeNextBestAction } from "@/lib/server/next-best-action-service";
 import { requireInternalRequest } from "@/lib/server/internal-api";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function POST(req) {
+async function manejarPOST(req) {
   const unauthorized = requireInternalRequest(req);
   if (unauthorized) return unauthorized;
 
@@ -30,3 +31,5 @@ export async function POST(req) {
     );
   }
 }
+
+export const POST = observeRoute("api.automation.run-nba.execute-next-action.post", manejarPOST);

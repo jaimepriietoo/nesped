@@ -1,6 +1,7 @@
 import { createAdminSupabase, generateNextBestActionLlmRecommendation } from "@/lib/server/next-best-action-service";
 import { getNextBestActionRules } from "@/lib/next-best-action";
 import { requireInternalRequest } from "@/lib/server/internal-api";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function predictCloseProbability(lead) {
   const score = Number(lead?.score || 0);
@@ -18,7 +19,7 @@ function predictCloseProbability(lead) {
   return Math.max(0, Math.min(100, base));
 }
 
-export async function POST(req) {
+async function manejarPOST(req) {
   const unauthorized = requireInternalRequest(req);
   if (unauthorized) return unauthorized;
 
@@ -76,3 +77,5 @@ export async function POST(req) {
     );
   }
 }
+
+export const POST = observeRoute("api.ai.next-step.next-best-action.llm.post", manejarPOST);

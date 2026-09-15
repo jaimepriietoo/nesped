@@ -11,8 +11,9 @@ import {
   resolveCheckoutConfig,
   stripe,
 } from "@/lib/server/stripe-utils";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     // La devolución tiene que ser al sitio, no a BASE_URL, que apunta al
     // servidor de voz: quien pagaba acababa en un 404 de Railway.
@@ -175,3 +176,5 @@ export async function POST(req) {
     );
   }
 }
+
+export const POST = observeRoute("api.stripe.checkout.post", manejarPOST);

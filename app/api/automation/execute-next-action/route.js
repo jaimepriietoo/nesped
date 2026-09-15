@@ -2,8 +2,9 @@ import { getPortalContext } from "@/lib/portal-auth";
 import { puede } from "@/lib/server/permisos";
 import { executeNextBestAction } from "@/lib/server/next-best-action-service";
 import { requireSameOrigin } from "@/lib/server/security";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     const sameOriginError = requireSameOrigin(
       req,
@@ -49,3 +50,5 @@ export async function POST(req) {
     );
   }
 }
+
+export const POST = observeRoute("api.automation.execute-next-action.post", manejarPOST);

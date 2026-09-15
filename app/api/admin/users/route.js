@@ -3,6 +3,7 @@ import { getAdminContext, hashPassword } from "@/lib/server/auth";
 import { requireSameOrigin } from "@/lib/server/security";
 import { validarPassword } from "@/lib/server/passwords";
 import { getInternalApiHeaders } from "@/lib/server/internal-api";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function getSupabase() {
   return createClient(
@@ -11,7 +12,7 @@ function getSupabase() {
   );
 }
 
-export async function GET() {
+async function manejarGET() {
   try {
     const admin = await getAdminContext();
     if (!admin.ok) {
@@ -61,7 +62,7 @@ export async function GET() {
   }
 }
 
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     const originError = requireSameOrigin(req);
     if (originError) return originError;
@@ -176,3 +177,6 @@ export async function POST(req) {
     );
   }
 }
+
+export const GET = observeRoute("api.admin.users.get", manejarGET);
+export const POST = observeRoute("api.admin.users.post", manejarPOST);

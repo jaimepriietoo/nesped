@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { getAdminContext } from "@/lib/server/auth";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * Las cifras globales de Nesped y las últimas llamadas.
@@ -38,7 +39,7 @@ const COLUMNAS_RECIENTES = [
   "detected_intent",
 ].join(",");
 
-export async function GET() {
+async function manejarGET() {
   try {
     const admin = await getAdminContext();
     if (!admin.ok) {
@@ -79,3 +80,5 @@ export async function GET() {
     );
   }
 }
+
+export const GET = observeRoute("api.admin.dashboard.get", manejarGET);

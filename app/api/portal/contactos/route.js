@@ -1,5 +1,6 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { paginar, cuantasFilas, respuestaPaginada, CursorInvalido } from "@/lib/server/paginacion";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * Los contactos de la empresa, por cursor.
@@ -8,7 +9,7 @@ import { paginar, cuantasFilas, respuestaPaginada, CursorInvalido } from "@/lib/
  * es para seguir a partir de ahí: ?cursor=<el que devolvió la página
  * anterior>&cuantos=100. Sin cursor, empieza por el principio.
  */
-export async function GET(req) {
+async function manejarGET(req) {
   const ctx = await getPortalContext();
   if (!ctx.ok) return Response.json({ success: false, message: "No autorizado", data: [] }, { status: 401 });
 
@@ -25,3 +26,5 @@ export async function GET(req) {
     return Response.json({ success: false, message: "No se pudieron cargar los contactos", data: [] }, { status: 500 });
   }
 }
+
+export const GET = observeRoute("api.portal.contactos.get", manejarGET);

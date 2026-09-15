@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { safeUpsertClientSettings } from "@/lib/client-settings";
 import { getAdminContext } from "@/lib/server/auth";
 import { esTelefonoValido, toE164 } from "@/lib/server/phone";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function getSupabase() {
   return createClient(
@@ -11,7 +12,7 @@ function getSupabase() {
   );
 }
 
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     const originError = requireSameOrigin(req);
     if (originError) return originError;
@@ -119,3 +120,5 @@ export async function POST(req) {
     );
   }
 }
+
+export const POST = observeRoute("api.admin.clients.create.post", manejarPOST);

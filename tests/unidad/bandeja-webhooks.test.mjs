@@ -31,7 +31,7 @@ test("el webhook de WhatsApp sólo verifica, guarda y contesta; el proceso es un
      Twilio o un reproceso desde administración no manda el mensaje dos veces. */
   assert.match(s, /reclamar_webhook[\s\S]{0,200}twilio-whatsapp/);
   /* El POST no llama al proceso: lo hace la cola. */
-  const post = s.slice(s.indexOf("export async function POST("));
+  const post = s.slice(s.indexOf("async function manejarPOST("));
   assert.doesNotMatch(post, /procesarMensajeEntrante\(/);
   assert.doesNotMatch(post, /getOpenAI\(|reservarGeneracionIA\(/, "la petición no habla con OpenAI");
 });

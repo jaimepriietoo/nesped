@@ -1,6 +1,7 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { buildBrandLabWorkspace } from "@/lib/portal-product";
 import { productos } from "@/lib/server/datos";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function buildServices(client, settings) {
   const hayVozConfigurada = Boolean(
@@ -49,7 +50,7 @@ function buildServices(client, settings) {
   };
 }
 
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -103,3 +104,5 @@ export async function GET() {
     );
   }
 }
+
+export const GET = observeRoute("api.portal.brand-lab.get", manejarGET);

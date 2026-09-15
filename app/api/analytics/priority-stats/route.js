@@ -1,6 +1,7 @@
 import { getPortalContext } from "@/lib/portal-auth";
+import { observeRoute } from "@/lib/server/observability.mjs";
  
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) return Response.json({ success: false, message: ctx.message }, { status: 401 });
@@ -17,3 +18,5 @@ export async function GET() {
     return Response.json({ success: false, message: "No se pudo completar la operación" }, { status: 500 });
   }
 }
+
+export const GET = observeRoute("api.analytics.priority-stats.get", manejarGET);

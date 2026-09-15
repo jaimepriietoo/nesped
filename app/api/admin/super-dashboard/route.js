@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { getAdminContext } from "@/lib/server/auth";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * El panel que ve todas las empresas de golpe.
@@ -27,7 +28,7 @@ function getSupabase() {
 /** Cuántas empresas por página. Se puede pedir menos, no más. */
 const POR_PAGINA = 100;
 
-export async function GET(req) {
+async function manejarGET(req) {
   try {
     const admin = await getAdminContext();
     if (!admin.ok) {
@@ -78,3 +79,5 @@ export async function GET(req) {
     );
   }
 }
+
+export const GET = observeRoute("api.admin.super-dashboard.get", manejarGET);

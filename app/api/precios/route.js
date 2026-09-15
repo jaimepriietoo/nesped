@@ -1,4 +1,5 @@
 import { obtenerPrecios } from "@/lib/server/precios";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * Precios públicos, leídos de Stripe.
@@ -13,7 +14,7 @@ import { obtenerPrecios } from "@/lib/server/precios";
  */
 export const revalidate = 300;
 
-export async function GET() {
+async function manejarGET() {
   try {
     const precios = await obtenerPrecios();
     return Response.json(
@@ -32,3 +33,5 @@ export async function GET() {
     return Response.json({ success: true, data: {} });
   }
 }
+
+export const GET = observeRoute("api.precios.get", manejarGET);

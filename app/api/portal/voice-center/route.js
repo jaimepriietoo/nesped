@@ -2,6 +2,7 @@ import { getPortalContext } from "@/lib/portal-auth";
 import { scoreVoiceCallQA } from "@/lib/portal-product";
 import { memoriasDeLeads } from "@/lib/server/datos";
 import { getVoiceCompliancePolicy } from "@/lib/server/compliance.mjs";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function normalizePhone(value = "") {
   return String(value || "").replace(/[^\d+]/g, "").trim();
@@ -52,7 +53,7 @@ function getNextStep(call = {}, qa = {}) {
   return "Mantener seguimiento ligero y dejar CTA único para la siguiente interacción.";
 }
 
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -256,3 +257,5 @@ export async function GET() {
 function uniqueLeadIds(leads = []) {
   return [...new Set((leads || []).map((lead) => lead.id).filter(Boolean))];
 }
+
+export const GET = observeRoute("api.portal.voice-center.get", manejarGET);

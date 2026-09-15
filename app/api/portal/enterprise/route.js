@@ -8,8 +8,9 @@ import {
   buildBaseUrl,
   buildPortalServices,
 } from "@/lib/server/portal-phase-three";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function GET(req) {
+async function manejarGET(req) {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -116,3 +117,5 @@ export async function GET(req) {
     );
   }
 }
+
+export const GET = observeRoute("api.portal.enterprise.get", manejarGET);

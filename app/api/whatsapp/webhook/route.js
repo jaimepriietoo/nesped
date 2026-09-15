@@ -13,6 +13,7 @@ import {
   verificarWebhookTwilio,
 } from "@/lib/server/twilio";
 import { toE164 } from "@/lib/server/phone";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 let openai = null;
 const supabase = getSupabase();
@@ -825,7 +826,7 @@ await sendWhatsapp(phone, finalReply);
     });
 }
 
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     /* Twilio manda un formulario, no JSON, y el mensaje ES el webhook: no hay
        un `event_type` que mirar como en Telnyx. Lo que sí hay son avisos de
@@ -868,3 +869,5 @@ export async function POST(req) {
     });
   }
 }
+
+export const POST = observeRoute("api.whatsapp.webhook.post", manejarPOST);

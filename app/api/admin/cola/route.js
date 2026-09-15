@@ -2,6 +2,7 @@ import { getAdminContext } from "@/lib/server/auth";
 import { getSupabase } from "@/lib/supabase";
 import { requireSameOrigin } from "@/lib/server/security";
 import { eventosFallidos, reintentarEvento } from "@/lib/server/bandeja-webhooks";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * Lo que no ha salido bien, y cómo volver a intentarlo.
@@ -18,7 +19,7 @@ import { eventosFallidos, reintentarEvento } from "@/lib/server/bandeja-webhooks
  * WhatsApp su MessageSid. Lo que ya surtió efecto no se repite; lo que se
  * quedó a medias, sí.
  */
-export async function GET(req) {
+async function manejarGET(req) {
   const admin = await getAdminContext();
   if (!admin.ok) return Response.json({ success: false, message: admin.message }, { status: admin.status || 401 });
 
@@ -42,7 +43,7 @@ export async function GET(req) {
   );
 }
 
-export async function POST(req) {
+async function manejarPOST(req) {
   const admin = await getAdminContext();
   if (!admin.ok) return Response.json({ success: false, message: admin.message }, { status: admin.status || 401 });
   const originError = requireSameOrigin(req);
@@ -83,3 +84,6 @@ export async function POST(req) {
     return Response.json({ success: false, message: "No se pudo completar la operación" }, { status: 500 });
   }
 }
+
+export const GET = observeRoute("api.admin.cola.get", manejarGET);
+export const POST = observeRoute("api.admin.cola.post", manejarPOST);

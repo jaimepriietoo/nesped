@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { getAdminContext } from "@/lib/server/auth";
 import { requireSameOrigin } from "@/lib/server/security";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function getSupabase() {
   return createClient(
@@ -9,7 +10,7 @@ function getSupabase() {
   );
 }
 
-export async function PATCH(req) {
+async function manejarPATCH(req) {
   try {
     const originError = requireSameOrigin(req);
     if (originError) return originError;
@@ -78,3 +79,5 @@ export async function PATCH(req) {
     );
   }
 }
+
+export const PATCH = observeRoute("api.admin.portal-users.update.patch", manejarPATCH);

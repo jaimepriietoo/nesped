@@ -1,13 +1,14 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { puede } from "@/lib/server/permisos";
 import { enviarSms } from "@/lib/server/twilio";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function normalizePhone(value) {
   if (!value) return "";
   return String(value).replace(/\s+/g, "").trim();
 }
 
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -138,3 +139,5 @@ export async function POST(req) {
     );
   }
 }
+
+export const POST = observeRoute("api.followup.sms.post", manejarPOST);

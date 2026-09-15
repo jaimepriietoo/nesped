@@ -3,8 +3,9 @@ import { puede } from "@/lib/server/permisos";
 import { saveNextBestAction } from "@/lib/server/next-best-action-service";
 import { isAuthorizedInternalRequest } from "@/lib/server/internal-api";
 import { requireSameOrigin } from "@/lib/server/security";
+import { observeRoute } from "@/lib/server/observability.mjs";
  
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     // Allow internal requests (from automation)
     const isInternal = isAuthorizedInternalRequest(req);
@@ -43,3 +44,5 @@ export async function POST(req) {
     return Response.json({ success: false, message: "No se pudo completar la operación" }, { status: 500 });
   }
 }
+
+export const POST = observeRoute("api.ai.next-best-action.save.post", manejarPOST);

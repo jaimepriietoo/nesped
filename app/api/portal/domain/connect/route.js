@@ -2,12 +2,13 @@ import { getPortalContext } from "@/lib/portal-auth";
 import { puede } from "@/lib/server/permisos";
 import { requireSameOrigin, requireRateLimitAsync } from "@/lib/server/security";
 import { resolveTxt } from "node:dns/promises";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function isValidDomain(value = "") {
   return /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(String(value || "").trim());
 }
 
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     const sameOriginError = requireSameOrigin(req);
     if (sameOriginError) return sameOriginError;
@@ -120,3 +121,5 @@ export async function POST(req) {
     );
   }
 }
+
+export const POST = observeRoute("api.portal.domain.connect.post", manejarPOST);

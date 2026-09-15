@@ -1,6 +1,7 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { evaluarConsumo } from "@/lib/server/cuotas";
 import { cursorDe } from "@/lib/server/paginacion";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function predictCloseProbability(lead) {
   const score = Number(lead.score || 0);
@@ -162,7 +163,7 @@ function buildQuickActions() {
 const MAXIMO_CONTACTOS = 500;
 const MAXIMO_LLAMADAS = 300;
 
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -530,3 +531,5 @@ export async function GET() {
     );
   }
 }
+
+export const GET = observeRoute("api.portal.overview.get", manejarGET);

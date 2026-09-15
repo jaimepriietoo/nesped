@@ -1,5 +1,6 @@
 import { verifyElevenLabsWebhookSignature } from "@/lib/server/elevenlabs";
 import { guardarEvento } from "@/lib/server/bandeja-webhooks";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * ElevenLabs avisa de que una llamada ha terminado.
@@ -14,7 +15,7 @@ import { guardarEvento } from "@/lib/server/bandeja-webhooks";
  * veces es una fila, y el procesado reclama la conversación antes de tener
  * efectos, así que no hay forma de contar una llamada dos veces.
  */
-export async function POST(req) {
+async function manejarPOST(req) {
   const rawBody = await req.text();
   const hasValidHmac = verifyElevenLabsWebhookSignature({
     rawBody,
@@ -63,3 +64,5 @@ export async function POST(req) {
     );
   }
 }
+
+export const POST = observeRoute("api.voice.elevenlabs.post-call.post", manejarPOST);

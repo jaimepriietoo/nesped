@@ -8,6 +8,7 @@ import {
   parsePlaybookWorkspace,
   serializePlaybookWorkspace,
 } from "@/lib/portal-product";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 async function findIndustryPlaybook(industry = "") {
   const normalized = String(industry || "").trim().toLowerCase();
@@ -32,7 +33,7 @@ function mergeWorkspaceWithIndustry(defaults, industryPlaybook) {
   };
 }
 
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -93,7 +94,7 @@ export async function GET() {
   }
 }
 
-export async function PATCH(req) {
+async function manejarPATCH(req) {
   try {
     const originError = requireSameOrigin(req);
     if (originError) return originError;
@@ -148,3 +149,6 @@ export async function PATCH(req) {
     );
   }
 }
+
+export const GET = observeRoute("api.playbooks.get", manejarGET);
+export const PATCH = observeRoute("api.playbooks.patch", manejarPATCH);

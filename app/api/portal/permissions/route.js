@@ -6,8 +6,9 @@ import {
   buildPermissionMatrix,
   getPermissionCatalog,
 } from "@/lib/server/portal-permissions";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -44,7 +45,7 @@ export async function GET() {
   }
 }
 
-export async function PATCH(req) {
+async function manejarPATCH(req) {
   try {
     const sameOriginError = requireSameOrigin(req);
     if (sameOriginError) return sameOriginError;
@@ -109,3 +110,6 @@ export async function PATCH(req) {
     );
   }
 }
+
+export const GET = observeRoute("api.portal.permissions.get", manejarGET);
+export const PATCH = observeRoute("api.portal.permissions.patch", manejarPATCH);

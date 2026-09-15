@@ -2,6 +2,7 @@ import { getPortalContext } from "@/lib/portal-auth";
 import { puede } from "@/lib/server/permisos";
 import { safeUpsertClientSettings } from "@/lib/client-settings";
 import { requireSameOrigin } from "@/lib/server/security";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function withValue(value, transform = (item) => item) {
   return value === undefined ? undefined : transform(value);
@@ -13,7 +14,7 @@ function cleanObject(input = {}) {
   );
 }
 
-export async function PATCH(req) {
+async function manejarPATCH(req) {
   try {
     const sameOriginError = requireSameOrigin(req);
     if (sameOriginError) {
@@ -112,3 +113,5 @@ export async function PATCH(req) {
     );
   }
 }
+
+export const PATCH = observeRoute("api.portal.settings.update.patch", manejarPATCH);

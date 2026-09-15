@@ -1,7 +1,8 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { buildInboxThreads } from "@/lib/portal-product";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -106,3 +107,5 @@ export async function GET() {
     );
   }
 }
+
+export const GET = observeRoute("api.portal.inbox.get", manejarGET);

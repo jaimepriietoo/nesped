@@ -1,7 +1,8 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { buildApiHubData } from "@/lib/server/portal-phase-three";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function GET(req) {
+async function manejarGET(req) {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -72,3 +73,5 @@ export async function GET(req) {
     );
   }
 }
+
+export const GET = observeRoute("api.portal.api-hub.get", manejarGET);

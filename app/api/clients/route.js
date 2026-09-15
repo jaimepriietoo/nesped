@@ -1,6 +1,7 @@
 import { getAdminContext } from "@/lib/server/auth";
 import { getSupabase } from "@/lib/supabase";
 import { CLIENT_LIST, mapClientToPublicShape } from "@/lib/clients";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 const supabase = getSupabase();
 
@@ -35,7 +36,7 @@ function formaPublica(cliente) {
  * necesita uno, así que ese caso pasa a ir por `id` y la lista completa
  * queda detrás de sesión.
  */
-export async function GET(req) {
+async function manejarGET(req) {
   try {
     const id = new URL(req.url).searchParams.get("id");
 
@@ -90,3 +91,5 @@ export async function GET(req) {
     );
   }
 }
+
+export const GET = observeRoute("api.clients.get", manejarGET);

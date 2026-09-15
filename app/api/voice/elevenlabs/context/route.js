@@ -1,7 +1,8 @@
 import { requireInternalRequest } from "@/lib/server/internal-api";
 import { buildElevenLabsContext } from "@/lib/server/elevenlabs";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     const authError = requireInternalRequest(req);
     if (authError) return authError;
@@ -29,3 +30,5 @@ export async function POST(req) {
     );
   }
 }
+
+export const POST = observeRoute("api.voice.elevenlabs.context.post", manejarPOST);

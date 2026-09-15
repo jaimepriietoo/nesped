@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { requireSameOrigin } from "@/lib/server/security";
 import { safeUpsertClientSettings } from "@/lib/client-settings";
 import { getAdminContext, hashPassword } from "@/lib/server/auth";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function getSupabase() {
   return createClient(
@@ -48,7 +49,7 @@ function mapClient(row) {
   };
 }
 
-export async function GET() {
+async function manejarGET() {
   try {
     const admin = await getAdminContext();
     if (!admin.ok) {
@@ -98,7 +99,7 @@ export async function GET() {
   }
 }
 
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     const originError = requireSameOrigin(req);
     if (originError) return originError;
@@ -274,7 +275,7 @@ export async function POST(req) {
   }
 }
 
-export async function PATCH(req) {
+async function manejarPATCH(req) {
   try {
     const originError = requireSameOrigin(req);
     if (originError) return originError;
@@ -389,3 +390,7 @@ export async function PATCH(req) {
     );
   }
 }
+
+export const GET = observeRoute("api.admin.clients.get", manejarGET);
+export const POST = observeRoute("api.admin.clients.post", manejarPOST);
+export const PATCH = observeRoute("api.admin.clients.patch", manejarPATCH);

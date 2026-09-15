@@ -1,9 +1,10 @@
 import { getSupabase } from "@/lib/supabase";
 import { getAdminContext } from "@/lib/server/auth";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 const supabase = getSupabase();
 
-export async function GET() {
+async function manejarGET() {
   try {
     const admin = await getAdminContext();
     if (!admin.ok) {
@@ -39,3 +40,5 @@ export async function GET() {
     );
   }
 }
+
+export const GET = observeRoute("api.admin.calls.get", manejarGET);

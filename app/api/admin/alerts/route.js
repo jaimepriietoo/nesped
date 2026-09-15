@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { getAdminContext } from "@/lib/server/auth";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function getSupabase() {
   return createClient(
@@ -8,7 +9,7 @@ function getSupabase() {
   );
 }
 
-export async function GET() {
+async function manejarGET() {
   try {
     const admin = await getAdminContext();
     if (!admin.ok) {
@@ -44,3 +45,5 @@ export async function GET() {
     );
   }
 }
+
+export const GET = observeRoute("api.admin.alerts.get", manejarGET);

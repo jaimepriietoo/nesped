@@ -1,12 +1,13 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { puede } from "@/lib/server/permisos";
 import { paginar, cuantasFilas, respuestaPaginada, CursorInvalido } from "@/lib/server/paginacion";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * El registro de auditoría de la empresa, por cursor. Para leerlo entero
  * sin la exportación de 2000 filas: quien puede exportar, puede leer.
  */
-export async function GET(req) {
+async function manejarGET(req) {
   const ctx = await getPortalContext();
   if (!ctx.ok) return Response.json({ success: false, message: "No autorizado", data: [] }, { status: 401 });
   if (!puede(ctx.role, "audit.export")) return Response.json({ success: false, message: "Sin permisos", data: [] }, { status: 403 });
@@ -24,3 +25,5 @@ export async function GET(req) {
     return Response.json({ success: false, message: "No se pudo cargar la auditoría", data: [] }, { status: 500 });
   }
 }
+
+export const GET = observeRoute("api.portal.auditoria.get", manejarGET);

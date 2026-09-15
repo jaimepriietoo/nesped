@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { getPortalContext } from "@/lib/portal-auth";
 import { getPaidLeadRows, groupPaidLeadRows } from "@/lib/server/billing-analytics";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -64,3 +65,5 @@ export async function GET() {
     );
   }
 }
+
+export const GET = observeRoute("api.analytics.billing.get", manejarGET);

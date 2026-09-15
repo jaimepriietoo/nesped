@@ -3,12 +3,13 @@ import { getPortalContext } from "@/lib/portal-auth";
 import { puede } from "@/lib/server/permisos";
 import { requireSameOrigin } from "@/lib/server/security";
 import { enviarSms, enviarWhatsApp } from "@/lib/server/twilio";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function normalizePhone(value = "") {
   return String(value || "").replace(/\s+/g, "").trim();
 }
 
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     const sameOriginError = requireSameOrigin(req);
     if (sameOriginError) return sameOriginError;
@@ -169,3 +170,5 @@ export async function POST(req) {
     );
   }
 }
+
+export const POST = observeRoute("api.portal.conversations.respond.post", manejarPOST);

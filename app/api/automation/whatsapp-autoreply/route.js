@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { getPortalContext } from "@/lib/portal-auth";
 import { puede } from "@/lib/server/permisos";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -69,3 +70,5 @@ export async function POST(req) {
     );
   }
 }
+
+export const POST = observeRoute("api.automation.whatsapp-autoreply.post", manejarPOST);

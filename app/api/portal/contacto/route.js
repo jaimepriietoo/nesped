@@ -1,5 +1,6 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { fichaDeContacto } from "@/lib/server/contacto";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * Todo lo que se sabe de un contacto, en una sola llamada.
@@ -12,7 +13,7 @@ import { fichaDeContacto } from "@/lib/server/contacto";
  * de la sesión: con el id de un contacto de otra empresa, esto devuelve 404,
  * no sus datos.
  */
-export async function GET(req) {
+async function manejarGET(req) {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -47,3 +48,5 @@ export async function GET(req) {
     );
   }
 }
+
+export const GET = observeRoute("api.portal.contacto.get", manejarGET);

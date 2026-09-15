@@ -5,6 +5,7 @@ import {
   interruptoresDePlataforma, interruptoresDeEmpresa,
   fijarInterruptoresDePlataforma, fijarInterruptoresDeEmpresa,
 } from "@/lib/server/interruptores";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * Los interruptores de emergencia, desde la administración de Nesped.
@@ -18,7 +19,7 @@ import {
  * que se pueda pulsar en segundos sin desplegar nada. Cada cambio queda en
  * audit_logs con quién lo pulsó.
  */
-export async function GET(req) {
+async function manejarGET(req) {
   const admin = await getAdminContext();
   if (!admin.ok) return Response.json({ success: false, message: admin.message }, { status: admin.status || 401 });
 
@@ -28,7 +29,7 @@ export async function GET(req) {
   return Response.json({ success: true, data: { plataforma, empresa: deEmpresa } }, { headers: { "Cache-Control": "no-store" } });
 }
 
-export async function POST(req) {
+async function manejarPOST(req) {
   const admin = await getAdminContext();
   if (!admin.ok) return Response.json({ success: false, message: admin.message }, { status: admin.status || 401 });
   const originError = requireSameOrigin(req);
@@ -59,3 +60,6 @@ export async function POST(req) {
     return Response.json({ success: false, message: "No se pudo completar la operación" }, { status: 500 });
   }
 }
+
+export const GET = observeRoute("api.admin.interruptores.get", manejarGET);
+export const POST = observeRoute("api.admin.interruptores.post", manejarPOST);

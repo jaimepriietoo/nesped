@@ -1,6 +1,7 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { revocarSesionesDe } from "@/lib/server/auth";
 import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * Cierra todas las sesiones abiertas de quien lo pide.
@@ -10,7 +11,7 @@ import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security"
  * entrado, eso no sirve de nada. Esto invalida el token en todas partes a la
  * vez, incluida la sesión desde la que se pide.
  */
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     const sameOriginError = requireSameOrigin(
       req,
@@ -63,3 +64,5 @@ export async function POST(req) {
     );
   }
 }
+
+export const POST = observeRoute("api.portal.sesiones.revocar.post", manejarPOST);

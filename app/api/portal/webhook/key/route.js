@@ -2,8 +2,9 @@ import { getPortalContext } from "@/lib/portal-auth";
 import { puede } from "@/lib/server/permisos";
 import { requireSameOrigin, requireRateLimitAsync } from "@/lib/server/security";
 import { webhookKey } from "@/lib/server/webhook-signing";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function POST(req) {
+async function manejarPOST(req) {
   const originError = requireSameOrigin(req);
   if (originError) return originError;
   const ctx = await getPortalContext();
@@ -13,3 +14,5 @@ export async function POST(req) {
   if (limited) return limited;
   return Response.json({ success: true, key: webhookKey(ctx.clientId), version: 1 }, { headers: { "Cache-Control": "no-store" } });
 }
+
+export const POST = observeRoute("api.portal.webhook.key.post", manejarPOST);

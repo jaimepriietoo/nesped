@@ -1,5 +1,6 @@
 import { getSupabase } from "@/lib/supabase";
 import { getClientById, isDemoClientId, mapClientToPublicShape } from "@/lib/clients";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 const supabase = getSupabase();
 
@@ -23,7 +24,7 @@ function mapClient(client) {
   };
 }
 
-export async function GET(req) {
+async function manejarGET(req) {
   try {
     const host = req.headers.get("host") || "";
     const hostname = host.split(":")[0];
@@ -76,3 +77,5 @@ export async function GET(req) {
     );
   }
 }
+
+export const GET = observeRoute("api.public-client.get", manejarGET);

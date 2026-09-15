@@ -1,6 +1,7 @@
 import { getPortalContext } from "@/lib/portal-auth";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -40,3 +41,5 @@ export async function GET() {
     );
   }
 }
+
+export const GET = observeRoute("api.calls.get", manejarGET);

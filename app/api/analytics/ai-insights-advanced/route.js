@@ -9,8 +9,9 @@ import {
   getClientPaymentRows,
 } from "@/lib/server/portal-phase-two";
 import { productos } from "@/lib/server/datos";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -109,3 +110,5 @@ export async function GET() {
     );
   }
 }
+
+export const GET = observeRoute("api.analytics.ai-insights-advanced.get", manejarGET);

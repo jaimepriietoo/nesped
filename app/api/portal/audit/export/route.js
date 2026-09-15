@@ -1,5 +1,6 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { puede } from "@/lib/server/permisos";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function csvEscape(value = "") {
   const text = String(value ?? "");
@@ -9,7 +10,7 @@ function csvEscape(value = "") {
   return text;
 }
 
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -74,3 +75,5 @@ export async function GET() {
     );
   }
 }
+
+export const GET = observeRoute("api.portal.audit.export.get", manejarGET);

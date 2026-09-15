@@ -5,6 +5,7 @@ import { validarPassword } from "@/lib/server/passwords";
 import { hashPassword, generateTwoFactorCode, setTwoFactorChallenge } from "@/lib/server/auth";
 import { sendTwoFactorCode } from "@/lib/server/two-factor.mjs";
 import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * Alta de cuenta ANTES de pagar.
@@ -47,7 +48,7 @@ function aIdentificador(valor = "") {
     .slice(0, 36);
 }
 
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     const origenError = requireSameOrigin(req, "Origen no permitido para el alta");
     if (origenError) return origenError;
@@ -112,3 +113,5 @@ export async function POST(req) {
     );
   }
 }
+
+export const POST = observeRoute("api.registro.post", manejarPOST);

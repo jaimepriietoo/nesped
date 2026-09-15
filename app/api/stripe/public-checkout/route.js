@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { urlDeSitio } from "@/lib/server/sitio";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * Cobro sin cuenta: retirado.
@@ -15,7 +16,7 @@ import { urlDeSitio } from "@/lib/server/sitio";
 
 const PLANES_PUBLICOS = new Set(["growth", "intelligence"]);
 
-export async function GET(req) {
+async function manejarGET(req) {
   const BASE_URL = urlDeSitio(req);
   const { searchParams } = new URL(req.url);
   const plan = String(searchParams.get("plan") || "growth").toLowerCase();
@@ -23,3 +24,5 @@ export async function GET(req) {
 
   return NextResponse.redirect(`${BASE_URL}${destino}`, 308);
 }
+
+export const GET = observeRoute("api.stripe.public-checkout.get", manejarGET);

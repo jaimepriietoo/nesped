@@ -1,8 +1,9 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { puede } from "@/lib/server/permisos";
 import { requireSameOrigin } from "@/lib/server/security";
+import { observeRoute } from "@/lib/server/observability.mjs";
  
-export async function PATCH(req) {
+async function manejarPATCH(req) {
   try {
     const sameOriginError = requireSameOrigin(
       req,
@@ -65,3 +66,5 @@ export async function PATCH(req) {
     return Response.json({ success: false, message: "No se pudo completar la operación" }, { status: 500 });
   }
 }
+
+export const PATCH = observeRoute("api.leads.update.patch", manejarPATCH);

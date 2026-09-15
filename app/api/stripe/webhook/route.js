@@ -1,8 +1,9 @@
 import { headers } from "next/headers";
 import { stripe } from "@/lib/server/stripe-utils";
 import { processStripeWebhookEvent } from "@/lib/server/stripe-webhook";
+import { observeRoute } from "@/lib/server/observability.mjs";
  
-export async function POST(req) {
+async function manejarPOST(req) {
   const body = await req.text();
   const sig = (await headers()).get("stripe-signature") || "";
  
@@ -23,3 +24,5 @@ export async function POST(req) {
 }
  
 export const config = { api: { bodyParser: false } };
+
+export const POST = observeRoute("api.stripe.webhook.post", manejarPOST);

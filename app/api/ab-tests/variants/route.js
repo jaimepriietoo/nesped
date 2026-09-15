@@ -3,8 +3,9 @@ import { variantes, crearVariante } from "@/lib/server/datos";
 import { getPortalContext } from "@/lib/portal-auth";
 import { puede } from "@/lib/server/permisos";
 import { requireSameOrigin } from "@/lib/server/security";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -29,7 +30,7 @@ export async function GET() {
   }
 }
 
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     const sameOriginError = requireSameOrigin(req);
     if (sameOriginError) {
@@ -74,3 +75,6 @@ export async function POST(req) {
     });
   }
 }
+
+export const GET = observeRoute("api.ab-tests.variants.get", manejarGET);
+export const POST = observeRoute("api.ab-tests.variants.post", manejarPOST);

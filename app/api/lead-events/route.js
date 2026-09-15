@@ -1,5 +1,6 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { exigirContactoPropio } from "@/lib/server/pertenencia";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * Historial de eventos de un contacto.
@@ -18,7 +19,7 @@ import { exigirContactoPropio } from "@/lib/server/pertenencia";
  * persona en TODAS las empresas del sistema. Se ha quitado: la tabla ni
  * siquiera tiene esa columna, así que esa rama sólo podía dar un error.
  */
-export async function GET(req) {
+async function manejarGET(req) {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -54,3 +55,5 @@ export async function GET(req) {
     );
   }
 }
+
+export const GET = observeRoute("api.lead-events.get", manejarGET);

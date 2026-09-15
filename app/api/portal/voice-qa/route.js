@@ -1,12 +1,13 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { llamadasDeVoz } from "@/lib/server/datos";
 import { scoreVoiceCallQA } from "@/lib/portal-product";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function normalizePhone(phone = "") {
   return String(phone || "").replace(/[^\d+]/g, "").trim();
 }
 
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -112,3 +113,5 @@ export async function GET() {
     );
   }
 }
+
+export const GET = observeRoute("api.portal.voice-qa.get", manejarGET);

@@ -1,11 +1,12 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { paginar, cuantasFilas, respuestaPaginada, CursorInvalido } from "@/lib/server/paginacion";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * Las llamadas de la empresa, por cursor. Misma forma que /api/calls (sin
  * la URL de grabación: ésa se pide aparte y firmada), pero sin fin.
  */
-export async function GET(req) {
+async function manejarGET(req) {
   const ctx = await getPortalContext();
   if (!ctx.ok) return Response.json({ success: false, message: "No autorizado", data: [] }, { status: 401 });
 
@@ -26,3 +27,5 @@ export async function GET(req) {
     return Response.json({ success: false, message: "No se pudieron cargar las llamadas", data: [] }, { status: 500 });
   }
 }
+
+export const GET = observeRoute("api.portal.llamadas.get", manejarGET);

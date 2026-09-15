@@ -11,6 +11,7 @@ import {
 } from "@/lib/portal-product";
 import { requireSameOrigin } from "@/lib/server/security";
 import { buildConversationAssistPayload } from "@/lib/server/portal-phase-four";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 const openai = process.env.OPENAI_API_KEY
   ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 20000, maxRetries: 0 })
@@ -72,7 +73,7 @@ Responde SOLO con JSON válido:
   }
 }
 
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     const sameOriginError = requireSameOrigin(req);
     if (sameOriginError) return sameOriginError;
@@ -170,3 +171,5 @@ export async function POST(req) {
     );
   }
 }
+
+export const POST = observeRoute("api.portal.conversations.suggest.post", manejarPOST);

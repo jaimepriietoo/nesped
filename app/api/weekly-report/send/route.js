@@ -2,6 +2,7 @@ import { getPortalContext } from "@/lib/portal-auth";
 import { puede } from "@/lib/server/permisos";
 import { requireSameOrigin } from "@/lib/server/security";
 import { encolar } from "@/lib/server/cola";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * Pedir el informe semanal.
@@ -15,7 +16,7 @@ import { encolar } from "@/lib/server/cola";
  * Ahora sólo lo apunta en la cola. El trabajo lo hace /api/cola/procesar, que
  * cuenta en la base de datos y reintenta si el proveedor falla.
  */
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     const originError = requireSameOrigin(req);
     if (originError) return originError;
@@ -44,3 +45,5 @@ export async function POST(req) {
     return Response.json({ success: false, message: "No se pudo completar la operación" }, { status: 500 });
   }
 }
+
+export const POST = observeRoute("api.weekly-report.send.post", manejarPOST);

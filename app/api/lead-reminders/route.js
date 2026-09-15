@@ -2,8 +2,9 @@ import { requireSameOrigin } from "@/lib/server/security";
 import { getPortalContext } from "@/lib/portal-auth";
 import { puede } from "@/lib/server/permisos";
 import { exigirContactoPropio } from "@/lib/server/pertenencia";
+import { observeRoute } from "@/lib/server/observability.mjs";
  
-export async function GET(req) {
+async function manejarGET(req) {
   try {
     const { searchParams } = new URL(req.url);
     const leadId = searchParams.get("lead_id");
@@ -29,7 +30,7 @@ export async function GET(req) {
   }
 }
  
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     const originError = requireSameOrigin(req);
     if (originError) return originError;
@@ -53,3 +54,6 @@ export async function POST(req) {
     return Response.json({ success: false, message: "No se pudo completar la operación" }, { status: 500 });
   }
 }
+
+export const GET = observeRoute("api.lead-reminders.get", manejarGET);
+export const POST = observeRoute("api.lead-reminders.post", manejarPOST);

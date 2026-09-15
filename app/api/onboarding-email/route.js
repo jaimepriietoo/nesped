@@ -1,5 +1,6 @@
 import { enviarCorreo } from "@/lib/server/correo";
 import { requireInternalRequest } from "@/lib/server/internal-api";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * Correo de bienvenida a un usuario recién creado.
@@ -33,7 +34,7 @@ function escaparHtml(valor = "") {
     .replace(/'/g, "&#39;");
 }
 
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     const errorInterno = requireInternalRequest(req);
     if (errorInterno) return errorInterno;
@@ -88,3 +89,5 @@ export async function POST(req) {
     );
   }
 }
+
+export const POST = observeRoute("api.onboarding-email.post", manejarPOST);

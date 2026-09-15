@@ -1,8 +1,9 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { groupPaidLeadRows } from "@/lib/server/payments";
 import { getClientPaymentRows } from "@/lib/server/portal-phase-two";
+import { observeRoute } from "@/lib/server/observability.mjs";
  
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -25,3 +26,5 @@ export async function GET() {
     return Response.json({ success: false, message: "No se pudo completar la operación" }, { status: 500 });
   }
 }
+
+export const GET = observeRoute("api.analytics.lead-revenue.get", manejarGET);

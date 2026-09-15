@@ -1,6 +1,7 @@
 import { getSupabase } from "@/lib/supabase";
 import { getAdminContext } from "@/lib/server/auth";
 import { direccionParaEscuchar } from "@/lib/server/grabaciones";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * Sacar una empresa entera.
@@ -28,7 +29,7 @@ import { direccionParaEscuchar } from "@/lib/server/grabaciones";
 /** Filas por trozo. Ver el comentario de exportar_tabla_de_empresa(). */
 const POR_TROZO = 1000;
 
-export async function GET(req) {
+async function manejarGET(req) {
   const admin = await getAdminContext();
   if (!admin.ok) {
     return Response.json(
@@ -153,3 +154,5 @@ export async function GET(req) {
     siguiente: filas.length === POR_TROZO ? (desde || 0) + POR_TROZO : null,
   });
 }
+
+export const GET = observeRoute("api.admin.empresa.exportar.get", manejarGET);

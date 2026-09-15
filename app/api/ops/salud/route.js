@@ -1,4 +1,5 @@
 import { getSupabase } from "@/lib/supabase";
+import { latidoDeLaCola } from "@/lib/server/cola";
 import { requireInternalRequest } from "@/lib/server/internal-api";
 import { observeRoute } from "@/lib/server/observability.mjs";
 import { TABLAS_POR_EMPRESA } from "@/lib/server/datos-cliente";
@@ -59,10 +60,11 @@ async function handleGet(req) {
 
   const supabase = getSupabase();
 
-  const [saludRes, crucesRes, desfase] = await Promise.all([
+  const [saludRes, crucesRes, desfase, latido] = await Promise.all([
     supabase.rpc("salud_de_la_base"),
     supabase.rpc("referencias_que_cruzan_empresas"),
     desfaseDeTablas(supabase),
+    latidoDeLaCola(15, supabase),
   ]);
 
   if (saludRes.error) {
@@ -73,6 +75,19 @@ async function handleGet(req) {
   }
 
   const avisos = [...(saludRes.data?.avisos || [])];
+
+  /* La cola depende de que alguien la empuje —el latido desde Railway, o el
+     cron diario de Vercel—. Si el latido cae, nada avisa: los informes y las
+     purgas simplemente no salen. Un trabajo pendiente desde hace más de
+     quince minutos es la señal de que nadie está empujando. */
+  if (latido.comprobado && latido.pendientesViejos > 0) {
+    avisos.push({
+      que: "La cola de trabajos no se está procesando",
+      medido: `${latido.pendientesViejos} pendiente(s) desde hace más de ${latido.minutos} min; el más antiguo, ${latido.masAntiguoMin} min`,
+      palanca:
+        "Mirar el servicio de Railway (voice-server.js, el latido) y CRON_SECRET. Mientras tanto, /api/cola/procesar se puede llamar a mano.",
+    });
+  }
 
   /* Un enlace que cruza empresas casi siempre quiere decir que alguien
      escribió una fila sin filtrar. Eso es una fuga, no un problema de
@@ -108,6 +123,7 @@ async function handleGet(req) {
         ? { comprobado: false, motivo: crucesRes.error.message }
         : crucesRes.data,
       tablas_de_empresa: desfase,
+      cola: latido,
       avisos,
       hayQueHacerAlgo: avisos.length > 0,
     },

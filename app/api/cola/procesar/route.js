@@ -1,6 +1,7 @@
 import { requireInternalRequest } from "@/lib/server/internal-api";
-import { encolar, tomarTrabajos, terminar, fallar, rescatarColgados, SinArreglo } from "@/lib/server/cola";
+import { encolar, tomarTrabajos, terminar, fallar, rescatarColgados, latidoDeLaCola, SinArreglo } from "@/lib/server/cola";
 import { colaEnPausa } from "@/lib/server/interruptores";
+import { logEvent } from "@/lib/server/observability.mjs";
 import { enviarInforme } from "@/lib/server/informes";
 import { pasadaDeMantenimiento } from "@/lib/server/mantenimiento";
 import { copiarGrabacion } from "@/lib/server/grabaciones";
@@ -105,6 +106,20 @@ async function procesar(req) {
     /* Antes de repartir, se recogen los que se quedaron con un trabajador
        muerto. Si no, se quedarían en 'en_curso' para siempre. */
     const rescatados = await rescatarColgados();
+
+    /* Y se mira si esta pasada llega tarde. Si hay trabajos vencidos desde
+       hace más de quince minutos, las pasadas anteriores no ocurrieron: el
+       latido de Railway está caído y sólo el cron diario de Vercel ha
+       llegado hasta aquí. Se avisa a operaciones —logEvent en nivel error
+       manda al webhook— y se sigue procesando, que es lo urgente. */
+    const latido = await latidoDeLaCola();
+    if (latido.comprobado && latido.pendientesViejos > 0) {
+      logEvent("error", "cola.sin_latido", {
+        pendientesViejos: latido.pendientesViejos,
+        masAntiguoMin: latido.masAntiguoMin,
+        palanca: "Mirar el latido en Railway (voice-server.js) y CRON_SECRET",
+      });
+    }
 
     /* El mantenimiento no necesita su propio cron: se apunta él mismo, y la
        clave con la fecha hace que sólo entre uno al día por mucho que esta

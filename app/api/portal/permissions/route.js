@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { filasDePermisos, fijarPermisosDeUsuario } from "@/lib/server/datos";
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
 import { requireSameOrigin } from "@/lib/server/security";
 import {
@@ -18,7 +18,7 @@ export async function GET() {
 
     const { data: portalUsers, error } = await ctx.supabase
       .from("portal_users")
-      .select("id,email,role")
+      .select("id,email,role,permissions,updated_at")
       .eq("client_id", ctx.clientId)
       .order("created_at", { ascending: true });
 
@@ -26,14 +26,7 @@ export async function GET() {
       throw new Error(error.message || "No se pudieron cargar permisos");
     }
 
-    const userIds = (portalUsers || []).map((item) => item.id).filter(Boolean);
-    const permissionRows =
-      userIds.length > 0
-        ? await prisma.userPermission.findMany({
-            where: { user_id: { in: userIds } },
-            orderBy: { created_at: "desc" },
-          })
-        : [];
+    const permissionRows = filasDePermisos(portalUsers || []);
 
     return Response.json({
       success: true,
@@ -89,12 +82,10 @@ export async function PATCH(req) {
     if (targetError || !target) return Response.json({ success: false, message: "Usuario no disponible" }, { status: 404 });
     if (target.role === "owner" && ctx.role !== "owner") return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
 
-    await prisma.$transaction([
-      prisma.userPermission.deleteMany({ where: { user_id: target.id } }),
-      ...(safeScopes.length ? [prisma.userPermission.createMany({
-        data: [...new Set(safeScopes)].map(scope => ({ user_id: target.id, scope })),
-      })] : []),
-    ]);
+    /* Los permisos viven en la propia fila del usuario, así que cambiarlos es
+       una escritura y no una transacción de borrar-y-crear. Y va atada a la
+       empresa: no se puede tocar un usuario de otra por su id. */
+    await fijarPermisosDeUsuario(target.id, safeScopes, ctx.clientId);
 
     await ctx.supabase.from("audit_logs").insert({
       client_id: ctx.clientId,

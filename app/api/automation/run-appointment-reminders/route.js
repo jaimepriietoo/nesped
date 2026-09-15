@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { citasPorEstado, ultimoEventoDeLead, crearEventoLead } from "@/lib/server/datos";
 import { getInternalApiHeaders } from "@/lib/server/internal-api";
 import { requireInternalRequest } from "@/lib/server/internal-api";
 
@@ -39,15 +39,7 @@ export async function POST(req) {
   if (errorInterno) return errorInterno;
 
   try {
-    const rows = await prisma.appointment.findMany({
-      where: {
-        status: "booked",
-      },
-      orderBy: {
-        start_at: "asc",
-      },
-      take: 200,
-    });
+    const rows = await citasPorEstado({ estado: "booked", cuantos: 200 });
 
     const processed = [];
     const failed = [];
@@ -65,12 +57,8 @@ export async function POST(req) {
 
         if (!reminderType) continue;
 
-        const existing = await prisma.leadEvent.findFirst({
-          where: {
-            lead_id: row.lead_id || null,
-            phone: row.phone,
-            type: reminderType,
-          },
+        const existing = await ultimoEventoDeLead({
+          lead_id: row.lead_id || null, phone: row.phone, tipos: [reminderType],
         });
 
         if (existing) continue;
@@ -82,13 +70,12 @@ export async function POST(req) {
 
         await sendWhatsapp(row.phone, message);
 
-        await prisma.leadEvent.create({
-          data: {
-            lead_id: row.lead_id || null,
-            phone: row.phone,
-            type: reminderType,
-            message,
-          },
+        await crearEventoLead({
+          client_id: row.client_id || null,
+          lead_id: row.lead_id || null,
+          phone: row.phone,
+          type: reminderType,
+          message,
         });
 
         processed.push({

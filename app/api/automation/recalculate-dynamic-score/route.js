@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { eventosDeLead } from "@/lib/server/datos";
 import { requireInternalRequest } from "@/lib/server/internal-api";
 
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
@@ -176,19 +176,9 @@ export async function POST(req) {
 
         let events = [];
 
-        if (phone) {
-          events = await prisma.leadEvent.findMany({
-            where: { phone },
-            orderBy: { created_at: "desc" },
-            take: 30,
-          });
-        } else {
-          events = await prisma.leadEvent.findMany({
-            where: { lead_id: leadId },
-            orderBy: { created_at: "desc" },
-            take: 30,
-          });
-        }
+        events = phone
+          ? await eventosDeLead({ phone, cuantos: 30 })
+          : await eventosDeLead({ lead_id: leadId, cuantos: 30 });
 
         const dynamic = calculateDynamicScore(lead, events);
 

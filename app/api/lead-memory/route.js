@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { memoriaDeLead, guardarMemoriaLead } from "@/lib/server/datos";
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
 import { exigirContactoPropio } from "@/lib/server/pertenencia";
 import { requireSameOrigin } from "@/lib/server/security";
@@ -14,7 +14,7 @@ export async function GET(req) {
  
     const denied = await exigirContactoPropio({ supabase: ctx.supabase, clientId: ctx.clientId, leadId });
     if (denied) return denied;
-    const memory = await prisma.leadMemory.findUnique({ where: { lead_id: leadId } });
+    const memory = await memoriaDeLead(leadId);
     return Response.json({ success: true, data: memory || null });
   } catch (err) {
     return Response.json({ success: false, message: "No se pudo completar la operación" }, { status: 500 });
@@ -37,11 +37,7 @@ export async function POST(req) {
     const fields = new Set(["last_intent", "last_objection", "temperature", "recommended_product", "last_summary"]);
     const payload = Object.fromEntries(Object.entries(body).filter(([key]) => fields.has(key)).map(([key, value]) => [key, String(value || "").slice(0, 2000)]));
  
-    const memory = await prisma.leadMemory.upsert({
-      where: { lead_id },
-      update: payload,
-      create: { lead_id, ...payload },
-    });
+    const memory = await guardarMemoriaLead(lead_id, payload, ctx.clientId);
     return Response.json({ success: true, data: memory });
   } catch (err) {
     return Response.json({ success: false, message: "No se pudo completar la operación" }, { status: 500 });

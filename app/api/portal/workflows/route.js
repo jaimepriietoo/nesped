@@ -57,6 +57,7 @@ export async function GET() {
 
     const leads = leadsRes.data || [];
     const experiments = await getClientMessageExperimentSnapshot({
+      clientId: ctx.clientId,
       leadIds: leads.map((lead) => lead.id).filter(Boolean),
     });
 

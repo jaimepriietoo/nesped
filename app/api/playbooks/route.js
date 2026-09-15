@@ -1,6 +1,6 @@
 import { requireSameOrigin } from "@/lib/server/security";
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
-import { prisma } from "@/lib/prisma";
+import { playbooksPorSector } from "@/lib/server/datos";
 import {
   getDefaultPlaybookWorkspace,
   getPlaybookLibrary,
@@ -12,7 +12,7 @@ async function findIndustryPlaybook(industry = "") {
   const normalized = String(industry || "").trim().toLowerCase();
   if (!normalized) return null;
 
-  const items = await prisma.industryPlaybook.findMany({ take: 50 });
+  const items = await playbooksPorSector({ cuantos: 50 });
   return (
     items.find(
       (item) => String(item.industry || "").trim().toLowerCase() === normalized

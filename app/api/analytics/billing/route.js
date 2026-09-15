@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { getPortalContext } from "@/lib/portal-auth";
 import { getPaidLeadRows, groupPaidLeadRows } from "@/lib/server/billing-analytics";
 

@@ -8,7 +8,7 @@ import {
   getClientMessageExperimentSnapshot,
   getClientPaymentRows,
 } from "@/lib/server/portal-phase-two";
-import { prisma } from "@/lib/prisma";
+import { productos } from "@/lib/server/datos";
 
 export async function GET() {
   try {
@@ -47,10 +47,7 @@ export async function GET() {
           .from("portal_users")
           .select("full_name,role")
           .eq("client_id", ctx.clientId),
-        prisma.product.findMany({
-          where: { active: true },
-          orderBy: { price: "asc" },
-        }),
+        productos({ activos: true }),
       ]);
 
     const errors = [

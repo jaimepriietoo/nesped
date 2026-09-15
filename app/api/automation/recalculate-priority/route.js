@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { eventosDeLead, memoriaDeLead } from "@/lib/server/datos";
 import { requireInternalRequest } from "@/lib/server/internal-api";
 
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
@@ -136,21 +136,8 @@ export async function POST(req) {
 
         if (!leadId) continue;
 
-        const events = await prisma.leadEvent.findMany({
-          where: phone
-            ? {
-                OR: [{ lead_id: leadId }, { phone }],
-              }
-            : { lead_id: leadId },
-          orderBy: {
-            created_at: "desc",
-          },
-          take: 20,
-        });
-
-        const memory = await prisma.leadMemory.findUnique({
-          where: { lead_id: leadId },
-        });
+        const events = await eventosDeLead({ lead_id: leadId, phone: phone || null, cuantos: 20 });
+        const memory = await memoriaDeLead(leadId);
 
         const priority = calculatePriorityForLead(lead, events, memory);
 

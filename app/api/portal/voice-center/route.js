@@ -1,6 +1,6 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { scoreVoiceCallQA } from "@/lib/portal-product";
-import { prisma } from "@/lib/prisma";
+import { memoriasDeLeads } from "@/lib/server/datos";
 import { getVoiceCompliancePolicy } from "@/lib/server/compliance.mjs";
 
 function normalizePhone(value = "") {
@@ -96,16 +96,7 @@ export async function GET() {
     });
 
     const leadIds = uniqueLeadIds(leads);
-    const memories =
-      leadIds.length > 0
-        ? await prisma.leadMemory.findMany({
-            where: {
-              lead_id: {
-                in: leadIds,
-              },
-            },
-          })
-        : [];
+    const memories = await memoriasDeLeads(leadIds);
 
     const memoryByLead = new Map(
       memories.map((memory) => [String(memory.lead_id || ""), memory])

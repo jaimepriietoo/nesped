@@ -1,5 +1,5 @@
 import { getPortalContext } from "@/lib/portal-auth";
-import { prisma } from "@/lib/prisma";
+import { filasDePermisos } from "@/lib/server/datos";
 import { buildAccessCenterData } from "@/lib/server/portal-phase-three";
 
 export async function GET() {
@@ -15,7 +15,7 @@ export async function GET() {
     const [portalUsersRes, authUsersRes, auditRes] = await Promise.all([
       ctx.supabase
         .from("portal_users")
-        .select("id,client_id,full_name,email,role,phone,is_active,created_at")
+        .select("id,client_id,full_name,email,role,phone,is_active,created_at,permissions,updated_at")
         .eq("client_id", ctx.clientId)
         .order("created_at", { ascending: true }),
       ctx.supabase
@@ -40,14 +40,7 @@ export async function GET() {
       throw new Error(errors[0].message || "No se pudo cargar Access Center");
     }
 
-    const userIds = (portalUsersRes.data || []).map((user) => user.id).filter(Boolean);
-    const permissionRows =
-      userIds.length > 0
-        ? await prisma.userPermission.findMany({
-            where: { user_id: { in: userIds } },
-            orderBy: { created_at: "desc" },
-          })
-        : [];
+    const permissionRows = filasDePermisos(portalUsersRes.data || []);
 
     return Response.json({
       success: true,

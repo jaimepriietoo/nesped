@@ -1,6 +1,5 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { safeLoadClientSettings } from "@/lib/client-settings";
-import { prisma } from "@/lib/prisma";
 import {
   buildEnvReadinessReport,
   getFeatureReport,

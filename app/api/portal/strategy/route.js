@@ -8,7 +8,7 @@ import {
   getClientMessageExperimentSnapshot,
   getClientPaymentRows,
 } from "@/lib/server/portal-phase-two";
-import { prisma } from "@/lib/prisma";
+import { productos } from "@/lib/server/datos";
 
 export async function GET() {
   try {
@@ -67,10 +67,7 @@ export async function GET() {
         .eq("client_id", ctx.clientId)
         .order("created_at", { ascending: false })
         .limit(24),
-      prisma.product.findMany({
-        where: { active: true },
-        orderBy: { price: "asc" },
-      }),
+      productos({ activos: true }),
     ]);
 
     const errors = [

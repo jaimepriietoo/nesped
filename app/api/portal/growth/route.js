@@ -1,6 +1,6 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { buildGrowthWorkspace } from "@/lib/portal-product";
-import { prisma } from "@/lib/prisma";
+import { productos } from "@/lib/server/datos";
 import {
   getClientMessageExperimentSnapshot,
   getClientPaymentRows,
@@ -43,10 +43,7 @@ export async function GET() {
           .eq("client_id", ctx.clientId)
           .order("created_at", { ascending: false })
           .limit(400),
-        prisma.product.findMany({
-          where: { active: true },
-          orderBy: { price: "asc" },
-        }),
+        productos({ activos: true }),
       ]);
 
     const errors = [
@@ -63,6 +60,7 @@ export async function GET() {
     const leads = leadsRes.data || [];
     const payments = await getClientPaymentRows(ctx.clientId, 1000);
     const experiments = await getClientMessageExperimentSnapshot({
+      clientId: ctx.clientId,
       leadIds: leads.map((lead) => lead.id).filter(Boolean),
     });
     const client = clientRes.data || {};

@@ -1,6 +1,6 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { buildBrandLabWorkspace } from "@/lib/portal-product";
-import { prisma } from "@/lib/prisma";
+import { productos } from "@/lib/server/datos";
 
 function buildServices(client, settings) {
   const hayVozConfigurada = Boolean(
@@ -72,10 +72,7 @@ export async function GET() {
         .select("*")
         .eq("client_id", ctx.clientId)
         .maybeSingle(),
-      prisma.product.findMany({
-        where: { active: true },
-        orderBy: { price: "asc" },
-      }),
+      productos({ activos: true }),
     ]);
 
     const errors = [clientRes.error, settingsRes.error].filter(Boolean);

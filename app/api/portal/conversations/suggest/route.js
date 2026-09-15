@@ -1,6 +1,6 @@
 import { reservarGeneracionIA } from "@/lib/server/ai-budget";
 import OpenAI from "openai";
-import { prisma } from "@/lib/prisma";
+import { memoriaDeLead } from "@/lib/server/datos";
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
 import {
   getDefaultPlaybookWorkspace,
@@ -122,9 +122,7 @@ export async function POST(req) {
       throw new Error(leadError?.message || "No se pudo cargar el lead");
     }
 
-    const memory = await prisma.leadMemory.findUnique({
-      where: { lead_id: leadId },
-    });
+    const memory = await memoriaDeLead(leadId);
 
     const playbook = parsePlaybookWorkspace(
       client?.prompt || "",

@@ -1,5 +1,5 @@
 import { getPortalContext } from "@/lib/portal-auth";
-import { prisma } from "@/lib/prisma";
+import { productos } from "@/lib/server/datos";
 import { buildRevenueOsData } from "@/lib/server/portal-phase-four";
 import {
   getClientMessageExperimentSnapshot,
@@ -38,10 +38,7 @@ export async function GET() {
           .from("portal_users")
           .select("id,full_name,email,role,is_active")
           .eq("client_id", ctx.clientId),
-        prisma.product.findMany({
-          where: { active: true },
-          orderBy: { price: "asc" },
-        }),
+        productos({ activos: true }),
         /* Facturación desde Postgres. Antes salía de Prisma contra un SQLite
            que no se despliega, así que aquí no llegaba nunca nada. */
         ctx.supabase
@@ -66,6 +63,7 @@ export async function GET() {
     const leads = leadsRes.data || [];
     const payments = await getClientPaymentRows(ctx.clientId, 1000);
     const experiments = await getClientMessageExperimentSnapshot({
+      clientId: ctx.clientId,
       leadIds: leads.map((lead) => lead.id).filter(Boolean),
     });
 

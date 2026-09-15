@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { eventosPorTipo, ultimoUpsell, crearUpsell } from "@/lib/server/datos";
 import { getInternalApiHeaders } from "@/lib/server/internal-api";
 import { requireInternalRequest } from "@/lib/server/internal-api";
 
@@ -54,15 +54,7 @@ export async function POST(req) {
   if (errorInterno) return errorInterno;
 
   try {
-    const paymentEvents = await prisma.leadEvent.findMany({
-      where: {
-        type: "payment_completed",
-      },
-      orderBy: {
-        created_at: "desc",
-      },
-      take: 200,
-    });
+    const paymentEvents = await eventosPorTipo({ type: "payment_completed", cuantos: 200 });
 
     const processed = [];
     const failed = [];
@@ -76,13 +68,8 @@ export async function POST(req) {
 
         if (!toTier || !phone) continue;
 
-        const existing = await prisma.upsellEvent.findFirst({
-          where: {
-            lead_id: payment.lead_id || null,
-            phone,
-            from_tier: fromTier,
-            to_tier: toTier,
-          },
+        const existing = await ultimoUpsell({
+          lead_id: payment.lead_id || null, phone, from_tier: fromTier, to_tier: toTier,
         });
 
         if (existing) continue;
@@ -98,15 +85,14 @@ export async function POST(req) {
 
         await sendWhatsapp(phone, message);
 
-        await prisma.upsellEvent.create({
-          data: {
-            lead_id: payment.lead_id || null,
-            phone,
-            from_tier: fromTier,
-            to_tier: toTier,
-            status: "sent",
-            message,
-          },
+        await crearUpsell({
+          client_id: payment.client_id || null,
+          lead_id: payment.lead_id || null,
+          phone,
+          from_tier: fromTier,
+          to_tier: toTier,
+          status: "sent",
+          message,
         });
 
         processed.push({

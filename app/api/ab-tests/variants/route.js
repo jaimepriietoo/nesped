@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { variantes, crearVariante } from "@/lib/server/datos";
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
 import { requireSameOrigin } from "@/lib/server/security";
 
@@ -13,11 +13,7 @@ export async function GET() {
       );
     }
 
-    const rows = await prisma.messageVariant.findMany({
-      orderBy: {
-        created_at: "desc",
-      },
-    });
+    const rows = await variantes({ client_id: ctx.clientId, activas: false });
 
     return NextResponse.json({
       success: true,
@@ -56,14 +52,13 @@ export async function POST(req) {
 
     const body = await req.json();
 
-    const row = await prisma.messageVariant.create({
-      data: {
-        name: body.name || "",
-        channel: body.channel || "whatsapp",
-        stage: body.stage || "qualified",
-        content: body.content || "",
-        active: body.active !== false,
-      },
+    const row = await crearVariante({
+      client_id: ctx.clientId,
+      name: body.name || "",
+      channel: body.channel || "whatsapp",
+      stage: body.stage || "qualified",
+      content: body.content || "",
+      active: body.active !== false,
     });
 
     return NextResponse.json({

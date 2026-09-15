@@ -1,7 +1,8 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { scoreVoiceCallQA } from "@/lib/portal-product";
-import { prisma } from "@/lib/prisma";
+import { memoriasDeLeads } from "@/lib/server/datos";
 import { getVoiceCompliancePolicy } from "@/lib/server/compliance.mjs";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function normalizePhone(value = "") {
   return String(value || "").replace(/[^\d+]/g, "").trim();
@@ -52,7 +53,7 @@ function getNextStep(call = {}, qa = {}) {
   return "Mantener seguimiento ligero y dejar CTA único para la siguiente interacción.";
 }
 
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -96,16 +97,7 @@ export async function GET() {
     });
 
     const leadIds = uniqueLeadIds(leads);
-    const memories =
-      leadIds.length > 0
-        ? await prisma.leadMemory.findMany({
-            where: {
-              lead_id: {
-                in: leadIds,
-              },
-            },
-          })
-        : [];
+    const memories = await memoriasDeLeads(leadIds);
 
     const memoryByLead = new Map(
       memories.map((memory) => [String(memory.lead_id || ""), memory])
@@ -255,7 +247,7 @@ export async function GET() {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo cargar el centro de voz",
+        message: "No se pudo cargar el centro de voz",
       },
       { status: 500 }
     );
@@ -265,3 +257,5 @@ export async function GET() {
 function uniqueLeadIds(leads = []) {
   return [...new Set((leads || []).map((lead) => lead.id).filter(Boolean))];
 }
+
+export const GET = observeRoute("api.portal.voice-center.get", manejarGET);

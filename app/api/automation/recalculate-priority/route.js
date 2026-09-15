@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { eventosDeLead, memoriaDeLead } from "@/lib/server/datos";
 import { requireInternalRequest } from "@/lib/server/internal-api";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 
@@ -118,7 +119,7 @@ async function patchLead(leadId, changes) {
  * contactos de todos los demás. No hay ninguna pantalla que las llame: son
  * trabajos programados, y como tales se cierran.
  */
-export async function POST(req) {
+async function manejarPOST(req) {
   const errorInterno = requireInternalRequest(req);
   if (errorInterno) return errorInterno;
 
@@ -136,21 +137,8 @@ export async function POST(req) {
 
         if (!leadId) continue;
 
-        const events = await prisma.leadEvent.findMany({
-          where: phone
-            ? {
-                OR: [{ lead_id: leadId }, { phone }],
-              }
-            : { lead_id: leadId },
-          orderBy: {
-            created_at: "desc",
-          },
-          take: 20,
-        });
-
-        const memory = await prisma.leadMemory.findUnique({
-          where: { lead_id: leadId },
-        });
+        const events = await eventosDeLead({ lead_id: leadId, phone: phone || null, cuantos: 20 });
+        const memory = await memoriaDeLead(leadId);
 
         const priority = calculatePriorityForLead(lead, events, memory);
 
@@ -185,3 +173,5 @@ export async function POST(req) {
     });
   }
 }
+
+export const POST = observeRoute("api.automation.recalculate-priority.post", manejarPOST);

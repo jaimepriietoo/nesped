@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { crearEventoLead, eventosDeLead, reactivacionesDeLead, crearReactivacion } from "@/lib/server/datos";
 import { getInternalApiHeaders } from "@/lib/server/internal-api";
 import { requireInternalRequest } from "@/lib/server/internal-api";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 const BOOKING_URL = process.env.BOOKING_URL || "";
@@ -65,7 +66,7 @@ async function sendWhatsapp(to, message) {
  * contactos de todos los demás. No hay ninguna pantalla que las llame: son
  * trabajos programados, y como tales se cierran.
  */
-export async function POST(req) {
+async function manejarPOST(req) {
   const errorInterno = requireInternalRequest(req);
   if (errorInterno) return errorInterno;
 
@@ -86,17 +87,8 @@ export async function POST(req) {
         const phone = normalizePhone(lead.telefono);
         if (!phone) continue;
 
-        const history = await prisma.leadEvent.findMany({
-          where: { phone },
-          orderBy: { created_at: "desc" },
-          take: 50,
-        });
-
-        const reactivations = await prisma.leadReactivation.findMany({
-          where: { phone },
-          orderBy: { sent_at: "desc" },
-          take: 20,
-        });
+        const history = await eventosDeLead({ phone, cuantos: 50 });
+        const reactivations = await reactivacionesDeLead({ phone, cuantos: 20 });
 
         const lastIncoming = history.find((e) => e.type === "incoming_whatsapp");
         const lastAiReply = history.find((e) =>
@@ -133,25 +125,23 @@ export async function POST(req) {
 
         await sendWhatsapp(phone, message);
 
-        await prisma.leadReactivation.create({
-          data: {
-            lead_id: lead.id || null,
-            phone,
-            stage,
-            message,
-          },
+        await crearReactivacion({
+          client_id: lead.client_id || null,
+          lead_id: lead.id || null,
+          phone,
+          stage,
+          message,
         });
 
-        await prisma.leadEvent.create({
-          data: {
-            lead_id: lead.id || null,
-            phone,
-            type: "lead_reactivation",
-            message: JSON.stringify({
+        await crearEventoLead({
+          client_id: lead.client_id || null,
+          lead_id: lead.id || null,
+          phone,
+          type: "lead_reactivation",
+          message: JSON.stringify({
               stage,
               message,
             }),
-          },
         });
 
         processed.push({
@@ -181,3 +171,5 @@ export async function POST(req) {
     });
   }
 }
+
+export const POST = observeRoute("api.automation.reactivate-cold-leads.post", manejarPOST);

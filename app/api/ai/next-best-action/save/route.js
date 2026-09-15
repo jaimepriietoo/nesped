@@ -1,9 +1,11 @@
 import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { saveNextBestAction } from "@/lib/server/next-best-action-service";
 import { isAuthorizedInternalRequest } from "@/lib/server/internal-api";
 import { requireSameOrigin } from "@/lib/server/security";
+import { observeRoute } from "@/lib/server/observability.mjs";
  
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     // Allow internal requests (from automation)
     const isInternal = isAuthorizedInternalRequest(req);
@@ -28,8 +30,9 @@ export async function POST(req) {
 
       const ctx = await getPortalContext();
       if (!ctx.ok) return Response.json({ success: false, message: ctx.message }, { status: 401 });
+      if (!puede(ctx.role, "ai.use")) return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
       supabase = ctx.supabase;
-      clientId = body.clientId || ctx.clientId;
+      clientId = ctx.clientId;
       actor = ctx.currentUser?.full_name || ctx.userEmail || "portal";
     }
  
@@ -38,6 +41,8 @@ export async function POST(req) {
     const result = await saveNextBestAction({ supabase, leadId, clientId, brandName, useAI, actor });
     return Response.json({ success: true, data: result.lead, recommendation: result.recommendation });
   } catch (err) {
-    return Response.json({ success: false, message: err.message }, { status: 500 });
+    return Response.json({ success: false, message: "No se pudo completar la operación" }, { status: 500 });
   }
 }
+
+export const POST = observeRoute("api.ai.next-best-action.save.post", manejarPOST);

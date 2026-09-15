@@ -1,5 +1,7 @@
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { requireSameOrigin } from "@/lib/server/security";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function withValue(value, transform = (item) => item) {
   return value === undefined ? undefined : transform(value);
@@ -11,14 +13,14 @@ function cleanObject(input = {}) {
   );
 }
  
-export async function PATCH(req) {
+async function manejarPATCH(req) {
   try {
     const sameOriginError = requireSameOrigin(req);
     if (sameOriginError) return sameOriginError;
 
     const ctx = await getPortalContext();
     if (!ctx.ok) return Response.json({ success: false, message: ctx.message }, { status: 401 });
-    if (!hasRole(ctx.role, ["owner","admin"])) return Response.json({ success: false, message: "Sin permisos de admin" }, { status: 403 });
+    if (!puede(ctx.role, "brand.manage")) return Response.json({ success: false, message: "Sin permisos de admin" }, { status: 403 });
  
     const body = await req.json();
     const payload = cleanObject({
@@ -26,12 +28,8 @@ export async function PATCH(req) {
       brand_logo_url: withValue(body.brand_logo_url, (value) => String(value || "").trim()),
       primary_color: withValue(body.primary_color, (value) => String(value || "").trim()),
       secondary_color: withValue(body.secondary_color, (value) => String(value || "").trim()),
-      owner_email: withValue(body.owner_email, (value) =>
-        String(value || "").trim().toLowerCase()
-      ),
       industry: withValue(body.industry, (value) => String(value || "").trim()),
       logo_text: withValue(body.logo_text, (value) => String(value || "").trim()),
-      custom_domain: withValue(body.custom_domain, (value) => String(value || "").trim().toLowerCase()),
       accent: withValue(body.accent, (value) => String(value || "").trim()),
       accent_text: withValue(body.accent_text, (value) => String(value || "").trim()),
       button: withValue(body.button, (value) => String(value || "").trim()),
@@ -47,6 +45,8 @@ export async function PATCH(req) {
     if (error) throw new Error(error.message);
     return Response.json({ success: true, message: "Branding actualizado." });
   } catch (err) {
-    return Response.json({ success: false, message: err.message }, { status: 500 });
+    return Response.json({ success: false, message: "No se pudo completar la operación" }, { status: 500 });
   }
 }
+
+export const PATCH = observeRoute("api.portal.branding.update.patch", manejarPATCH);

@@ -1,7 +1,8 @@
 import { requireInternalRequest } from "@/lib/server/internal-api";
 import { upsertElevenLabsLead } from "@/lib/server/elevenlabs";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     const authError = requireInternalRequest(req);
     if (authError) return authError;
@@ -30,9 +31,11 @@ export async function POST(req) {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo guardar el lead de ElevenLabs",
+        message: "No se pudo guardar el lead de ElevenLabs",
       },
       { status: 500 }
     );
   }
 }
+
+export const POST = observeRoute("api.voice.elevenlabs.upsert-lead.post", manejarPOST);

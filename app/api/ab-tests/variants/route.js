@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { variantes, crearVariante } from "@/lib/server/datos";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { requireSameOrigin } from "@/lib/server/security";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -13,11 +15,7 @@ export async function GET() {
       );
     }
 
-    const rows = await prisma.messageVariant.findMany({
-      orderBy: {
-        created_at: "desc",
-      },
-    });
+    const rows = await variantes({ client_id: ctx.clientId, activas: false });
 
     return NextResponse.json({
       success: true,
@@ -32,7 +30,7 @@ export async function GET() {
   }
 }
 
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     const sameOriginError = requireSameOrigin(req);
     if (sameOriginError) {
@@ -47,7 +45,7 @@ export async function POST(req) {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin", "manager"])) {
+    if (!puede(ctx.role, "experiments.manage")) {
       return NextResponse.json(
         { success: false, message: "Sin permisos para crear variantes" },
         { status: 403 }
@@ -56,14 +54,13 @@ export async function POST(req) {
 
     const body = await req.json();
 
-    const row = await prisma.messageVariant.create({
-      data: {
-        name: body.name || "",
-        channel: body.channel || "whatsapp",
-        stage: body.stage || "qualified",
-        content: body.content || "",
-        active: body.active !== false,
-      },
+    const row = await crearVariante({
+      client_id: ctx.clientId,
+      name: body.name || "",
+      channel: body.channel || "whatsapp",
+      stage: body.stage || "qualified",
+      content: body.content || "",
+      active: body.active !== false,
     });
 
     return NextResponse.json({
@@ -78,3 +75,6 @@ export async function POST(req) {
     });
   }
 }
+
+export const GET = observeRoute("api.ab-tests.variants.get", manejarGET);
+export const POST = observeRoute("api.ab-tests.variants.post", manejarPOST);

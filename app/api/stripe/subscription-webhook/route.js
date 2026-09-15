@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { processStripeWebhookEvent } from "@/lib/server/stripe-webhook-service";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 const stripe = new Stripe(
   process.env.STRIPE_SECRET_KEY || "sk_test_placeholder"
 );
 
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     const rawBody = await req.text();
     const signature = req.headers.get("stripe-signature");
@@ -51,3 +52,5 @@ export async function POST(req) {
     );
   }
 }
+
+export const POST = observeRoute("api.stripe.subscription-webhook.post", manejarPOST);

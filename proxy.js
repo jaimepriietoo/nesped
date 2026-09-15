@@ -102,8 +102,9 @@ function construirCsp(nonce, esDev, conNonce = false) {
   return directivas.join("; ");
 }
 
-function aplicarCabeceras(response, req, nonce, conNonce) {
+function aplicarCabeceras(response, req, nonce, conNonce, idPeticion = "") {
   const esDev = process.env.NODE_ENV !== "production";
+  if (idPeticion) response.headers.set("x-nesped-request-id", idPeticion);
 
   response.headers.set("Content-Security-Policy", construirCsp(nonce, esDev, conNonce));
 
@@ -181,6 +182,13 @@ export async function proxy(req) {
   const nonce = crypto.randomUUID().replace(/-/g, "");
   const cabecerasPeticion = new Headers(req.headers);
   cabecerasPeticion.set("x-nonce", nonce);
+
+  /* Un identificador por petición, que viaja hacia dentro en la cabecera y
+     vuelve hacia fuera en la respuesta. Es lo que permite juntar un error de
+     Sentry, una línea de registro y lo que vio el usuario. Si viene uno de
+     fuera se descarta: el id lo pone Nesped, no quien llama. */
+  const idPeticion = `req_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
+  cabecerasPeticion.set("x-nesped-request-id", idPeticion);
   cabecerasPeticion.set(
     "Content-Security-Policy",
     construirCsp(nonce, process.env.NODE_ENV !== "production", conNonce)
@@ -207,7 +215,7 @@ export async function proxy(req) {
   ) {
     const loginUrl = new URL("/login", req.url);
     loginUrl.searchParams.set("next", `${pathname}${req.nextUrl.search || ""}`);
-    return aplicarCabeceras(NextResponse.redirect(loginUrl), req, nonce, conNonce);
+    return aplicarCabeceras(NextResponse.redirect(loginUrl), req, nonce, conNonce, idPeticion);
   }
 
     /* "owner" no entra aquí. En la tabla `users`, cada cliente que da de alta
@@ -220,7 +228,8 @@ export async function proxy(req) {
       NextResponse.redirect(new URL("/portal", req.url)),
       req,
       nonce,
-      conNonce
+      conNonce,
+      idPeticion
     );
   }
 
@@ -228,7 +237,8 @@ export async function proxy(req) {
     NextResponse.next({ request: { headers: cabecerasPeticion } }),
     req,
     nonce,
-    conNonce
+    conNonce,
+    idPeticion
   );
 }
 

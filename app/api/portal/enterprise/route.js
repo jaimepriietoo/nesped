@@ -8,8 +8,9 @@ import {
   buildBaseUrl,
   buildPortalServices,
 } from "@/lib/server/portal-phase-three";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function GET(req) {
+async function manejarGET(req) {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -110,9 +111,11 @@ export async function GET(req) {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo cargar Enterprise",
+        message: "No se pudo cargar Enterprise",
       },
       { status: 500 }
     );
   }
 }
+
+export const GET = observeRoute("api.portal.enterprise.get", manejarGET);

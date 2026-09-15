@@ -1,12 +1,14 @@
-import { prisma } from "@/lib/prisma";
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { filasDePermisos, fijarPermisosDeUsuario } from "@/lib/server/datos";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { requireSameOrigin } from "@/lib/server/security";
 import {
   buildPermissionMatrix,
   getPermissionCatalog,
 } from "@/lib/server/portal-permissions";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -18,7 +20,7 @@ export async function GET() {
 
     const { data: portalUsers, error } = await ctx.supabase
       .from("portal_users")
-      .select("id,email,role")
+      .select("id,email,role,permissions,updated_at")
       .eq("client_id", ctx.clientId)
       .order("created_at", { ascending: true });
 
@@ -26,14 +28,7 @@ export async function GET() {
       throw new Error(error.message || "No se pudieron cargar permisos");
     }
 
-    const userIds = (portalUsers || []).map((item) => item.id).filter(Boolean);
-    const permissionRows =
-      userIds.length > 0
-        ? await prisma.userPermission.findMany({
-            where: { user_id: { in: userIds } },
-            orderBy: { created_at: "desc" },
-          })
-        : [];
+    const permissionRows = filasDePermisos(portalUsers || []);
 
     return Response.json({
       success: true,
@@ -44,13 +39,13 @@ export async function GET() {
     });
   } catch (error) {
     return Response.json(
-      { success: false, message: error.message || "No se pudieron cargar permisos" },
+      { success: false, message: "No se pudieron cargar permisos" },
       { status: 500 }
     );
   }
 }
 
-export async function PATCH(req) {
+async function manejarPATCH(req) {
   try {
     const sameOriginError = requireSameOrigin(req);
     if (sameOriginError) return sameOriginError;
@@ -63,7 +58,7 @@ export async function PATCH(req) {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin"])) {
+    if (!puede(ctx.role, "users.manage")) {
       return Response.json(
         { success: false, message: "Sin permisos para editar permisos finos" },
         { status: 403 }
@@ -84,18 +79,15 @@ export async function PATCH(req) {
     const allowedScopes = new Set(getPermissionCatalog().map((item) => item.id));
     const safeScopes = scopes.filter((scope) => allowedScopes.has(scope));
 
-    await prisma.userPermission.deleteMany({
-      where: { user_id: userId },
-    });
+    const { data: target, error: targetError } = await ctx.supabase.from("portal_users")
+      .select("id,role").eq("id", userId).eq("client_id", ctx.clientId).maybeSingle();
+    if (targetError || !target) return Response.json({ success: false, message: "Usuario no disponible" }, { status: 404 });
+    if (target.role === "owner" && ctx.role !== "owner") return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
 
-    if (safeScopes.length > 0) {
-      await prisma.userPermission.createMany({
-        data: safeScopes.map((scope) => ({
-          user_id: userId,
-          scope,
-        })),
-      });
-    }
+    /* Los permisos viven en la propia fila del usuario, así que cambiarlos es
+       una escritura y no una transacción de borrar-y-crear. Y va atada a la
+       empresa: no se puede tocar un usuario de otra por su id. */
+    await fijarPermisosDeUsuario(target.id, safeScopes, ctx.clientId);
 
     await ctx.supabase.from("audit_logs").insert({
       client_id: ctx.clientId,
@@ -113,8 +105,11 @@ export async function PATCH(req) {
     });
   } catch (error) {
     return Response.json(
-      { success: false, message: error.message || "No se pudieron guardar los permisos" },
+      { success: false, message: "No se pudieron guardar los permisos" },
       { status: 500 }
     );
   }
 }
+
+export const GET = observeRoute("api.portal.permissions.get", manejarGET);
+export const PATCH = observeRoute("api.portal.permissions.patch", manejarPATCH);

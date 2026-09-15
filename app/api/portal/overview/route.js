@@ -1,5 +1,7 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { evaluarConsumo } from "@/lib/server/cuotas";
+import { cursorDe } from "@/lib/server/paginacion";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function predictCloseProbability(lead) {
   const score = Number(lead.score || 0);
@@ -161,7 +163,7 @@ function buildQuickActions() {
 const MAXIMO_CONTACTOS = 500;
 const MAXIMO_LLAMADAS = 300;
 
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -192,7 +194,7 @@ export async function GET() {
         .maybeSingle(),
       ctx.supabase
         .from("portal_users")
-        .select("*")
+        .select("id,client_id,email,full_name,role,phone,is_active,created_at")
         .eq("client_id", ctx.clientId)
         .order("created_at", { ascending: true }),
       /* Las listas se acotan; las CIFRAS no salen de ellas.
@@ -211,12 +213,14 @@ export async function GET() {
         .select("*")
         .eq("client_id", ctx.clientId)
         .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
         .limit(MAXIMO_CONTACTOS),
       ctx.supabase
         .from("calls")
         .select("*")
         .eq("client_id", ctx.clientId)
         .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
         .limit(MAXIMO_LLAMADAS),
       ctx.supabase
         .from("alerts")
@@ -260,7 +264,7 @@ export async function GET() {
 
     if (errors.length > 0) {
       return Response.json(
-        { success: false, message: errors[0].message || "Error cargando overview" },
+        { success: false, message: "Error cargando overview" },
         { status: 500 }
       );
     }
@@ -470,6 +474,13 @@ export async function GET() {
          darla por buena. */
       cifrasExactas,
 
+      /* Si las listas se han cortado, por dónde seguir: /api/portal/contactos
+         y /api/portal/llamadas aceptan ?cursor= y devuelven el siguiente. */
+      siguiente: {
+        leads: rawLeads.length >= MAXIMO_CONTACTOS ? cursorDe(rawLeads[rawLeads.length - 1]) : null,
+        calls: calls.length >= MAXIMO_LLAMADAS ? cursorDe(calls[calls.length - 1]) : null,
+      },
+
       /* Consumo del mes contra el límite del plan. Se enseña siempre, no sólo
          al pasarse: quien ve subir el contador puede llamar antes de que le
          llegue una factura rara. */
@@ -515,8 +526,10 @@ export async function GET() {
     });
   } catch (error) {
     return Response.json(
-      { success: false, message: error.message || "Error cargando overview" },
+      { success: false, message: "Error cargando overview" },
       { status: 500 }
     );
   }
 }
+
+export const GET = observeRoute("api.portal.overview.get", manejarGET);

@@ -1,4 +1,6 @@
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function csvEscape(value = "") {
   const text = String(value ?? "");
@@ -8,7 +10,7 @@ function csvEscape(value = "") {
   return text;
 }
 
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -18,7 +20,7 @@ export async function GET() {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin", "manager"])) {
+    if (!puede(ctx.role, "audit.export")) {
       return Response.json(
         { success: false, message: "Sin permisos para exportar auditoría" },
         { status: 403 }
@@ -67,9 +69,11 @@ export async function GET() {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo exportar la auditoría",
+        message: "No se pudo exportar la auditoría",
       },
       { status: 500 }
     );
   }
 }
+
+export const GET = observeRoute("api.portal.audit.export.get", manejarGET);

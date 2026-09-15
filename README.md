@@ -71,13 +71,24 @@ web anunciara un precio y se cobrara otro.
 | [`docs/nucleo-vivo.md`](docs/nucleo-vivo.md) | la Apertura Neural: qué es, cómo se marcha, de dónde sale la nitidez, el rendimiento medido y **cuatro trampas de CSS y React que se ven en pantalla y no leyendo el fichero** |
 | [`docs/voz-elevenlabs-twilio.md`](docs/voz-elevenlabs-twilio.md) | el recorrido de una llamada, los webhooks y qué falta para que suene el teléfono |
 | [`docs/production-runbook.md`](docs/production-runbook.md) | desplegar y qué mirar cuando algo va mal |
-| [`docs/hasta-donde-aguanta.md`](docs/hasta-donde-aguanta.md) | los límites conocidos |
+| [`docs/hasta-donde-aguanta.md`](docs/hasta-donde-aguanta.md) | los límites conocidos, medidos con 506 empresas y 45.000 llamadas |
+| [`docs/copias-y-recuperacion.md`](docs/copias-y-recuperacion.md) | qué se pierde y cuánto se tarda si algo se borra; el simulacro de restauración |
+| [`docs/cuando-se-cae-algo.md`](docs/cuando-se-cae-algo.md) | un runbook por proveedor: detección, impacto, mitigación, vuelta atrás |
+| [`docs/webhooks-salientes.md`](docs/webhooks-salientes.md) | lo que Nesped manda al sistema del cliente: eventos, firma, reintentos |
+| [`scripts/carga/LEEME.md`](scripts/carga/LEEME.md) | pruebas de carga con k6, sólo contra un entorno de pruebas; se niegan a apuntar a producción |
 | [`tests/unidad/LEEME.md`](tests/unidad/LEEME.md) | qué se prueba y por qué eso y no otra cosa |
 
 ## Despliegue
 
 Producción sale de `main`, en Vercel, con las funciones en `dub1` (Dublín, la
-misma región que la base de datos). Cada empuje a `main` despliega.
+misma región que la base de datos). Cada empuje a `main` despliega, **y `main`
+está protegida**: sólo admite fusiones con el flujo `verificar` en verde
+(eslint, unidad, build, e2e), también para administradores, sin force push.
+Se trabaja en rama y se fusiona por pull request.
+
+Si algo sale mal ya desplegado: Vercel → Deployments → el anterior → *Promote
+to Production*. Un minuto. Y hay interruptores de emergencia que paran la IA,
+las llamadas o todo sin desplegar: `docs/cuando-se-cae-algo.md`.
 
 ## El banco de pruebas del núcleo
 

@@ -1,0 +1,65 @@
+# La puerta antes de main.
+#
+# Hasta ahora cada push a main desplegaba a producción sin que nada ejecutara
+# las pruebas. Este flujo corre lo mismo que se pide antes de tocar nada en el
+# README —eslint, guardián de shaders, unidad, build y e2e— y la protección
+# de la rama exige que esté en verde para fusionar.
+#
+# Las e2e levantan su propio servidor de desarrollo. Necesitan un secreto de
+# sesión para firmar cookies de prueba; en CI es un valor sintético, que sólo
+# vale dentro de esta ejecución. La prueba de precios necesita Stripe: si el
+# repositorio no tiene STRIPE_SECRET_KEY entre sus secretos, esa prueba se
+# salta a sí misma y lo dice.
+name: verificar
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: verificar-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      NESPED_SESSION_SECRET: ci-solo-para-esta-ejecucion-${{ github.run_id }}
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Dependencias
+        run: npm ci
+
+      - name: Lint
+        run: npx eslint app components lib tests scripts
+
+      - name: Guardián de shaders y pruebas de unidad
+        run: npm run test:unidad
+
+      - name: Build
+        run: npm run build
+
+      - name: Navegador para las e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Pruebas e2e
+        run: npx playwright test
+
+      - name: Informe de Playwright si algo falla
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

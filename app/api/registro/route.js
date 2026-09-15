@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase";
-import { safeUpsertClientSettings } from "@/lib/client-settings";
+import crypto from "node:crypto";
 import { validarPassword } from "@/lib/server/passwords";
-import { hashPassword, setAuthCookies } from "@/lib/server/auth";
+import { hashPassword, generateTwoFactorCode, setTwoFactorChallenge } from "@/lib/server/auth";
+import { sendTwoFactorCode } from "@/lib/server/two-factor.mjs";
 import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * Alta de cuenta ANTES de pagar.
@@ -46,23 +48,7 @@ function aIdentificador(valor = "") {
     .slice(0, 36);
 }
 
-async function identificadorLibre(supabase, semilla) {
-  const base = aIdentificador(semilla) || "cliente";
-
-  for (let i = 0; i < 20; i += 1) {
-    const candidato = i === 0 ? base : `${base}-${i + 1}`;
-    const { data } = await supabase
-      .from("clients")
-      .select("id")
-      .eq("id", candidato)
-      .maybeSingle();
-    if (!data) return candidato;
-  }
-
-  return `${base}-${Date.now()}`;
-}
-
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     const origenError = requireSameOrigin(req, "Origen no permitido para el alta");
     if (origenError) return origenError;
@@ -83,10 +69,10 @@ export async function POST(req) {
     const empresa = String(cuerpo.empresa || "").trim();
     const plan = String(cuerpo.plan || "growth").toLowerCase();
 
-    if (!email || !email.includes("@")) {
+    if (email.length > 254 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
       return NextResponse.json({ ok: false, message: "Escribe un correo válido." }, { status: 400 });
     }
-    if (!empresa) {
+    if (!empresa || empresa.length > 200) {
       return NextResponse.json({ ok: false, message: "Falta el nombre de tu empresa." }, { status: 400 });
     }
     if (!PLANES_PUBLICOS.has(plan)) {
@@ -100,88 +86,24 @@ export async function POST(req) {
 
     const supabase = getSupabase();
 
-    /* Mismo mensaje exista o no la cuenta: si dijéramos "ese correo ya está
-       registrado", cualquiera podría averiguar quién es cliente nuestro
-       probando correos. Se le manda a entrar, que es lo que necesita hacer. */
-    const { data: yaExiste } = await supabase
-      .from("users")
-      .select("id")
-      .eq("email", email)
-      .maybeSingle();
-
-    if (yaExiste) {
-      return NextResponse.json(
-        {
-          ok: false,
-          yaRegistrado: true,
-          message: "Ese correo ya tiene cuenta. Entra con tu contraseña para continuar.",
-        },
-        { status: 409 }
-      );
-    }
-
-    const clientId = await identificadorLibre(supabase, empresa);
-
-    const { error: errorCliente } = await supabase.from("clients").insert({
-      id: clientId,
-      name: empresa,
-      brand_name: empresa,
-      owner_email: email,
-      /* El plan que pretende contratar, todavía sin pagar. Quien decide si
-         está activo es billing_status, nunca esta columna por sí sola. */
-      plan,
-      billing_status: "pendiente",
-      is_active: true,
+    const clientId = `${aIdentificador(empresa) || "cliente"}-${crypto.randomUUID().slice(0, 8)}`;
+    const { error: signupError } = await supabase.rpc("registrar_empresa_segura", {
+      p_client: clientId, p_company: empresa, p_email: email, p_password: hashPassword(password), p_plan: plan,
     });
-
-    if (errorCliente) {
-      throw new Error(errorCliente.message || "No se pudo crear la empresa");
+    if (signupError) {
+      return NextResponse.json({ ok: false, message: "No se pudo completar el alta. Si ya tienes cuenta, entra desde Acceder." }, { status: 400 });
     }
 
-    const { error: errorAjustes } = await safeUpsertClientSettings(
-      supabase,
-      { client_id: clientId, weekly_report_email: email, daily_report_email: email },
-      { onConflict: "client_id" }
-    );
-    if (errorAjustes) {
-      throw new Error(errorAjustes.message || "No se pudo dejar lista la configuración");
-    }
-
-    const hash = hashPassword(password);
-
-    const { error: errorUsuario } = await supabase.from("users").insert({
-      email,
-      password: hash,
-      role: "client",
-      client_id: clientId,
-      created_at: new Date().toISOString(),
-    });
-    if (errorUsuario) {
-      throw new Error(errorUsuario.message || "No se pudo crear el usuario");
-    }
-
-    const { error: errorPortal } = await supabase.from("portal_users").insert({
-      client_id: clientId,
-      email,
-      full_name: empresa,
-      role: "owner",
-      password_hash: hash,
-      is_active: true,
-    });
-    if (errorPortal) {
-      throw new Error(errorPortal.message || "No se pudo crear el acceso al portal");
-    }
-
-    /* Se deja la sesión abierta: acaba de demostrar que sabe la contraseña
-       poniéndola, y mandarle a la pantalla de acceso justo antes de pagar es
-       una pérdida de gente por nada. El segundo factor entra en los accesos
-       posteriores, que es donde protege de verdad. */
-    await setAuthCookies({ email, role: "client", clientId, clientName: empresa });
+    // Escribir una contraseña no demuestra que el correo le pertenezca.
+    const code = generateTwoFactorCode();
+    await setTwoFactorChallenge({ email, role: "client", clientId, clientName: empresa,
+      nextPath: `/api/suscripcion/iniciar?plan=${encodeURIComponent(plan)}`, code });
+    await sendTwoFactorCode({ email, code, clientName: empresa, role: "owner" });
 
     return NextResponse.json({
       ok: true,
       clientId,
-      siguiente: `/api/suscripcion/iniciar?plan=${encodeURIComponent(plan)}`,
+      siguiente: "/login?verificar=1",
     });
   } catch (error) {
     console.error("POST /api/registro error:", error);
@@ -191,3 +113,5 @@ export async function POST(req) {
     );
   }
 }
+
+export const POST = observeRoute("api.registro.post", manejarPOST);

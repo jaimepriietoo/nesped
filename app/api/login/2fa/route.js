@@ -1,158 +1,61 @@
 import { getSupabase } from "@/lib/supabase";
 import { avisarDeAcceso } from "@/lib/server/aviso-acceso.mjs";
 import {
-  bumpTwoFactorChallengeAttempts,
-  clearTwoFactorChallenge,
-  getTwoFactorChallenge,
-  setAuthCookies,
-  verifyTwoFactorCode,
+  clearTwoFactorChallenge, getTwoFactorChallenge, setAuthCookies,
+  tomarIntentoTwoFactor, verifyTwoFactorCode, consumirTwoFactor,
 } from "@/lib/server/auth";
 import { consumirCodigo } from "@/lib/server/codigos-recuperacion";
-import { logEvent, observeRoute } from "@/lib/server/observability.mjs";
+import { observeRoute } from "@/lib/server/observability.mjs";
 import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
-
-async function appendAuditLog({ clientId, actor, action, changes }) {
-  try {
-    const supabase = getSupabase();
-    await supabase.from("audit_logs").insert({
-      client_id: clientId,
-      entity_type: "auth",
-      entity_id: actor || null,
-      action,
-      actor: actor || "system",
-      changes: changes ? JSON.stringify(changes) : null,
-      created_at: new Date().toISOString(),
-    });
-  } catch {}
-}
+import { SegundoFactor, validar } from "@/lib/server/esquemas";
 
 async function handlePost(req) {
-  const sameOriginError = requireSameOrigin(
-    req,
-    "Origen no permitido para verificar el acceso"
-  );
-  if (sameOriginError) return sameOriginError;
-
-  const rateLimitError = await requireRateLimitAsync(req, {
-    namespace: "login:2fa",
-    limit: 12,
-    windowMs: 15 * 60 * 1000,
-    message: "Demasiados intentos de verificación. Espera unos minutos.",
-  });
-  if (rateLimitError) return rateLimitError;
-
+  const originError = requireSameOrigin(req);
+  if (originError) return originError;
   const challenge = await getTwoFactorChallenge();
-  if (!challenge) {
-    return Response.json(
-      {
-        success: false,
-        message: "La verificación ha caducado. Vuelve a iniciar sesión.",
-      },
-      { status: 400 }
-    );
-  }
-
-  const body = await req.json().catch(() => ({}));
-  const bruto = String(body?.code || "").trim();
-  const code = bruto.replace(/\D/g, "");
-
-  /* Se aceptan dos cosas en el mismo campo: el código de seis cifras que llega
-     por correo, y un código de recuperación.
-  
-     Van juntos a propósito. El día que el correo no sale, quien intenta entrar
-     no está para buscar otra pantalla: escribe en la casilla que tiene delante
-     lo que sea que tenga guardado, y eso tiene que funcionar. */
-  const pareceRecuperacion = /^[A-Za-z0-9-]{10,12}$/.test(bruto) && code.length !== 6;
-
-  if (pareceRecuperacion) {
-    const valido = await consumirCodigo({ email: challenge.email, codigo: bruto });
-
-    if (valido) {
-      logEvent("warn", "auth.2fa_con_codigo_de_recuperacion", {
-        email: challenge.email,
-        role: challenge.role,
-      });
-      await appendAuditLog({
-        clientId: challenge.clientId,
-        actor: challenge.email,
-        action: "2fa_recuperacion_usada",
-        changes: null,
-      });
-    } else {
-      await bumpTwoFactorChallengeAttempts(challenge);
-      return Response.json(
-        { success: false, message: "Ese código de recuperación no vale o ya se ha usado." },
-        { status: 401 }
-      );
-    }
-  } else if (code.length !== 6) {
-    return Response.json(
-      { success: false, message: "Introduce el código de 6 dígitos o uno de recuperación." },
-      { status: 400 }
-    );
-  } else if (!verifyTwoFactorCode(challenge, code)) {
-    const nextAttempts = Number(challenge.attempts || 0) + 1;
-
-    if (nextAttempts >= 5) {
-      await clearTwoFactorChallenge();
-    } else {
-      await bumpTwoFactorChallengeAttempts(challenge);
-    }
-
-    // Igual que en el acceso sin doble factor: se avisa, pero no se espera.
-  void avisarDeAcceso({
-    email: challenge.email,
-    rol: challenge.role,
-    clientName: challenge.clientName,
-    ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "",
-    agente: req.headers.get("user-agent") || "",
+  if (!challenge) return Response.json({ success: false, message: "La verificación ha caducado. Vuelve a entrar." }, { status: 400 });
+  const limited = await requireRateLimitAsync(req, {
+    namespace: "login:2fa", limit: 12, windowMs: 15 * 60 * 1000,
+    keyParts: [challenge.email], includeIp: false,
   });
-
-  await appendAuditLog({
-      clientId: challenge.clientId,
-      actor: challenge.email,
-      action: "2fa_failed",
-      changes: { attempts: nextAttempts },
-    });
-
-    return Response.json(
-      {
-        success: false,
-        message:
-          nextAttempts >= 5
-            ? "Demasiados intentos. Vuelve a iniciar sesión."
-            : "Código incorrecto.",
-      },
-      { status: 401 }
-    );
+  if (limited) return limited;
+  const leido = validar(SegundoFactor, await req.json().catch(() => ({})), { mensaje: "Código no válido" });
+  if (leido.respuesta) return leido.respuesta;
+  const { code } = leido.datos;
+  // El contador está en la base de datos; repetir una cookie no lo reinicia.
+  const attempt = await tomarIntentoTwoFactor(challenge);
+  if (!attempt) return Response.json({ success: false, message: "La verificación ha caducado." }, { status: 400 });
+  const recovery = /^[A-Za-z0-9]{5}-?[A-Za-z0-9]{5}$/.test(code);
+  const valid = recovery
+    ? await consumirCodigo({ email: challenge.email, codigo: code })
+    : verifyTwoFactorCode(attempt, code);
+  if (!valid) {
+    if (attempt.attempts >= 5) await clearTwoFactorChallenge();
+    return Response.json({ success: false, message: "Código incorrecto o caducado." }, { status: 401 });
   }
-
+  if (!await consumirTwoFactor(challenge)) {
+    return Response.json({ success: false, message: "El código ya se ha utilizado." }, { status: 401 });
+  }
+  const supabase = getSupabase();
+  const { data: user, error } = await supabase.from("users")
+    .select("role,session_epoch").eq("email", challenge.email).eq("client_id", challenge.clientId).maybeSingle();
+  const { data: profile, error: profileError } = await supabase.from("portal_users")
+    .select("is_active").eq("email", challenge.email).eq("client_id", challenge.clientId).maybeSingle();
+  if (error || profileError || !user || profile?.is_active !== true ||
+      Number(user.session_epoch || 0) !== Number(challenge.sessionEpoch || 0)) {
+    await clearTwoFactorChallenge();
+    return Response.json({ success: false, message: "El acceso ha cambiado. Vuelve a entrar." }, { status: 401 });
+  }
   await clearTwoFactorChallenge();
   await setAuthCookies({
-    email: challenge.email,
-    clientId: challenge.clientId,
-    role: challenge.role || "viewer",
-    clientName: challenge.clientName || challenge.clientId,
-    sessionEpoch: Number(challenge.sessionEpoch || 0),
+    email: challenge.email, clientId: challenge.clientId, role: user.role,
+    clientName: challenge.clientName, sessionEpoch: user.session_epoch,
   });
-
-  await appendAuditLog({
-    clientId: challenge.clientId,
-    actor: challenge.email,
-    action: "2fa_verified",
-    changes: { delivery: challenge.deliveryChannel || "email" },
+  await supabase.from("audit_logs").insert({
+    client_id: challenge.clientId, entity_type: "auth", entity_id: challenge.email,
+    action: recovery ? "2fa_recuperacion_usada" : "2fa_verified", actor: challenge.email,
   });
-
-  logEvent("info", "auth.2fa_verified", {
-    email: challenge.email,
-    clientId: challenge.clientId,
-    role: challenge.role || "viewer",
-  });
-
-  return Response.json({
-    success: true,
-    redirectTo: challenge.nextPath || "/portal",
-  });
+  void avisarDeAcceso({ email: challenge.email, rol: user.role, clientName: challenge.clientName });
+  return Response.json({ success: true, redirectTo: challenge.nextPath || "/portal" });
 }
-
 export const POST = observeRoute("api.login.2fa.post", handlePost);

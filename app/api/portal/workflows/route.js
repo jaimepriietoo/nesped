@@ -1,8 +1,9 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { buildWorkflowStudioData } from "@/lib/server/portal-phase-four";
 import { getClientMessageExperimentSnapshot } from "@/lib/server/portal-phase-two";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -57,6 +58,7 @@ export async function GET() {
 
     const leads = leadsRes.data || [];
     const experiments = await getClientMessageExperimentSnapshot({
+      clientId: ctx.clientId,
       leadIds: leads.map((lead) => lead.id).filter(Boolean),
     });
 
@@ -76,9 +78,11 @@ export async function GET() {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo cargar Workflow Studio",
+        message: "No se pudo cargar Workflow Studio",
       },
       { status: 500 }
     );
   }
 }
+
+export const GET = observeRoute("api.portal.workflows.get", manejarGET);

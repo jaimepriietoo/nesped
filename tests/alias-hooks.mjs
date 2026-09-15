@@ -26,7 +26,16 @@ const RAIZ = path.resolve(import.meta.dirname, "..");
    que usa el proyecto, en el mismo orden. */
 const EXTENSIONES = ["", ".js", ".mjs", ".jsx", "/index.js", "/index.mjs"];
 
+/* Módulos que sólo existen dentro de Next y que aquí se sustituyen por un
+   doble mínimo. Ver tests/stubs/. */
+const SUSTITUTOS = {
+  "next/headers": path.join(RAIZ, "tests/stubs/next-headers.mjs"),
+};
+
 export async function resolve(especificador, contexto, siguiente) {
+  if (SUSTITUTOS[especificador]) {
+    return siguiente(pathToFileURL(SUSTITUTOS[especificador]).href, contexto);
+  }
   if (!especificador.startsWith("@/")) return siguiente(especificador, contexto);
 
   const base = path.join(RAIZ, especificador.slice(2));

@@ -1099,8 +1099,12 @@ function Resumen({ datos }) {
   );
 }
 
-function Leads({ datos, onRecargar }) {
+function Leads({ datos, onRecargar, onMas }) {
   const [busqueda, setBusqueda] = useState("");
+  // Cuántas filas se pintan. Crece de 200 en 200 al pedir más: pintar miles
+  // de <tr> de golpe es lo que hace lento un portal con histórico.
+  const [limite, setLimite] = useState(200);
+  const [pidiendo, setPidiendo] = useState(false);
   const [filtro, setFiltro] = useState("todos");
   const [abierto, setAbierto] = useState(null);
   // El embudo era una pantalla aparte. Son los mismos leads mirados de otra
@@ -1171,7 +1175,7 @@ function Leads({ datos, onRecargar }) {
               </tr>
             </thead>
             <tbody>
-              {visibles.slice(0, 200).map((l, i) => (
+              {visibles.slice(0, limite).map((l, i) => (
                 <tr
                   key={l.id || i}
                   className="pv3-fila"
@@ -1201,10 +1205,20 @@ function Leads({ datos, onRecargar }) {
         </div>
       )}
       <div className="pv3-det" style={{ marginTop: 10 }}>
-        {num(visibles.length)} de {num((datos.leads || []).length)} leads
-        {visibles.length > 200 ? " · se muestran los 200 más recientes" : ""}
+        {num(Math.min(visibles.length, limite))} de {num((datos.leads || []).length)} leads cargados
+        {datos.siguiente?.leads ? " · hay más" : ""}
         {" · pulsa una fila para abrir su ficha"}
       </div>
+      {visibles.length > limite || datos.siguiente?.leads ? (
+        <MasFilas
+          pidiendo={pidiendo}
+          onClick={async () => {
+            if (visibles.length > limite) { setLimite((n) => n + 200); return; }
+            setPidiendo(true);
+            try { await onMas?.(); setLimite((n) => n + 200); } finally { setPidiendo(false); }
+          }}
+        />
+      ) : null}
 
       {leadAbierto ? (
         <FichaLead
@@ -1219,8 +1233,10 @@ function Leads({ datos, onRecargar }) {
   );
 }
 
-function Llamadas({ datos }) {
+function Llamadas({ datos, onMas }) {
   const [abierta, setAbierta] = useState(null);
+  const [limite, setLimite] = useState(200);
+  const [pidiendo, setPidiendo] = useState(false);
   const llamadas = datos.calls || [];
 
   return (
@@ -1234,7 +1250,7 @@ function Llamadas({ datos }) {
               <tr><th>FECHA</th><th>ORIGEN</th><th>DESTINO</th><th>DURACIÓN</th><th>LEAD</th><th>RESUMEN</th><th /></tr>
             </thead>
             <tbody>
-              {llamadas.slice(0, 200).map((c, i) => (
+              {llamadas.slice(0, limite).map((c, i) => (
                 <tr key={c.id || i}>
                   <td>{fecha(c.created_at)}</td>
                   <td>{c.from_number || "—"}</td>
@@ -1256,6 +1272,17 @@ function Llamadas({ datos }) {
         </div>
       )}
 
+      {llamadas.length > limite || datos.siguiente?.calls ? (
+        <MasFilas
+          pidiendo={pidiendo}
+          onClick={async () => {
+            if (llamadas.length > limite) { setLimite((n) => n + 200); return; }
+            setPidiendo(true);
+            try { await onMas?.(); setLimite((n) => n + 200); } finally { setPidiendo(false); }
+          }}
+        />
+      ) : null}
+
       {abierta != null && llamadas[abierta] ? (
         <div className="pv3-card" style={{ marginTop: 16 }}>
           <div className="pv3-lab">LLAMADA · {fecha(llamadas[abierta].created_at)}</div>
@@ -1267,6 +1294,17 @@ function Llamadas({ datos }) {
           ) : null}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** El botón de "ver más" de una lista larga. */
+function MasFilas({ pidiendo, onClick }) {
+  return (
+    <div style={{ marginTop: 12 }}>
+      <button type="button" className="pv3-btn" disabled={pidiendo} onClick={onClick}>
+        {pidiendo ? "Cargando…" : "Ver más"}
+      </button>
     </div>
   );
 }
@@ -2724,6 +2762,9 @@ export default function PortalV3() {
      plan viaja por referencia en vez de por dependencia: si fuera dependencia,
      cambiaría la identidad de la función en cada carga. */
   const planActual = useRef(PLAN_POR_DEFECTO);
+  /* Los cursores de "hay más", por referencia por la misma razón. */
+  const siguiente = useRef(null);
+  useEffect(() => { siguiente.current = datos?.siguiente || null; }, [datos]);
 
   useEffect(() => {
     let vivo = true;
@@ -2766,6 +2807,24 @@ export default function PortalV3() {
   const recargar = useCallback(async () => {
     const json = await pedir("/api/portal/overview");
     if (json) setDatos(json);
+  }, []);
+
+  /**
+   * Trae la siguiente página de contactos o llamadas y la pega al final.
+   * /overview trae las N más recientes y un cursor si hay más; esto sigue
+   * desde ese cursor y guarda el siguiente. Cuando devuelve null, no queda.
+   */
+  const cargarMas = useCallback(async (lista) => {
+    const ruta = lista === "leads" ? "/api/portal/contactos" : "/api/portal/llamadas";
+    const cursor = siguiente.current?.[lista] || null;
+    if (!cursor) return;
+    const json = await pedir(`${ruta}?cursor=${encodeURIComponent(cursor)}&cuantos=200`);
+    if (!json) return;
+    setDatos((d) => {
+      const vistos = new Set((d[lista] || []).map((f) => f.id));
+      const nuevas = (json.data || []).filter((f) => !vistos.has(f.id));
+      return { ...d, [lista]: [...(d[lista] || []), ...nuevas], siguiente: { ...(d.siguiente || {}), [lista]: json.siguiente || null } };
+    });
   }, []);
 
   /** Vuelve a pedir una sección concreta, tras tocar algo que le afecta. */
@@ -2919,8 +2978,8 @@ export default function PortalV3() {
       case "inteligencia": return <Inteligencia datos={datosVista} />;
       case "agentes": return <Agentes datos={datosVista} onCambiado={() => recargarSeccion("agentes")} />;
       case "resumen": return <Resumen datos={datos} />;
-      case "leads": return <Leads datos={datos} onRecargar={recargar} />;
-      case "llamadas": return <Llamadas datos={datos} />;
+      case "leads": return <Leads datos={datos} onRecargar={recargar} onMas={() => cargarMas("leads")} />;
+      case "llamadas": return <Llamadas datos={datos} onMas={() => cargarMas("calls")} />;
       case "ajustes": return <Ajustes datos={datos} onRecargar={recargar} />;
 
       case "equipo":

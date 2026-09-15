@@ -1,4 +1,12 @@
 import { expect, test } from "@playwright/test";
+import fs from "node:fs";
+
+/* En local la clave de Stripe vive en .env.local, que lee el servidor y no el
+   corredor de pruebas; en CI entra como secreto del repositorio. */
+function hayStripe() {
+  if (process.env.STRIPE_SECRET_KEY) return true;
+  try { return /^STRIPE_SECRET_KEY=.+/m.test(fs.readFileSync(".env.local", "utf8")); } catch { return false; }
+}
 
 /**
  * Recorrido público: que se pueda llegar a pagar y que el aviso legal de las
@@ -49,6 +57,11 @@ test("la portada responde: el menú se abre", async ({ page }) => {
 });
 
 test("pricing enseña precios reales y lleva al checkout", async ({ page }) => {
+  /* Los precios salen de Stripe y de ningún otro sitio: sin clave no hay
+     cifra que comprobar, y la prueba lo dice en vez de fallar por un motivo
+     que no es un fallo. En CI la clave entra como secreto del repositorio. */
+  test.skip(!hayStripe(), "sin STRIPE_SECRET_KEY no hay precios reales que comprobar");
+
   await page.goto("/pricing");
 
   await expect(

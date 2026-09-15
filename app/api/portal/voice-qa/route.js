@@ -1,12 +1,13 @@
 import { getPortalContext } from "@/lib/portal-auth";
-import { prisma } from "@/lib/prisma";
+import { llamadasDeVoz } from "@/lib/server/datos";
 import { scoreVoiceCallQA } from "@/lib/portal-product";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function normalizePhone(phone = "") {
   return String(phone || "").replace(/[^\d+]/g, "").trim();
 }
 
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -59,23 +60,10 @@ export async function GET() {
       });
     }
 
-    const filters = [];
-    if (leadIds.length > 0) {
-      filters.push({ lead_id: { in: leadIds } });
-    }
-    if (phones.length > 0) {
-      filters.push({ phone: { in: phones } });
-    }
-
-    const calls = await prisma.voiceCall.findMany({
-      where: {
-        OR: filters,
-      },
-      orderBy: {
-        created_at: "desc",
-      },
-      take: 30,
-    });
+    /* Las llamadas ya son de esta empresa por client_id: no hace falta
+       reconstruir el filtro por contactos y teléfonos que necesitaba SQLite,
+       donde las llamadas no sabían de qué empresa eran. */
+    const calls = await llamadasDeVoz({ client_id: ctx.clientId, cuantos: 30 });
 
     const scoredCalls = calls.map((call) => {
       const normalizedPhone = normalizePhone(call.phone);
@@ -119,9 +107,11 @@ export async function GET() {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo cargar la QA de voz",
+        message: "No se pudo cargar la QA de voz",
       },
       { status: 500 }
     );
   }
 }
+
+export const GET = observeRoute("api.portal.voice-qa.get", manejarGET);

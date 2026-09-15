@@ -61,7 +61,13 @@ node scripts/validate-env.mjs
 
 ## 4. Deploy order
 
-1. Deploy Next app to Vercel
+`main` está protegida: nada llega a producción sin pasar por una pull
+request con el check `verificar` en verde (eslint, unidad, build, e2e), y
+no se puede hacer force push ni borrarla. Vercel despliega producción desde
+`main` al fusionar. Antes de aplicar una migración que quite algo, ver
+`docs/copias-y-recuperacion.md`.
+
+1. Deploy Next app to Vercel (fusionar la PR en `main`)
 2. Deploy `voice-server.js` service to Railway
 3. Confirm public `BASE_URL` still points to the voice service
 4. Confirm Stripe and Twilio webhooks still target the right production URLs
@@ -119,6 +125,14 @@ npm run smoke -- https://tu-dominio.com
   - `SENTRY_AUTH_TOKEN`
   - `SENTRY_ORG`
   - `SENTRY_PROJECT`
+
+Palancas de emergencia (sin desplegar):
+
+- `WEBHOOKS_EN_LINEA=si` — los webhooks de ElevenLabs y WhatsApp se procesan
+  dentro de la petición, como antes de la bandeja. Para cuando la cola esté
+  parada y haya que atenderlos ya. Quitarla cuando la cola vuelva.
+- `ajustes_plataforma` (tabla) — `pausa_global`, `pausa_ia`, `pausa_llamadas`;
+  ver `docs/cuando-se-cae-algo.md`.
 
 ## 9. Incident checklist
 

@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -11,7 +13,7 @@ export async function POST(req) {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin", "manager", "agent"])) {
+    if (!puede(ctx.role, "inbox.reply")) {
       return NextResponse.json(
         { success: false, message: "Sin permisos" },
         { status: 403 }
@@ -35,7 +37,7 @@ export async function POST(req) {
 
     if (error || !lead?.telefono) {
       return NextResponse.json(
-        { success: false, message: error?.message || "Lead sin teléfono" },
+        { success: false, message: "Lead sin teléfono" },
         { status: 404 }
       );
     }
@@ -68,3 +70,5 @@ export async function POST(req) {
     );
   }
 }
+
+export const POST = observeRoute("api.automation.whatsapp-autoreply.post", manejarPOST);

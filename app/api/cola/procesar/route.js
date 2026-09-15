@@ -1,8 +1,14 @@
 import { requireInternalRequest } from "@/lib/server/internal-api";
-import { encolar, tomarTrabajos, terminar, fallar, rescatarColgados, SinArreglo } from "@/lib/server/cola";
+import { encolar, tomarTrabajos, terminar, fallar, rescatarColgados, latidoDeLaCola, SinArreglo } from "@/lib/server/cola";
+import { colaEnPausa } from "@/lib/server/interruptores";
+import { logEvent } from "@/lib/server/observability.mjs";
+import { conContexto } from "@/lib/server/contexto.mjs";
 import { enviarInforme } from "@/lib/server/informes";
 import { pasadaDeMantenimiento } from "@/lib/server/mantenimiento";
 import { copiarGrabacion } from "@/lib/server/grabaciones";
+import { procesarEvento } from "@/lib/server/bandeja-webhooks";
+import { entregarWebhook } from "@/lib/server/webhooks-salientes";
+import { getSupabase } from "@/lib/supabase";
 
 /**
  * El que ejecuta la cola.
@@ -52,6 +58,12 @@ const OFICIOS = {
       clientId: t.client_id,
     }),
 
+  /* Un webhook guardado en la bandeja: ElevenLabs al colgar, un WhatsApp.
+     El endpoint sólo verificó la firma y lo guardó; el trabajo de verdad es
+     éste, con los reintentos de la cola. */
+  webhook: (t) => procesarEvento(t.datos?.evento_id),
+  webhook_saliente: (t) => entregarWebhook(t.datos?.entrega_id),
+
   /**
    * Mover lo viejo al archivo y pasar la retención.
    *
@@ -79,6 +91,8 @@ const OFICIOS = {
 
 /** El mantenimiento se pide una vez al día, y se pide solo. */
 async function pedirMantenimientoDelDia() {
+  const { error } = await getSupabase().rpc("purgar_seguridad_caducada");
+  if (error) throw new Error("No se pudo limpiar el estado de seguridad caducado");
   const hoy = new Date().toISOString().slice(0, 10);
   await encolar({
     tipo: "mantenimiento",
@@ -92,9 +106,29 @@ async function procesar(req) {
   if (errorInterno) return errorInterno;
 
   try {
+    /* Con la plataforma en pausa la cola se queda quieta: los trabajos
+       siguen ahí, pendientes, y se procesan cuando se levante la pausa. */
+    if (await colaEnPausa()) {
+      return Response.json({ success: true, pausado: true, procesados: 0 });
+    }
+
     /* Antes de repartir, se recogen los que se quedaron con un trabajador
        muerto. Si no, se quedarían en 'en_curso' para siempre. */
     const rescatados = await rescatarColgados();
+
+    /* Y se mira si esta pasada llega tarde. Si hay trabajos vencidos desde
+       hace más de quince minutos, las pasadas anteriores no ocurrieron: el
+       latido de Railway está caído y sólo el cron diario de Vercel ha
+       llegado hasta aquí. Se avisa a operaciones —logEvent en nivel error
+       manda al webhook— y se sigue procesando, que es lo urgente. */
+    const latido = await latidoDeLaCola();
+    if (latido.comprobado && latido.pendientesViejos > 0) {
+      logEvent("error", "cola.sin_latido", {
+        pendientesViejos: latido.pendientesViejos,
+        masAntiguoMin: latido.masAntiguoMin,
+        palanca: "Mirar el latido en Railway (voice-server.js) y CRON_SECRET",
+      });
+    }
 
     /* El mantenimiento no necesita su propio cron: se apunta él mismo, y la
        clave con la fecha hace que sólo entre uno al día por mucho que esta
@@ -109,7 +143,14 @@ async function procesar(req) {
     const hechos = [];
     const fallidos = [];
 
-    for (const trabajo of trabajos) {
+    /* Cada trabajo por su cuenta: uno que revienta no se lleva por delante a
+       los demás del lote, y uno que se retrasa tampoco los retrasa. */
+    const ejecutar = (trabajo) => conContexto(
+      { job_id: trabajo.id, job_tipo: trabajo.tipo, client_id: trabajo.client_id || null },
+      () => ejecutarTrabajo(trabajo),
+    );
+
+    const ejecutarTrabajo = async (trabajo) => {
       const oficio = OFICIOS[trabajo.tipo];
 
       if (!oficio) {
@@ -117,7 +158,7 @@ async function procesar(req) {
            veces no hará que aparezca la función que falta. */
         await fallar(trabajo, new SinArreglo(`Tipo desconocido: ${trabajo.tipo}`));
         fallidos.push({ id: trabajo.id, motivo: "tipo desconocido", reintenta: false });
-        continue;
+        return;
       }
 
       try {
@@ -127,8 +168,6 @@ async function procesar(req) {
         await terminar(trabajo.id, resultado?.aviso || null);
         hechos.push(trabajo.id);
       } catch (err) {
-        /* Un trabajo que revienta no puede llevarse por delante a los demás
-           del lote. Se anota y se sigue. */
         const resultado = await fallar(trabajo, err);
         fallidos.push({
           id: trabajo.id,
@@ -136,6 +175,20 @@ async function procesar(req) {
           reintenta: resultado.reintenta,
         });
       }
+    };
+
+    /* De tres en tres, no de uno en uno ni los diez a la vez.
+
+       Los trabajos son casi todos espera de red —un informe por correo, una
+       copia de grabación, un webhook que habla con OpenAI—, así que en serie
+       la pasada tardaba la suma de todas las esperas: Sentry lo marcaba como
+       "Consecutive HTTP". Todos a la vez sería peor de otra manera: diez
+       trabajos de la misma empresa golpeando al mismo proveedor a la vez es
+       justo lo que abre los cortacircuitos. Tres es el punto en que la pasada
+       cabe en el tiempo de una función y ningún proveedor lo nota. */
+    const A_LA_VEZ = 3;
+    for (let i = 0; i < trabajos.length; i += A_LA_VEZ) {
+      await Promise.all(trabajos.slice(i, i + A_LA_VEZ).map(ejecutar));
     }
 
     return Response.json({
@@ -147,7 +200,7 @@ async function procesar(req) {
     });
   } catch (error) {
     return Response.json(
-      { success: false, message: error?.message || "Error procesando la cola" },
+      { success: false, message: "Error procesando la cola" },
       { status: 500 }
     );
   }

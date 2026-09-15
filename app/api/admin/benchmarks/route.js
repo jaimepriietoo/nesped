@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { getAdminContext } from "@/lib/server/auth";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function getSupabase() {
   return createClient(
@@ -8,7 +9,7 @@ function getSupabase() {
   );
 }
 
-export async function GET() {
+async function manejarGET() {
   try {
     const admin = await getAdminContext();
     if (!admin.ok) {
@@ -28,7 +29,7 @@ export async function GET() {
 
     if (error) {
       return Response.json(
-        { success: false, message: error.message, data: [] },
+        { success: false, message: "No se pudo completar la operación", data: [] },
         { status: 500 }
       );
     }
@@ -39,8 +40,10 @@ export async function GET() {
     });
   } catch (error) {
     return Response.json(
-      { success: false, message: error.message || "Error cargando benchmarks", data: [] },
+      { success: false, message: "Error cargando benchmarks", data: [] },
       { status: 500 }
     );
   }
 }
+
+export const GET = observeRoute("api.admin.benchmarks.get", manejarGET);

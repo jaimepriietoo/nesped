@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { urlDeSitio } from "@/lib/server/sitio";
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { requireSameOrigin } from "@/lib/server/security";
 import {
   resolveClientStripeCustomer,
   stripe,
 } from "@/lib/server/stripe-utils";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     // La devolución tiene que ser al sitio, no a BASE_URL, que apunta al
     // servidor de voz: quien pagaba acababa en un 404 de Railway.
@@ -28,7 +30,7 @@ export async function POST(req) {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin", "manager"])) {
+    if (!puede(ctx.role, "billing.manage")) {
       return NextResponse.json(
         { success: false, message: "Sin permisos para abrir billing" },
         { status: 403 }
@@ -71,3 +73,5 @@ export async function POST(req) {
     );
   }
 }
+
+export const POST = observeRoute("api.stripe.portal.post", manejarPOST);

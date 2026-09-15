@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireInternalRequest } from "@/lib/server/internal-api";
 import { normalizePhone, enviarWhatsApp } from "@/lib/server/twilio";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function POST(req) {
+async function manejarPOST(req) {
   const unauthorized = requireInternalRequest(req);
   if (unauthorized) return unauthorized;
 
@@ -32,3 +33,5 @@ export async function POST(req) {
     );
   }
 }
+
+export const POST = observeRoute("api.automation.whatsapp-send.post", manejarPOST);

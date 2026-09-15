@@ -1,7 +1,10 @@
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { requireSameOrigin } from "@/lib/server/security";
+import { observeRoute } from "@/lib/server/observability.mjs";
+import { emitirWebhook, EVENTOS } from "@/lib/server/webhooks-salientes";
  
-export async function PATCH(req) {
+async function manejarPATCH(req) {
   try {
     const sameOriginError = requireSameOrigin(
       req,
@@ -11,7 +14,7 @@ export async function PATCH(req) {
 
     const ctx = await getPortalContext();
     if (!ctx.ok) return Response.json({ success: false, message: ctx.message }, { status: 401 });
-    if (!hasRole(ctx.role, ["owner","admin","manager","agent"])) return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
+    if (!puede(ctx.role, "crm.edit")) return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
  
     const body = await req.json();
     const { leadId } = body;
@@ -59,8 +62,16 @@ export async function PATCH(req) {
       changes: updates,
     });
  
+    void emitirWebhook({
+      clientId: ctx.clientId,
+      evento: EVENTOS.CONTACTO_ACTUALIZADO,
+      datos: { lead_id: leadId, cambios: updates, status: lead?.status || null },
+    });
+
     return Response.json({ success: true, data: lead });
   } catch (err) {
-    return Response.json({ success: false, message: err.message }, { status: 500 });
+    return Response.json({ success: false, message: "No se pudo completar la operación" }, { status: 500 });
   }
 }
+
+export const PATCH = observeRoute("api.leads.update.patch", manejarPATCH);

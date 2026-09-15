@@ -1,11 +1,14 @@
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
-import { requireSameOrigin } from "@/lib/server/security";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
+import { requireSameOrigin, requireRateLimitAsync } from "@/lib/server/security";
+import { resolveTxt } from "node:dns/promises";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function isValidDomain(value = "") {
   return /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(String(value || "").trim());
 }
 
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     const sameOriginError = requireSameOrigin(req);
     if (sameOriginError) return sameOriginError;
@@ -18,7 +21,7 @@ export async function POST(req) {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin"])) {
+    if (!puede(ctx.role, "settings.manage")) {
       return Response.json(
         { success: false, message: "Sin permisos para conectar dominio" },
         { status: 403 }
@@ -34,6 +37,21 @@ export async function POST(req) {
         { status: 400 }
       );
     }
+
+    if (/(^|\.)(nesped\.com|vercel\.app)$/.test(domain)) {
+      return Response.json({ success: false, message: "Ese dominio está reservado." }, { status: 400 });
+    }
+    const limited = await requireRateLimitAsync(req, { namespace: "domain:connect", limit: 10, keyParts: [ctx.clientId], includeIp: false });
+    if (limited) return limited;
+    const verification = `nesped-verification=${ctx.clientId}`;
+    const records = await resolveTxt(`_nesped.${domain}`).catch(() => []);
+    if (!records.some(record => record.join("") === verification)) {
+      return Response.json({ success: false, message: "Verifica primero la propiedad del dominio con este registro DNS TXT.",
+        verification: { name: `_nesped.${domain}`, value: verification } }, { status: 409 });
+    }
+    const { data: existing, error: existingError } = await ctx.supabase.from("clients")
+      .select("id").eq("custom_domain", domain).neq("id", ctx.clientId).maybeSingle();
+    if (existingError || existing) return Response.json({ success: false, message: "Dominio no disponible." }, { status: 409 });
 
     let addJson = null;
     let inspectJson = null;
@@ -52,6 +70,7 @@ export async function POST(req) {
       );
 
       addJson = await addRes.json().catch(() => null);
+      if (!addRes.ok) throw new Error("No se pudo conectar el dominio");
 
       const inspectRes = await fetch(
         `https://api.vercel.com/v9/projects/${process.env.VERCEL_PROJECT_ID}/domains/${encodeURIComponent(
@@ -65,6 +84,7 @@ export async function POST(req) {
       );
 
       inspectJson = await inspectRes.json().catch(() => null);
+      if (!inspectRes.ok || inspectJson?.verified !== true) throw new Error("Dominio pendiente de verificación");
     }
 
     const { error } = await ctx.supabase
@@ -95,9 +115,11 @@ export async function POST(req) {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo conectar el dominio",
+        message: "No se pudo conectar el dominio",
       },
       { status: 500 }
     );
   }
 }
+
+export const POST = observeRoute("api.portal.domain.connect.post", manejarPOST);

@@ -1,6 +1,7 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { buildBrandLabWorkspace } from "@/lib/portal-product";
-import { prisma } from "@/lib/prisma";
+import { productos } from "@/lib/server/datos";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function buildServices(client, settings) {
   const hayVozConfigurada = Boolean(
@@ -49,7 +50,7 @@ function buildServices(client, settings) {
   };
 }
 
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -72,10 +73,7 @@ export async function GET() {
         .select("*")
         .eq("client_id", ctx.clientId)
         .maybeSingle(),
-      prisma.product.findMany({
-        where: { active: true },
-        orderBy: { price: "asc" },
-      }),
+      productos({ activos: true }),
     ]);
 
     const errors = [clientRes.error, settingsRes.error].filter(Boolean);
@@ -100,9 +98,11 @@ export async function GET() {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo cargar Brand Lab",
+        message: "No se pudo cargar Brand Lab",
       },
       { status: 500 }
     );
   }
 }
+
+export const GET = observeRoute("api.portal.brand-lab.get", manejarGET);

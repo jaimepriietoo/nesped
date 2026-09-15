@@ -1,7 +1,9 @@
+import { requireSameOrigin } from "@/lib/server/security";
 import { createClient } from "@supabase/supabase-js";
 import { safeUpsertClientSettings } from "@/lib/client-settings";
 import { getAdminContext } from "@/lib/server/auth";
 import { esTelefonoValido, toE164 } from "@/lib/server/phone";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function getSupabase() {
   return createClient(
@@ -10,8 +12,10 @@ function getSupabase() {
   );
 }
 
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
+    const originError = requireSameOrigin(req);
+    if (originError) return originError;
     const admin = await getAdminContext();
     if (!admin.ok) {
       return Response.json(
@@ -89,7 +93,7 @@ export async function POST(req) {
         );
       }
       return Response.json(
-        { success: false, message: error.message },
+        { success: false, message: "No se pudo completar la operación" },
         { status: 500 }
       );
     }
@@ -111,8 +115,10 @@ export async function POST(req) {
     return Response.json({ success: true, data });
   } catch (error) {
     return Response.json(
-      { success: false, message: error.message || "Error creando cliente" },
+      { success: false, message: "Error creando cliente" },
       { status: 500 }
     );
   }
 }
+
+export const POST = observeRoute("api.admin.clients.create.post", manejarPOST);

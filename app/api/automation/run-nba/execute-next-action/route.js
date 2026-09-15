@@ -1,7 +1,8 @@
 import { executeNextBestAction } from "@/lib/server/next-best-action-service";
 import { requireInternalRequest } from "@/lib/server/internal-api";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function POST(req) {
+async function manejarPOST(req) {
   const unauthorized = requireInternalRequest(req);
   if (unauthorized) return unauthorized;
 
@@ -24,9 +25,11 @@ export async function POST(req) {
     return Response.json(
       {
         success: false,
-        message: error.message || "Error ejecutando la acción recomendada",
+        message: "Error ejecutando la acción recomendada",
       },
       { status: 500 }
     );
   }
 }
+
+export const POST = observeRoute("api.automation.run-nba.execute-next-action.post", manejarPOST);

@@ -1,13 +1,14 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { buildGrowthWorkspace } from "@/lib/portal-product";
-import { prisma } from "@/lib/prisma";
+import { productos } from "@/lib/server/datos";
 import {
   getClientMessageExperimentSnapshot,
   getClientPaymentRows,
 } from "@/lib/server/portal-phase-two";
 import { buildPortalServices } from "@/lib/server/portal-phase-three";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -43,10 +44,7 @@ export async function GET() {
           .eq("client_id", ctx.clientId)
           .order("created_at", { ascending: false })
           .limit(400),
-        prisma.product.findMany({
-          where: { active: true },
-          orderBy: { price: "asc" },
-        }),
+        productos({ activos: true }),
       ]);
 
     const errors = [
@@ -63,6 +61,7 @@ export async function GET() {
     const leads = leadsRes.data || [];
     const payments = await getClientPaymentRows(ctx.clientId, 1000);
     const experiments = await getClientMessageExperimentSnapshot({
+      clientId: ctx.clientId,
       leadIds: leads.map((lead) => lead.id).filter(Boolean),
     });
     const client = clientRes.data || {};
@@ -85,9 +84,11 @@ export async function GET() {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo cargar Growth",
+        message: "No se pudo cargar Growth",
       },
       { status: 500 }
     );
   }
 }
+
+export const GET = observeRoute("api.portal.growth.get", manejarGET);

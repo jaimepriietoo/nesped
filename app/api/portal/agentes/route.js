@@ -1,9 +1,11 @@
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { evaluarAgentes, MODOS } from "@/lib/server/agentes";
 import { requireSameOrigin } from "@/lib/server/security";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 /** Qué agentes hay, en qué modo están y qué les falta para poder ejecutar. */
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -39,7 +41,7 @@ export async function GET() {
  * por seguridad del sistema, sino para que nadie se quede creyendo que algo
  * está funcionando cuando no puede estarlo.
  */
-export async function PATCH(req) {
+async function manejarPATCH(req) {
   try {
     const origenError = requireSameOrigin(req, "Origen no permitido");
     if (origenError) return origenError;
@@ -48,7 +50,7 @@ export async function PATCH(req) {
     if (!ctx.ok) {
       return Response.json({ success: false, message: ctx.message }, { status: 401 });
     }
-    if (!hasRole(ctx.role, ["owner", "admin"])) {
+    if (!puede(ctx.role, "agents.manage")) {
       return Response.json(
         { success: false, message: "Solo el propietario puede cambiar cómo actúan los agentes." },
         { status: 403 }
@@ -103,3 +105,6 @@ export async function PATCH(req) {
     return Response.json({ success: false, message: "No se pudo cambiar el modo" }, { status: 500 });
   }
 }
+
+export const GET = observeRoute("api.portal.agentes.get", manejarGET);
+export const PATCH = observeRoute("api.portal.agentes.patch", manejarPATCH);

@@ -1,11 +1,16 @@
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { requireSameOrigin } from "@/lib/server/security";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { saveNextBestAction } from "@/lib/server/next-best-action-service";
+import { observeRoute } from "@/lib/server/observability.mjs";
  
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
+    const originError = requireSameOrigin(req);
+    if (originError) return originError;
     const ctx = await getPortalContext();
     if (!ctx.ok) return Response.json({ success: false, message: ctx.message }, { status: 401 });
-    if (!hasRole(ctx.role, ["owner","admin","manager","agent"])) return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
+    if (!puede(ctx.role, "ai.use")) return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
  
     const body = await req.json();
     const { leadId } = body;
@@ -22,6 +27,8 @@ export async function POST(req) {
  
     return Response.json({ success: true, data: result.lead, recommendation: result.recommendation });
   } catch (err) {
-    return Response.json({ success: false, message: err.message }, { status: 500 });
+    return Response.json({ success: false, message: "No se pudo completar la operación" }, { status: 500 });
   }
 }
+
+export const POST = observeRoute("api.ai.next-step.post", manejarPOST);

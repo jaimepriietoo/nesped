@@ -26,8 +26,6 @@
     "revisar:shaders": "node scripts/revisar-shaders.mjs"
   },
   "dependencies": {
-    "@prisma/adapter-better-sqlite3": "^7.7.0",
-    "@prisma/client": "^7.7.0",
     "@sentry/nextjs": "^10.50.0",
     "@sentry/node": "^10.50.0",
     "@supabase/supabase-js": "^2.99.3",
@@ -39,15 +37,14 @@
     "react-dom": "19.2.4",
     "resend": "^6.9.4",
     "stripe": "^20.4.1",
-    "ws": "^8.19.0"
+    "ws": "^8.19.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
     "@tailwindcss/postcss": "^4",
-    "@types/better-sqlite3": "^7.6.13",
     "eslint": "^9",
     "eslint-config-next": "16.2.0",
-    "prisma": "^7.7.0",
     "tailwindcss": "^4"
   }
 }

@@ -1,6 +1,7 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { codigosDisponibles, generarCodigos } from "@/lib/server/codigos-recuperacion";
 import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * Códigos de recuperación de la propia cuenta.
@@ -11,7 +12,7 @@ import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security"
  */
 
 /** Cuántos quedan. No devuelve los códigos: no se pueden volver a ver. */
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -35,7 +36,7 @@ export async function GET() {
  * guardan más que como hash. Si quien los pide cierra la pestaña sin
  * copiarlos, tiene que generar otros.
  */
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     const origenError = requireSameOrigin(req, "Origen no permitido");
     if (origenError) return origenError;
@@ -78,3 +79,6 @@ export async function POST(req) {
     );
   }
 }
+
+export const GET = observeRoute("api.portal.codigos-recuperacion.get", manejarGET);
+export const POST = observeRoute("api.portal.codigos-recuperacion.post", manejarPOST);

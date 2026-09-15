@@ -1,12 +1,14 @@
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { enviarSms } from "@/lib/server/twilio";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function normalizePhone(value) {
   if (!value) return "";
   return String(value).replace(/\s+/g, "").trim();
 }
 
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -16,7 +18,7 @@ export async function POST(req) {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin", "manager", "agent"])) {
+    if (!puede(ctx.role, "inbox.reply")) {
       return Response.json(
         { success: false, message: "Sin permisos para enviar SMS" },
         { status: 403 }
@@ -132,8 +134,10 @@ export async function POST(req) {
     });
   } catch (error) {
     return Response.json(
-      { success: false, message: error.message || "Error enviando SMS" },
+      { success: false, message: "Error enviando SMS" },
       { status: 500 }
     );
   }
 }
+
+export const POST = observeRoute("api.followup.sms.post", manejarPOST);

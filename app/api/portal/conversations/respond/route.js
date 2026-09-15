@@ -1,13 +1,15 @@
 import { enviarCorreo } from "@/lib/server/correo";
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { requireSameOrigin } from "@/lib/server/security";
 import { enviarSms, enviarWhatsApp } from "@/lib/server/twilio";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function normalizePhone(value = "") {
   return String(value || "").replace(/\s+/g, "").trim();
 }
 
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     const sameOriginError = requireSameOrigin(req);
     if (sameOriginError) return sameOriginError;
@@ -20,7 +22,7 @@ export async function POST(req) {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin", "manager", "agent"])) {
+    if (!puede(ctx.role, "inbox.reply")) {
       return Response.json(
         { success: false, message: "Sin permisos para responder conversaciones" },
         { status: 403 }
@@ -162,9 +164,11 @@ export async function POST(req) {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo enviar la respuesta",
+        message: "No se pudo enviar la respuesta",
       },
       { status: 500 }
     );
   }
 }
+
+export const POST = observeRoute("api.portal.conversations.respond.post", manejarPOST);

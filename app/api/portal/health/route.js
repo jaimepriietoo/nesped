@@ -1,6 +1,5 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { safeLoadClientSettings } from "@/lib/client-settings";
-import { prisma } from "@/lib/prisma";
 import {
   buildEnvReadinessReport,
   getFeatureReport,
@@ -224,7 +223,7 @@ async function handleGet() {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo cargar la salud del sistema",
+        message: "No se pudo cargar la salud del sistema",
       },
       { status: 500 }
     );

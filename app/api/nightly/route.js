@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { crearEventoLead, eventosDeLead, eventosPorTipo } from "@/lib/server/datos";
 import { runComplianceRetentionSweep } from "@/lib/server/compliance.mjs";
 import { requireInternalRequest } from "@/lib/server/internal-api";
 import {
@@ -10,6 +10,7 @@ import {
   runVoiceCallsAutomation,
   sendWhatsAppMessage,
 } from "@/lib/server/automation-service";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function hoursBetween(dateA, dateB) {
   const a = new Date(dateA).getTime();
@@ -64,7 +65,7 @@ function buildTimedRecoveryMessage(lead, stage, paymentLink, bookingUrl) {
  * contactos de todos los demás. No hay ninguna pantalla que las llame: son
  * trabajos programados, y como tales se cierran.
  */
-export async function POST(req) {
+async function manejarPOST(req) {
   const errorInterno = requireInternalRequest(req);
   if (errorInterno) return errorInterno;
 
@@ -74,28 +75,17 @@ export async function POST(req) {
     const processed = [];
     const failed = [];
 
-    const recentPaymentEvents = await prisma.leadEvent.findMany({
-      where: {
-        type: {
-          in: ["ai_reply_with_payment", "ai_payment_push"],
-        },
-      },
-      orderBy: {
-        created_at: "desc",
-      },
-      take: 100,
-    });
+    const recentPaymentEvents = [
+      ...(await eventosPorTipo({ type: "ai_reply_with_payment", cuantos: 100 })),
+      ...(await eventosPorTipo({ type: "ai_payment_push", cuantos: 100 })),
+    ].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))).slice(0, 100);
 
     for (const paymentEvent of recentPaymentEvents) {
       try {
         const phone = paymentEvent.phone;
         if (!phone) continue;
 
-        const history = await prisma.leadEvent.findMany({
-          where: { phone },
-          orderBy: { created_at: "desc" },
-          take: 50,
-        });
+        const history = await eventosDeLead({ phone, cuantos: 50 });
 
         const latestPaymentEvent = history.find((e) =>
           ["ai_reply_with_payment", "ai_payment_push"].includes(String(e.type || ""))
@@ -139,13 +129,12 @@ export async function POST(req) {
 
         await sendWhatsAppMessage(normalizePhone(phone), message);
 
-        await prisma.leadEvent.create({
-          data: {
-            lead_id: lead.id || null,
-            phone,
-            type: stage === "30m" ? "payment_followup_30m" : "payment_followup_24h",
-            message,
-          },
+        await crearEventoLead({
+          client_id: lead.client_id || paymentEvent.client_id || null,
+          lead_id: lead.id || null,
+          phone,
+          type: stage === "30m" ? "payment_followup_30m" : "payment_followup_24h",
+          message,
         });
 
         processed.push({ phone, stage });
@@ -187,3 +176,5 @@ export async function POST(req) {
     });
   }
 }
+
+export const POST = observeRoute("api.nightly.post", manejarPOST);

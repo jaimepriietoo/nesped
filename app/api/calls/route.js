@@ -1,6 +1,7 @@
 import { getPortalContext } from "@/lib/portal-auth";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -19,14 +20,17 @@ export async function GET() {
 
     if (error) {
       return Response.json(
-        { success: false, message: error.message, data: [] },
+        { success: false, message: "Error cargando llamadas", data: [] },
         { status: 500 }
       );
     }
 
     return Response.json({
       success: true,
-      data: data || [],
+      data: (data || []).map(({ recording_url, grabacion_propia, ...call }) => ({
+        ...call,
+        tiene_grabacion: Boolean(grabacion_propia),
+      })),
     });
   } catch (error) {
     console.error(error);
@@ -37,3 +41,5 @@ export async function GET() {
     );
   }
 }
+
+export const GET = observeRoute("api.calls.get", manejarGET);

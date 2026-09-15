@@ -1,8 +1,10 @@
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { executeNextBestAction } from "@/lib/server/next-best-action-service";
 import { requireSameOrigin } from "@/lib/server/security";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     const sameOriginError = requireSameOrigin(
       req,
@@ -18,7 +20,7 @@ export async function POST(req) {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin", "manager", "agent"])) {
+    if (!puede(ctx.role, "automations.run")) {
       return Response.json(
         { success: false, message: "Sin permisos para ejecutar la acción" },
         { status: 403 }
@@ -42,9 +44,11 @@ export async function POST(req) {
     return Response.json(
       {
         success: false,
-        message: error.message || "Error ejecutando la acción recomendada",
+        message: "Error ejecutando la acción recomendada",
       },
       { status: 500 }
     );
   }
 }
+
+export const POST = observeRoute("api.automation.execute-next-action.post", manejarPOST);

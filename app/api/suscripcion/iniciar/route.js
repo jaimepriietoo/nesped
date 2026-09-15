@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getPortalContext } from "@/lib/portal-auth";
 import { resolveCheckoutConfig, stripe } from "@/lib/server/stripe-checkout";
 import { urlDeSitio } from "@/lib/server/sitio";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * Manda a pagar a alguien que YA tiene cuenta.
@@ -17,7 +18,7 @@ import { urlDeSitio } from "@/lib/server/sitio";
 
 const PLANES_PUBLICOS = new Set(["growth", "intelligence"]);
 
-export async function GET(req) {
+async function manejarGET(req) {
   const BASE_URL = urlDeSitio(req);
 
   try {
@@ -102,3 +103,5 @@ export async function GET(req) {
     return NextResponse.redirect(`${BASE_URL}/pricing?checkout=error`, 303);
   }
 }
+
+export const GET = observeRoute("api.suscripcion.iniciar.get", manejarGET);

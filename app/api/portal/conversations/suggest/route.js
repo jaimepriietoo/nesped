@@ -1,15 +1,20 @@
+import { reservarGeneracionIA } from "@/lib/server/ai-budget";
+import { conRegistroIA } from "@/lib/server/ia";
+import { respuestaSiPausado } from "@/lib/server/interruptores";
 import OpenAI from "openai";
-import { prisma } from "@/lib/prisma";
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { memoriaDeLead } from "@/lib/server/datos";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import {
   getDefaultPlaybookWorkspace,
   parsePlaybookWorkspace,
 } from "@/lib/portal-product";
 import { requireSameOrigin } from "@/lib/server/security";
 import { buildConversationAssistPayload } from "@/lib/server/portal-phase-four";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 const openai = process.env.OPENAI_API_KEY
-  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 20000, maxRetries: 0 })
   : null;
 
 async function tryAiSuggestion({ client, lead, payload, channel, goal }) {
@@ -40,10 +45,14 @@ Responde SOLO con JSON válido:
 `;
 
   try {
-    const response = await openai.responses.create({
+    await reservarGeneracionIA(client?.id);
+    const response = await conRegistroIA({ clientId: client?.id, uso: "sugerencia", modelo: "gpt-5-mini", promptVersion: "sugerencia-v1" }, () =>
+      openai.responses.create({
+      max_output_tokens: 1200,
       model: "gpt-5-mini",
-      input: prompt,
-    });
+      input: prompt.slice(0, 16000),
+    })
+    );
 
     const text = response.output_text?.trim() || "{}";
     const parsed = JSON.parse(text);
@@ -64,7 +73,7 @@ Responde SOLO con JSON válido:
   }
 }
 
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     const sameOriginError = requireSameOrigin(req);
     if (sameOriginError) return sameOriginError;
@@ -77,7 +86,7 @@ export async function POST(req) {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin", "manager", "agent"])) {
+    if (!puede(ctx.role, "inbox.reply")) {
       return Response.json(
         { success: false, message: "Sin permisos para pedir sugerencias IA" },
         { status: 403 }
@@ -119,9 +128,7 @@ export async function POST(req) {
       throw new Error(leadError?.message || "No se pudo cargar el lead");
     }
 
-    const memory = await prisma.leadMemory.findUnique({
-      where: { lead_id: leadId },
-    });
+    const memory = await memoriaDeLead(leadId);
 
     const playbook = parsePlaybookWorkspace(
       client?.prompt || "",
@@ -153,12 +160,16 @@ export async function POST(req) {
       data: payload,
     });
   } catch (error) {
+    const pausado = respuestaSiPausado(error);
+    if (pausado) return pausado;
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo generar la sugerencia",
+        message: "No se pudo generar la sugerencia",
       },
       { status: 500 }
     );
   }
 }
+
+export const POST = observeRoute("api.portal.conversations.suggest.post", manejarPOST);

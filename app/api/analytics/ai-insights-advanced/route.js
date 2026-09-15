@@ -8,9 +8,10 @@ import {
   getClientMessageExperimentSnapshot,
   getClientPaymentRows,
 } from "@/lib/server/portal-phase-two";
-import { prisma } from "@/lib/prisma";
+import { productos } from "@/lib/server/datos";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -47,10 +48,7 @@ export async function GET() {
           .from("portal_users")
           .select("full_name,role")
           .eq("client_id", ctx.clientId),
-        prisma.product.findMany({
-          where: { active: true },
-          orderBy: { price: "asc" },
-        }),
+        productos({ activos: true }),
       ]);
 
     const errors = [
@@ -106,9 +104,11 @@ export async function GET() {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudieron cargar los insights avanzados",
+        message: "No se pudieron cargar los insights avanzados",
       },
       { status: 500 }
     );
   }
 }
+
+export const GET = observeRoute("api.analytics.ai-insights-advanced.get", manejarGET);

@@ -1,7 +1,8 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { buildIntegrationsCenterData } from "@/lib/server/portal-phase-four";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -40,9 +41,11 @@ export async function GET() {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo cargar Integrations Center",
+        message: "No se pudo cargar Integrations Center",
       },
       { status: 500 }
     );
   }
 }
+
+export const GET = observeRoute("api.portal.integrations-center.get", manejarGET);

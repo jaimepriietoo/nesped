@@ -1,17 +1,20 @@
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
-import { prisma } from "@/lib/prisma";
+import { requireSameOrigin } from "@/lib/server/security";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
+import { playbooksPorSector } from "@/lib/server/datos";
 import {
   getDefaultPlaybookWorkspace,
   getPlaybookLibrary,
   parsePlaybookWorkspace,
   serializePlaybookWorkspace,
 } from "@/lib/portal-product";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 async function findIndustryPlaybook(industry = "") {
   const normalized = String(industry || "").trim().toLowerCase();
   if (!normalized) return null;
 
-  const items = await prisma.industryPlaybook.findMany({ take: 50 });
+  const items = await playbooksPorSector({ cuantos: 50 });
   return (
     items.find(
       (item) => String(item.industry || "").trim().toLowerCase() === normalized
@@ -30,7 +33,7 @@ function mergeWorkspaceWithIndustry(defaults, industryPlaybook) {
   };
 }
 
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -84,15 +87,17 @@ export async function GET() {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo cargar la biblioteca de playbooks",
+        message: "No se pudo cargar la biblioteca de playbooks",
       },
       { status: 500 }
     );
   }
 }
 
-export async function PATCH(req) {
+async function manejarPATCH(req) {
   try {
+    const originError = requireSameOrigin(req);
+    if (originError) return originError;
     const ctx = await getPortalContext();
     if (!ctx.ok) {
       return Response.json(
@@ -101,7 +106,7 @@ export async function PATCH(req) {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin", "manager"])) {
+    if (!puede(ctx.role, "playbooks.manage")) {
       return Response.json(
         { success: false, message: "Sin permisos para actualizar playbooks" },
         { status: 403 }
@@ -138,9 +143,12 @@ export async function PATCH(req) {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo guardar el playbook",
+        message: "No se pudo guardar el playbook",
       },
       { status: 500 }
     );
   }
 }
+
+export const GET = observeRoute("api.playbooks.get", manejarGET);
+export const PATCH = observeRoute("api.playbooks.patch", manejarPATCH);

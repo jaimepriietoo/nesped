@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { urlDeSitio } from "@/lib/server/sitio";
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
 import { requireSameOrigin } from "@/lib/server/security";
+import { exigirContactoPropio } from "@/lib/server/pertenencia";
 import {
   getClientBillingState,
   normalizePhone,
@@ -9,8 +11,9 @@ import {
   resolveCheckoutConfig,
   stripe,
 } from "@/lib/server/stripe-utils";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     // La devolución tiene que ser al sitio, no a BASE_URL, que apunta al
     // servidor de voz: quien pagaba acababa en un 404 de Railway.
@@ -31,7 +34,7 @@ export async function POST(req) {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin", "manager", "agent"])) {
+    if (!puede(ctx.role, "billing.checkout")) {
       return NextResponse.json(
         { success: false, message: "Sin permisos para crear un checkout" },
         { status: 403 }
@@ -46,10 +49,12 @@ export async function POST(req) {
       phone = "",
       email = "",
       name = "",
-      successUrl,
-      cancelUrl,
     } = body || {};
 
+    if (leadId) {
+      const denied = await exigirContactoPropio({ supabase: ctx.supabase, clientId: ctx.clientId, leadId });
+      if (denied) return denied;
+    }
     const config = await resolveCheckoutConfig({ plan, productId });
 
     if (!config?.priceId) {
@@ -60,6 +65,9 @@ export async function POST(req) {
     }
 
     const isClientPlanCheckout = !leadId;
+    if (isClientPlanCheckout && !puede(ctx.role, "billing.manage")) {
+      return NextResponse.json({ success: false, message: "Sin permisos de facturación" }, { status: 403 });
+    }
 
     const metadata = {
       client_id: ctx.clientId,
@@ -126,8 +134,8 @@ export async function POST(req) {
           quantity: 1,
         },
       ],
-      success_url: successUrl || `${BASE_URL}/portal?checkout=success`,
-      cancel_url: cancelUrl || `${BASE_URL}/portal?checkout=cancelled`,
+      success_url: `${BASE_URL}/portal?checkout=success`,
+      cancel_url: `${BASE_URL}/portal?checkout=cancelled`,
       client_reference_id: leadId || null,
       phone_number_collection: {
         enabled: true,
@@ -168,3 +176,5 @@ export async function POST(req) {
     );
   }
 }
+
+export const POST = observeRoute("api.stripe.checkout.post", manejarPOST);

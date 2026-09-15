@@ -1,5 +1,6 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { evaluarInteligencia } from "@/lib/server/inteligencia";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * Estado de inteligencia de la cuenta: qué se puede afirmar y qué falta.
@@ -8,7 +9,7 @@ import { evaluarInteligencia } from "@/lib/server/inteligencia";
  * client_id de la sesión, así que no hay forma de pedir los datos de otra
  * empresa cambiando un parámetro: no se acepta ninguno.
  */
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -32,3 +33,5 @@ export async function GET() {
     );
   }
 }
+
+export const GET = observeRoute("api.portal.inteligencia.get", manejarGET);

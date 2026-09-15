@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { getAdminContext } from "@/lib/server/auth";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 function getSupabase() {
   return createClient(
@@ -8,7 +9,7 @@ function getSupabase() {
   );
 }
 
-export async function POST(req) {
+async function manejarPOST(req) {
   try {
     const admin = await getAdminContext();
     if (!admin.ok) {
@@ -74,3 +75,5 @@ export async function POST(req) {
     );
   }
 }
+
+export const POST = observeRoute("api.admin.domains.post", manejarPOST);

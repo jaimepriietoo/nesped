@@ -1,4 +1,6 @@
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * Descarga los contactos en CSV.
@@ -54,7 +56,7 @@ const COLUMNAS = [
   ["Creado", (l) => l.created_at],
 ];
 
-export async function GET() {
+async function manejarGET() {
   try {
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -64,7 +66,7 @@ export async function GET() {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin", "manager"])) {
+    if (!puede(ctx.role, "crm.export")) {
       return Response.json(
         { success: false, message: "Sin permisos para exportar contactos" },
         { status: 403 }
@@ -101,8 +103,10 @@ export async function GET() {
     });
   } catch (error) {
     return Response.json(
-      { success: false, message: error.message || "No se pudo exportar" },
+      { success: false, message: "No se pudo exportar" },
       { status: 500 }
     );
   }
 }
+
+export const GET = observeRoute("api.leads.export.get", manejarGET);

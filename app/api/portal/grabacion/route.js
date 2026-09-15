@@ -1,5 +1,6 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { direccionParaEscuchar } from "@/lib/server/grabaciones";
+import { observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * Escuchar la grabación de una llamada.
@@ -17,7 +18,7 @@ import { direccionParaEscuchar } from "@/lib/server/grabaciones";
  * El filtro por empresa es el motivo de que esta ruta exista. Sin él sería el
  * mismo agujero con más pasos.
  */
-export async function GET(req) {
+async function manejarGET(req) {
   const ctx = await getPortalContext();
   if (!ctx.ok) {
     return Response.json({ success: false, message: ctx.message }, { status: 401 });
@@ -46,9 +47,16 @@ export async function GET(req) {
   }
 
   try {
+    const { error: auditError } = await ctx.supabase.from("audit_logs").insert({
+      client_id: ctx.clientId, entity_type: "call", entity_id: String(llamada.id),
+      action: "recording_access", actor: ctx.userEmail,
+    });
+    if (auditError) throw new Error("No se pudo registrar el acceso");
     const url = await direccionParaEscuchar(llamada.grabacion_propia);
-    return Response.json({ success: true, url });
+    return Response.json({ success: true, url }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return Response.json({ success: false, message: "No se pudo preparar la grabación" }, { status: 500 });
   }
 }
+
+export const GET = observeRoute("api.portal.grabacion.get", manejarGET);

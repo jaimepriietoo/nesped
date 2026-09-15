@@ -1,4 +1,5 @@
 import { reservarGeneracionIA } from "@/lib/server/ai-budget";
+import { respuestaSiPausado } from "@/lib/server/interruptores";
 import { getPortalContext } from "@/lib/portal-auth";
 import { evaluarInteligencia } from "@/lib/server/inteligencia";
 import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
@@ -165,6 +166,8 @@ export async function POST(req) {
       basadoEn: activos.map((m) => ({ titulo: m.titulo, valor: `${m.valor}${m.unidad || ""}` })),
     });
   } catch (error) {
+    const pausado = respuestaSiPausado(error);
+    if (pausado) return pausado;
     console.error("POST /api/portal/copiloto error:", error);
     return Response.json(
       { success: false, message: "No he podido responder ahora mismo." },

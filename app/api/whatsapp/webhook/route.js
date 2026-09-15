@@ -1,4 +1,5 @@
 import { reservarGeneracionIA } from "@/lib/server/ai-budget";
+import { Pausado } from "@/lib/server/interruptores";
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { getSupabase } from "@/lib/supabase";
@@ -805,6 +806,12 @@ await sendWhatsapp(phone, finalReply);
       clientId: clientContext.id,
     });
   } catch (err) {
+    /* Con la IA en pausa no se contesta al mensaje y no es un error: es
+       exactamente lo que hace el interruptor. Twilio recibe un 200 y no
+       reintenta; el mensaje entrante ya quedó guardado en el contacto. */
+    if (err instanceof Pausado) {
+      return NextResponse.json({ success: false, pausado: true, message: err.message });
+    }
     console.error("Webhook WhatsApp error:", err);
     return NextResponse.json({
       success: false,

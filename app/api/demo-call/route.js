@@ -3,6 +3,7 @@ import { ensureDemoWorkspace, isDemoClientId } from "@/lib/clients";
 import { logEvent, observeRoute } from "@/lib/server/observability.mjs";
 import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 import { conCortacircuitos, noEsDelProveedor } from "@/lib/server/cortacircuitos";
+import { exigirLlamadasPermitidas, respuestaSiPausado } from "@/lib/server/interruptores";
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
 import { toE164 } from "@/lib/server/phone";
 
@@ -43,6 +44,10 @@ function hayVozConfigurada() {
 
 async function lanzarLlamadaDeDemostracion({ telefono, clientId, leadId }) {
   const cfg = configuracionDeVoz();
+
+  /* El interruptor, antes que el proveedor: una llamada saliente cuesta
+     dinero desde el primer segundo. */
+  await exigirLlamadasPermitidas(clientId);
 
   return conCortacircuitos({ proveedor: "elevenlabs", quienEspera: "persona" }, async () => {
     const respuesta = await fetch(
@@ -199,6 +204,10 @@ async function handlePost(req) {
       recordingEnabled: true,
     });
   } catch (error) {
+    /* En pausa no es un fallo: es una decisión, y se contesta como tal. */
+    const pausado = respuestaSiPausado(error);
+    if (pausado) return pausado;
+
     logEvent("error", "voice.demo_call_failed", {
       error: {
         name: error?.name || "Error",

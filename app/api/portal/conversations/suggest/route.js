@@ -1,4 +1,5 @@
 import { reservarGeneracionIA } from "@/lib/server/ai-budget";
+import { respuestaSiPausado } from "@/lib/server/interruptores";
 import OpenAI from "openai";
 import { memoriaDeLead } from "@/lib/server/datos";
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
@@ -154,6 +155,8 @@ export async function POST(req) {
       data: payload,
     });
   } catch (error) {
+    const pausado = respuestaSiPausado(error);
+    if (pausado) return pausado;
     return Response.json(
       {
         success: false,

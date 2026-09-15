@@ -1,5 +1,6 @@
 import { requireInternalRequest } from "@/lib/server/internal-api";
 import { encolar, tomarTrabajos, terminar, fallar, rescatarColgados, SinArreglo } from "@/lib/server/cola";
+import { colaEnPausa } from "@/lib/server/interruptores";
 import { enviarInforme } from "@/lib/server/informes";
 import { pasadaDeMantenimiento } from "@/lib/server/mantenimiento";
 import { copiarGrabacion } from "@/lib/server/grabaciones";
@@ -95,6 +96,12 @@ async function procesar(req) {
   if (errorInterno) return errorInterno;
 
   try {
+    /* Con la plataforma en pausa la cola se queda quieta: los trabajos
+       siguen ahí, pendientes, y se procesan cuando se levante la pausa. */
+    if (await colaEnPausa()) {
+      return Response.json({ success: true, pausado: true, procesados: 0 });
+    }
+
     /* Antes de repartir, se recogen los que se quedaron con un trabajador
        muerto. Si no, se quedarían en 'en_curso' para siempre. */
     const rescatados = await rescatarColgados();

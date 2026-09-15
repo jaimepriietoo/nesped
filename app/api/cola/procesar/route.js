@@ -2,6 +2,7 @@ import { requireInternalRequest } from "@/lib/server/internal-api";
 import { encolar, tomarTrabajos, terminar, fallar, rescatarColgados, latidoDeLaCola, SinArreglo } from "@/lib/server/cola";
 import { colaEnPausa } from "@/lib/server/interruptores";
 import { logEvent } from "@/lib/server/observability.mjs";
+import { conContexto } from "@/lib/server/contexto.mjs";
 import { enviarInforme } from "@/lib/server/informes";
 import { pasadaDeMantenimiento } from "@/lib/server/mantenimiento";
 import { copiarGrabacion } from "@/lib/server/grabaciones";
@@ -142,7 +143,12 @@ async function procesar(req) {
 
     /* Cada trabajo por su cuenta: uno que revienta no se lleva por delante a
        los demás del lote, y uno que se retrasa tampoco los retrasa. */
-    const ejecutar = async (trabajo) => {
+    const ejecutar = (trabajo) => conContexto(
+      { job_id: trabajo.id, job_tipo: trabajo.tipo, client_id: trabajo.client_id || null },
+      () => ejecutarTrabajo(trabajo),
+    );
+
+    const ejecutarTrabajo = async (trabajo) => {
       const oficio = OFICIOS[trabajo.tipo];
 
       if (!oficio) {

@@ -1,5 +1,6 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { evaluarConsumo } from "@/lib/server/cuotas";
+import { cursorDe } from "@/lib/server/paginacion";
 
 function predictCloseProbability(lead) {
   const score = Number(lead.score || 0);
@@ -211,12 +212,14 @@ export async function GET() {
         .select("*")
         .eq("client_id", ctx.clientId)
         .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
         .limit(MAXIMO_CONTACTOS),
       ctx.supabase
         .from("calls")
         .select("*")
         .eq("client_id", ctx.clientId)
         .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
         .limit(MAXIMO_LLAMADAS),
       ctx.supabase
         .from("alerts")
@@ -469,6 +472,13 @@ export async function GET() {
       /* Para que el panel pueda decir que una cifra es aproximada en vez de
          darla por buena. */
       cifrasExactas,
+
+      /* Si las listas se han cortado, por dónde seguir: /api/portal/contactos
+         y /api/portal/llamadas aceptan ?cursor= y devuelven el siguiente. */
+      siguiente: {
+        leads: rawLeads.length >= MAXIMO_CONTACTOS ? cursorDe(rawLeads[rawLeads.length - 1]) : null,
+        calls: calls.length >= MAXIMO_LLAMADAS ? cursorDe(calls[calls.length - 1]) : null,
+      },
 
       /* Consumo del mes contra el límite del plan. Se enseña siempre, no sólo
          al pasarse: quien ve subir el contador puede llamar antes de que le

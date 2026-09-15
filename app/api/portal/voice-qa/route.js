@@ -119,7 +119,7 @@ export async function GET() {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo cargar la QA de voz",
+        message: "No se pudo cargar la QA de voz",
       },
       { status: 500 }
     );

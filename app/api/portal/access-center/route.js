@@ -62,7 +62,7 @@ export async function GET() {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo cargar Access Center",
+        message: "No se pudo cargar Access Center",
       },
       { status: 500 }
     );

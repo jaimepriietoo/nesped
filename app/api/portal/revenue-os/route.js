@@ -87,7 +87,7 @@ export async function GET() {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo cargar Revenue OS",
+        message: "No se pudo cargar Revenue OS",
       },
       { status: 500 }
     );

@@ -85,7 +85,7 @@ export async function GET() {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo cargar Growth",
+        message: "No se pudo cargar Growth",
       },
       { status: 500 }
     );

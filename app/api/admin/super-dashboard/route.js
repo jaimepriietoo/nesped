@@ -54,7 +54,7 @@ export async function GET(req) {
 
     if (error) {
       return Response.json(
-        { success: false, message: error.message || "Error cargando super dashboard" },
+        { success: false, message: "Error cargando super dashboard" },
         { status: 500 }
       );
     }
@@ -73,7 +73,7 @@ export async function GET(req) {
     });
   } catch (error) {
     return Response.json(
-      { success: false, message: error.message || "Error cargando super dashboard" },
+      { success: false, message: "Error cargando super dashboard" },
       { status: 500 }
     );
   }

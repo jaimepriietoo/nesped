@@ -100,7 +100,7 @@ export async function GET() {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo cargar el inbox",
+        message: "No se pudo cargar el inbox",
       },
       { status: 500 }
     );

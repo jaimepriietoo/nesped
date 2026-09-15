@@ -66,10 +66,9 @@ export async function GET(req) {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo cargar API Hub",
+        message: "No se pudo cargar API Hub",
       },
       { status: 500 }
     );
   }
 }
-

@@ -43,7 +43,7 @@ export async function POST(req) {
 
     if (error || !lead) {
       return Response.json(
-        { success: false, message: error?.message || "Lead no encontrado" },
+        { success: false, message: "Lead no encontrado" },
         { status: 404 }
       );
     }
@@ -70,7 +70,7 @@ export async function POST(req) {
     return Response.json(
       {
         success: false,
-        message: error.message || "Error generando NBA con IA",
+        message: "Error generando NBA con IA",
       },
       { status: 500 }
     );

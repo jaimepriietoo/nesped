@@ -28,7 +28,7 @@ export async function GET() {
 
     if (error) {
       return Response.json(
-        { success: false, message: error.message, data: [] },
+        { success: false, message: "No se pudo completar la operación", data: [] },
         { status: 500 }
       );
     }
@@ -39,7 +39,7 @@ export async function GET() {
     });
   } catch (error) {
     return Response.json(
-      { success: false, message: error.message || "Error cargando benchmarks", data: [] },
+      { success: false, message: "Error cargando benchmarks", data: [] },
       { status: 500 }
     );
   }

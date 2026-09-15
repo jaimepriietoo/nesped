@@ -76,7 +76,7 @@ export async function GET() {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo cargar Workflow Studio",
+        message: "No se pudo cargar Workflow Studio",
       },
       { status: 500 }
     );

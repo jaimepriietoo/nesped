@@ -162,7 +162,7 @@ export async function POST(req) {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo enviar la respuesta",
+        message: "No se pudo enviar la respuesta",
       },
       { status: 500 }
     );

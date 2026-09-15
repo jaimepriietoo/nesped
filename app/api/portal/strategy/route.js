@@ -121,10 +121,9 @@ export async function GET() {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo cargar el workspace de estrategia",
+        message: "No se pudo cargar el workspace de estrategia",
       },
       { status: 500 }
     );
   }
 }
-

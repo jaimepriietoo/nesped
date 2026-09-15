@@ -192,7 +192,7 @@ export async function GET() {
         .maybeSingle(),
       ctx.supabase
         .from("portal_users")
-        .select("*")
+        .select("id,client_id,email,full_name,role,phone,is_active,created_at")
         .eq("client_id", ctx.clientId)
         .order("created_at", { ascending: true }),
       /* Las listas se acotan; las CIFRAS no salen de ellas.
@@ -260,7 +260,7 @@ export async function GET() {
 
     if (errors.length > 0) {
       return Response.json(
-        { success: false, message: errors[0].message || "Error cargando overview" },
+        { success: false, message: "Error cargando overview" },
         { status: 500 }
       );
     }
@@ -515,7 +515,7 @@ export async function GET() {
     });
   } catch (error) {
     return Response.json(
-      { success: false, message: error.message || "Error cargando overview" },
+      { success: false, message: "Error cargando overview" },
       { status: 500 }
     );
   }

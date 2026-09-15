@@ -132,7 +132,7 @@ export async function POST(req) {
     });
   } catch (error) {
     return Response.json(
-      { success: false, message: error.message || "Error enviando SMS" },
+      { success: false, message: "Error enviando SMS" },
       { status: 500 }
     );
   }

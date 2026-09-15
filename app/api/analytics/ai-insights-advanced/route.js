@@ -106,7 +106,7 @@ export async function GET() {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudieron cargar los insights avanzados",
+        message: "No se pudieron cargar los insights avanzados",
       },
       { status: 500 }
     );

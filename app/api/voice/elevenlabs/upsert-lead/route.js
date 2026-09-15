@@ -30,7 +30,7 @@ export async function POST(req) {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo guardar el lead de ElevenLabs",
+        message: "No se pudo guardar el lead de ElevenLabs",
       },
       { status: 500 }
     );

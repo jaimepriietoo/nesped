@@ -21,7 +21,7 @@ export async function GET() {
 
     if (error) {
       return Response.json(
-        { success: false, message: error.message, data: [] },
+        { success: false, message: "No se pudo completar la operación", data: [] },
         { status: 500 }
       );
     }

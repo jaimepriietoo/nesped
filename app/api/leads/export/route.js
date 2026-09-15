@@ -101,7 +101,7 @@ export async function GET() {
     });
   } catch (error) {
     return Response.json(
-      { success: false, message: error.message || "No se pudo exportar" },
+      { success: false, message: "No se pudo exportar" },
       { status: 500 }
     );
   }

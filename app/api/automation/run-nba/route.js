@@ -35,7 +35,7 @@ export async function POST(req) {
 
     if (error) {
       return Response.json(
-        { success: false, message: error.message },
+        { success: false, message: "No se pudo completar la operación" },
         { status: 500 }
       );
     }
@@ -59,7 +59,7 @@ export async function POST(req) {
     return Response.json({ success: true });
   } catch (error) {
     return Response.json(
-      { success: false, message: error.message || "Error ejecutando automatización NBA" },
+      { success: false, message: "Error ejecutando automatización NBA" },
       { status: 500 }
     );
   }

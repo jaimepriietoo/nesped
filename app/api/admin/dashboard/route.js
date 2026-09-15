@@ -62,7 +62,7 @@ export async function GET() {
     const error = resumenRes.error || recientesRes.error;
     if (error) {
       return Response.json(
-        { success: false, message: error.message || "Error cargando dashboard" },
+        { success: false, message: "Error cargando dashboard" },
         { status: 500 }
       );
     }
@@ -74,7 +74,7 @@ export async function GET() {
     });
   } catch (error) {
     return Response.json(
-      { success: false, message: error.message || "Error cargando dashboard" },
+      { success: false, message: "Error cargando dashboard" },
       { status: 500 }
     );
   }

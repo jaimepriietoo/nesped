@@ -58,7 +58,7 @@ export async function POST(req) {
     });
   } catch (error) {
     return Response.json(
-      { success: false, message: error.message || "Error cerrando sesiones" },
+      { success: false, message: "Error cerrando sesiones" },
       { status: 500 }
     );
   }

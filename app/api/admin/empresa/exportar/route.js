@@ -61,7 +61,7 @@ export async function GET(req) {
 
     if (error) {
       return Response.json(
-        { success: false, message: error.message || "No se pudo leer el inventario" },
+        { success: false, message: "No se pudo leer el inventario" },
         { status: 500 }
       );
     }
@@ -136,7 +136,7 @@ export async function GET(req) {
        información útil para quien exporta y no dice nada que un administrador
        no pueda ver de todos modos. */
     return Response.json(
-      { success: false, message: error.message || "No se pudo exportar" },
+      { success: false, message: "No se pudo exportar" },
       { status: 400 }
     );
   }

@@ -42,7 +42,7 @@ export async function POST(req) {
     return Response.json(
       {
         success: false,
-        message: error.message || "Error ejecutando la acción recomendada",
+        message: "Error ejecutando la acción recomendada",
       },
       { status: 500 }
     );

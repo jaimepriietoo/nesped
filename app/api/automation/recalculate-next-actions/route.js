@@ -44,7 +44,7 @@ export async function POST(req) {
 
     if (error) {
       return Response.json(
-        { success: false, message: error.message },
+        { success: false, message: "No se pudo completar la operación" },
         { status: 500 }
       );
     }
@@ -88,7 +88,7 @@ export async function POST(req) {
     return Response.json(
       {
         success: false,
-        message: error.message || "Error recalculando acciones recomendadas",
+        message: "Error recalculando acciones recomendadas",
       },
       { status: 500 }
     );

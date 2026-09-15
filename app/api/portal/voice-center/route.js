@@ -255,7 +255,7 @@ export async function GET() {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo cargar el centro de voz",
+        message: "No se pudo cargar el centro de voz",
       },
       { status: 500 }
     );

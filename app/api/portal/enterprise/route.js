@@ -110,7 +110,7 @@ export async function GET(req) {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo cargar Enterprise",
+        message: "No se pudo cargar Enterprise",
       },
       { status: 500 }
     );

@@ -67,7 +67,7 @@ export async function GET() {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo exportar la auditoría",
+        message: "No se pudo exportar la auditoría",
       },
       { status: 500 }
     );

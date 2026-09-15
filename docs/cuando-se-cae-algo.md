@@ -70,12 +70,14 @@ sola.
 **Impacto.** **No se atiende ninguna llamada.** Es el único caso en que el
 cliente lo nota de inmediato: el teléfono suena y nadie contesta.
 **Mitigación.** No hay proveedor de respaldo (§Resiliencia del informe: no
-se ha construido). Lo que sí: en Twilio, desviar el número al teléfono del
-cliente mientras dure (configuración manual en la consola de Twilio o por
-API con `TWILIO_AUTH_TOKEN`). Es la única mitigación real y conviene
-tenerla en un botón: **pendiente**.
+se ha construido). Lo que sí: **desviar el número al teléfono del cliente**
+mientras dure. Es un botón: `POST /api/admin/desvio` con
+`{ "empresa": "acme", "activar": true, "telefono": "+34…" }` (el teléfono se
+guarda en `clients.telefono_desvio`; la siguiente vez no hace falta). El
+número de Twilio pasa a contestar un `<Dial>` al teléfono del cliente y se
+guarda a dónde apuntaba antes.
 **Recuperación.** El cortacircuitos se cierra solo al volver. Quitar el
-desvío.
+desvío: el mismo `POST` con `"activar": false` restaura la URL anterior.
 **Verificación.** Llamada de prueba de extremo a extremo.
 
 ## Twilio caído
@@ -159,8 +161,6 @@ réplica de lectura en otra región de la UE. Hoy no está justificado.
 
 ## Lo que falta para que estos runbooks sean completos
 
-- **Desvío del número en Twilio con un botón** (mitigación de ElevenLabs
-  caído): es la única caída que el cliente nota al instante.
 - **Página de estado** (§24 del informe): cuando haya más de diez clientes.
 - **Simulacro**: ejecutar uno de estos runbooks en frío una vez, y anotar
   lo que no cuadró.

@@ -7,6 +7,7 @@ import { enviarInforme } from "@/lib/server/informes";
 import { pasadaDeMantenimiento } from "@/lib/server/mantenimiento";
 import { copiarGrabacion } from "@/lib/server/grabaciones";
 import { procesarEvento } from "@/lib/server/bandeja-webhooks";
+import { entregarWebhook } from "@/lib/server/webhooks-salientes";
 import { getSupabase } from "@/lib/supabase";
 
 /**
@@ -61,6 +62,7 @@ const OFICIOS = {
      El endpoint sólo verificó la firma y lo guardó; el trabajo de verdad es
      éste, con los reintentos de la cola. */
   webhook: (t) => procesarEvento(t.datos?.evento_id),
+  webhook_saliente: (t) => entregarWebhook(t.datos?.entrega_id),
 
   /**
    * Mover lo viejo al archivo y pasar la retención.

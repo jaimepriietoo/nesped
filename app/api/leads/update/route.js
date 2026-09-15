@@ -2,6 +2,7 @@ import { getPortalContext } from "@/lib/portal-auth";
 import { puede } from "@/lib/server/permisos";
 import { requireSameOrigin } from "@/lib/server/security";
 import { observeRoute } from "@/lib/server/observability.mjs";
+import { emitirWebhook, EVENTOS } from "@/lib/server/webhooks-salientes";
  
 async function manejarPATCH(req) {
   try {
@@ -61,6 +62,12 @@ async function manejarPATCH(req) {
       changes: updates,
     });
  
+    void emitirWebhook({
+      clientId: ctx.clientId,
+      evento: EVENTOS.CONTACTO_ACTUALIZADO,
+      datos: { lead_id: leadId, cambios: updates, status: lead?.status || null },
+    });
+
     return Response.json({ success: true, data: lead });
   } catch (err) {
     return Response.json({ success: false, message: "No se pudo completar la operación" }, { status: 500 });

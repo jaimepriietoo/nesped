@@ -3,6 +3,7 @@ import { encolar, tomarTrabajos, terminar, fallar, rescatarColgados, SinArreglo 
 import { enviarInforme } from "@/lib/server/informes";
 import { pasadaDeMantenimiento } from "@/lib/server/mantenimiento";
 import { copiarGrabacion } from "@/lib/server/grabaciones";
+import { getSupabase } from "@/lib/supabase";
 
 /**
  * El que ejecuta la cola.
@@ -79,6 +80,8 @@ const OFICIOS = {
 
 /** El mantenimiento se pide una vez al día, y se pide solo. */
 async function pedirMantenimientoDelDia() {
+  const { error } = await getSupabase().rpc("purgar_seguridad_caducada");
+  if (error) throw new Error("No se pudo limpiar el estado de seguridad caducado");
   const hoy = new Date().toISOString().slice(0, 10);
   await encolar({
     tipo: "mantenimiento",
@@ -147,7 +150,7 @@ async function procesar(req) {
     });
   } catch (error) {
     return Response.json(
-      { success: false, message: error?.message || "Error procesando la cola" },
+      { success: false, message: "Error procesando la cola" },
       { status: 500 }
     );
   }

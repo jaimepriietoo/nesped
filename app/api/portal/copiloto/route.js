@@ -1,3 +1,4 @@
+import { reservarGeneracionIA } from "@/lib/server/ai-budget";
 import { getPortalContext } from "@/lib/portal-auth";
 import { evaluarInteligencia } from "@/lib/server/inteligencia";
 import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
@@ -132,9 +133,11 @@ export async function POST(req) {
     }
 
     const { default: OpenAI } = await import("openai");
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 20000, maxRetries: 0 });
 
+    await reservarGeneracionIA(ctx.clientId);
     const respuesta = await openai.responses.create({
+      max_output_tokens: 1200,
       model: MODELO,
       instructions: INSTRUCCIONES,
       /* La pregunta va SEPARADA del bloque de datos, y el bloque va entre

@@ -19,14 +19,17 @@ export async function GET() {
 
     if (error) {
       return Response.json(
-        { success: false, message: error.message, data: [] },
+        { success: false, message: "Error cargando llamadas", data: [] },
         { status: 500 }
       );
     }
 
     return Response.json({
       success: true,
-      data: data || [],
+      data: (data || []).map(({ recording_url, grabacion_propia, ...call }) => ({
+        ...call,
+        tiene_grabacion: Boolean(grabacion_propia),
+      })),
     });
   } catch (error) {
     console.error(error);

@@ -1,4 +1,5 @@
-import { getPortalContext } from "@/lib/portal-auth";
+import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { requireSameOrigin } from "@/lib/server/security";
 import { encolar } from "@/lib/server/cola";
 
 /**
@@ -13,10 +14,13 @@ import { encolar } from "@/lib/server/cola";
  * Ahora sólo lo apunta en la cola. El trabajo lo hace /api/cola/procesar, que
  * cuenta en la base de datos y reintenta si el proveedor falla.
  */
-export async function POST() {
+export async function POST(req) {
   try {
+    const originError = requireSameOrigin(req);
+    if (originError) return originError;
     const ctx = await getPortalContext();
     if (!ctx.ok) return Response.json({ success: false, message: ctx.message }, { status: 401 });
+    if (!hasRole(ctx.role, ["owner", "admin", "manager"])) return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
 
     /* La clave lleva la fecha: pulsar el botón cinco veces la misma mañana no
        manda cinco correos, y mañana sí se puede volver a pedir. */
@@ -36,6 +40,6 @@ export async function POST() {
         : "Informe pedido. Te llega al correo en unos minutos.",
     });
   } catch (err) {
-    return Response.json({ success: false, message: err.message }, { status: 500 });
+    return Response.json({ success: false, message: "No se pudo completar la operación" }, { status: 500 });
   }
 }

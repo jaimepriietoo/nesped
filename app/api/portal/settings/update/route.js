@@ -41,17 +41,10 @@ export async function PATCH(req) {
       brand_logo_url: withValue(body.brand_logo_url, (value) => String(value || "").trim()),
       primary_color: withValue(body.primary_color, (value) => String(value || "").trim()),
       secondary_color: withValue(body.secondary_color, (value) => String(value || "").trim()),
-      owner_email: withValue(body.owner_email, (value) =>
-        String(value || "").trim().toLowerCase()
-      ),
       industry: withValue(body.industry, (value) => String(value || "").trim()),
-      twilio_number: withValue(body.twilio_number, (value) => String(value || "").trim()),
       webhook: withValue(body.webhook, (value) => String(value || "").trim()),
       tagline: withValue(body.tagline, (value) => String(value || "").trim()),
       logo_text: withValue(body.logo_text, (value) => String(value || "").trim()),
-      custom_domain: withValue(body.custom_domain, (value) =>
-        String(value || "").trim().toLowerCase()
-      ),
       accent: withValue(body.accent, (value) => String(value || "").trim()),
       accent_text: withValue(body.accent_text, (value) => String(value || "").trim()),
       button: withValue(body.button, (value) => String(value || "").trim()),
@@ -112,7 +105,7 @@ export async function PATCH(req) {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudieron guardar los ajustes",
+        message: "No se pudieron guardar los ajustes",
       },
       { status: 500 }
     );

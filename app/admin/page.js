@@ -228,10 +228,13 @@ export default function AdminPage() {
         return;
       }
 
+      if (json.initialPassword) {
+        window.alert(`Acceso creado. Copia ahora la contraseña inicial y entrégala por un canal seguro separado del correo:\n\n${json.initialPassword}\n\nNo se volverá a mostrar.`);
+      }
       setClientMessage(
-        creatingClient
+        json.userWarning || (creatingClient
           ? "Cliente creado correctamente"
-          : "Cliente actualizado correctamente"
+          : "Cliente actualizado correctamente")
       );
 
       const savedId = form.id.trim();

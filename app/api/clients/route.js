@@ -1,4 +1,4 @@
-import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { getAdminContext } from "@/lib/server/auth";
 import { getSupabase } from "@/lib/supabase";
 import { CLIENT_LIST, mapClientToPublicShape } from "@/lib/clients";
 
@@ -58,8 +58,8 @@ export async function GET(req) {
       });
     }
 
-    const ctx = await getPortalContext();
-    if (!ctx.ok || !hasRole(ctx.role, ["owner", "admin", "super_admin"])) {
+    const ctx = await getAdminContext();
+    if (!ctx.ok) {
       return Response.json(
         { success: false, message: "Sin permisos para listar clientes", data: [] },
         { status: 403 }
@@ -73,7 +73,7 @@ export async function GET(req) {
 
     if (error) {
       return Response.json(
-        { success: false, message: error.message, data: [] },
+        { success: false, message: "No se pudo completar la operación", data: [] },
         { status: 500 }
       );
     }

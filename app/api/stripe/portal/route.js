@@ -28,7 +28,7 @@ export async function POST(req) {
       );
     }
 
-    if (!hasRole(ctx.role, ["owner", "admin", "manager"])) {
+    if (!hasRole(ctx.role, ["owner", "admin"])) {
       return NextResponse.json(
         { success: false, message: "Sin permisos para abrir billing" },
         { status: 403 }

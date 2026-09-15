@@ -44,6 +44,6 @@ export async function GET() {
 
     return Response.json({ success: true, data: ranking });
   } catch (err) {
-    return Response.json({ success: false, message: err.message }, { status: 500 });
+    return Response.json({ success: false, message: "No se pudo completar la operación" }, { status: 500 });
   }
 }

@@ -18,7 +18,7 @@ import { leerSesionFirmada } from "../../lib/sesion-edge.js";
 const SECRETO = "secreto-de-pruebas-que-no-vale-para-nada";
 
 function firmar(carga, clave = SECRETO) {
-  const cuerpo = Buffer.from(JSON.stringify(carga)).toString("base64url");
+  const cuerpo = Buffer.from(JSON.stringify({ purpose: "session", email: "a@b.c", clientId: "demo", ...carga })).toString("base64url");
   const firma = crypto.createHmac("sha256", clave).update(cuerpo).digest("base64url");
   return `${cuerpo}.${firma}`;
 }

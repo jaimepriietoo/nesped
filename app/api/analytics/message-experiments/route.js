@@ -34,6 +34,6 @@ export async function GET() {
       suggestions: snapshot.suggestions,
     });
   } catch (err) {
-    return Response.json({ success: false, message: err.message }, { status: 500 });
+    return Response.json({ success: false, message: "No se pudo completar la operación" }, { status: 500 });
   }
 }

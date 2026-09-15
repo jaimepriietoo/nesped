@@ -1,7 +1,8 @@
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
 import { logEvent, observeRoute } from "@/lib/server/observability.mjs";
-import { requireSameOrigin } from "@/lib/server/security";
-import { comprobarUrlExterna } from "@/lib/server/url-segura";
+import { requireSameOrigin, requireRateLimitAsync } from "@/lib/server/security";
+import { comprobarUrlExterna, peticionExternaSegura } from "@/lib/server/url-segura";
+import { signWebhook } from "@/lib/server/webhook-signing";
 
 async function handlePost(req) {
   try {
@@ -27,6 +28,8 @@ async function handlePost(req) {
     }
 
     const body = await req.json().catch(() => ({}));
+    const limited = await requireRateLimitAsync(req, { namespace: "webhook:test", limit: 10, keyParts: [ctx.clientId], includeIp: false });
+    if (limited) return limited;
     const providedUrl = String(body?.url || "").trim();
 
     const { data: client, error } = await ctx.supabase
@@ -63,9 +66,6 @@ async function handlePost(req) {
       );
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-
     const payload = {
       event: "nesped.webhook_test",
       created_at: new Date().toISOString(),
@@ -81,28 +81,23 @@ async function handlePost(req) {
       },
     };
 
-    let response;
-
-    try {
-      response = await fetch(targetUrl, {
+    const serialized = JSON.stringify(payload);
+    const response = await peticionExternaSegura(targetUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "X-Nesped-Event": payload.event,
+          ...signWebhook(ctx.clientId, serialized),
         },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
+        body: serialized,
       });
-    } finally {
-      clearTimeout(timeout);
-    }
 
     const responseText = await response.text().catch(() => "");
 
     await ctx.supabase.from("audit_logs").insert({
       client_id: ctx.clientId,
       entity_type: "webhook",
-      entity_id: targetUrl,
+      entity_id: new URL(targetUrl).origin,
       action: "webhook_test",
       actor: ctx.userEmail,
       changes: JSON.stringify({
@@ -125,7 +120,7 @@ async function handlePost(req) {
         ? "Webhook respondió correctamente"
         : "El webhook respondió con error",
       data: {
-        url: targetUrl,
+        url: new URL(targetUrl).origin,
         status: response.status,
         ok: response.ok,
         response: responseText.slice(0, 1200),
@@ -144,10 +139,7 @@ async function handlePost(req) {
     return Response.json(
       {
         success: false,
-        message:
-          error.name === "AbortError"
-            ? "Timeout al probar el webhook"
-            : error.message || "No se pudo probar el webhook",
+        message: "No se pudo probar el webhook. Revisa que sea HTTPS, público y que responda sin redirigir.",
       },
       { status: 500 }
     );

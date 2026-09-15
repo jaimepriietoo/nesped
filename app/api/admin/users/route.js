@@ -1,5 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { getAdminContext, hashPassword } from "@/lib/server/auth";
+import { requireSameOrigin } from "@/lib/server/security";
+import { validarPassword } from "@/lib/server/passwords";
 import { getInternalApiHeaders } from "@/lib/server/internal-api";
 
 function getSupabase() {
@@ -34,7 +36,7 @@ export async function GET() {
       return Response.json(
         {
           success: false,
-          message: error.message,
+          message: "No se pudo completar la operación",
           data: [],
         },
         { status: 500 }
@@ -61,6 +63,8 @@ export async function GET() {
 
 export async function POST(req) {
   try {
+    const originError = requireSameOrigin(req);
+    if (originError) return originError;
     const admin = await getAdminContext();
     if (!admin.ok) {
       return Response.json(
@@ -76,7 +80,7 @@ export async function POST(req) {
     const body = await req.json();
 
     const email = body.email?.trim()?.toLowerCase();
-    const password = body.password?.trim();
+    const password = body.password;
     const role = body.role?.trim() || "client";
     const clientId = body.clientId?.trim();
 
@@ -89,6 +93,10 @@ export async function POST(req) {
         { status: 400 }
       );
     }
+
+    const passwordCheck = validarPassword(password, { email });
+    if (!passwordCheck.ok) return Response.json({ success: false, message: passwordCheck.message }, { status: 400 });
+    if (!["client","admin","super_admin"].includes(role)) return Response.json({ success: false, message: "Rol no válido" }, { status: 400 });
 
     const { data: existingUser } = await supabase
       .from("users")
@@ -122,25 +130,16 @@ export async function POST(req) {
       );
     }
 
-    const { data, error } = await supabase
-      .from("users")
-      .insert([
-        {
-          email,
-          password: hashPassword(password),
-          role,
-          client_id: clientId,
-          created_at: new Date().toISOString(),
-        },
-      ])
-      .select("id,email,role,client_id,created_at")
-      .single();
+    const { data, error } = await supabase.rpc("crear_usuario_administrado", {
+      p_actor: admin.userEmail, p_client: clientId, p_email: email,
+      p_password: hashPassword(password), p_role: role, p_portal_role: role === "client" ? "agent" : "admin",
+    });
 
     if (error) {
       return Response.json(
         {
           success: false,
-          message: error.message,
+          message: "No se pudo completar la operación",
         },
         { status: 500 }
       );
@@ -155,7 +154,7 @@ export async function POST(req) {
         },
         /* loginUrl ya no viaja: lo construye la propia ruta. Aceptarlo del
            cuerpo permitía que el botón del correo apuntara a cualquier sitio. */
-        body: JSON.stringify({ email, clientName: clientExists.name, password }),
+        body: JSON.stringify({ email, clientName: clientExists.name }),
       });
     } catch (emailErr) {
       console.error("Error enviando onboarding email:", emailErr);
@@ -171,7 +170,7 @@ export async function POST(req) {
     return Response.json(
       {
         success: false,
-        message: error.message || "Error creando usuario",
+        message: "Error creando usuario",
       },
       { status: 500 }
     );

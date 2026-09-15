@@ -35,7 +35,7 @@ export async function POST(req) {
 
     if (error || !lead?.telefono) {
       return NextResponse.json(
-        { success: false, message: error?.message || "Lead sin teléfono" },
+        { success: false, message: "Lead sin teléfono" },
         { status: 404 }
       );
     }

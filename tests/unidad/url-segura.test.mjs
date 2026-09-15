@@ -45,7 +45,7 @@ test("rechaza lo que no es una dirección", async () => {
 });
 
 test("un webhook normal sí pasa", async () => {
-  const r = await comprobarUrlExterna("https://www.nesped.com/api/precios");
+  const r = await comprobarUrlExterna("https://www.nesped.com/api/precios", async () => [{ address: "93.184.216.34", family: 4 }]);
   assert.equal(r.ok, true, r.motivo);
 });
 
@@ -59,6 +59,6 @@ test("un dominio que resuelve a una dirección interna también se corta", async
   /* localtest.me y sus subdominios resuelven a 127.0.0.1 por diseño. Si el
      DNS no lo resuelve en esta máquina, la comprobación falla igualmente,
      que es el lado seguro. */
-  const r = await comprobarUrlExterna("https://cualquiercosa.localtest.me/x");
+  const r = await comprobarUrlExterna("https://cualquiercosa.localtest.me/x", async () => [{ address: "127.0.0.1", family: 4 }]);
   assert.equal(r.ok, false, "un nombre público que apunta dentro no puede pasar");
 });

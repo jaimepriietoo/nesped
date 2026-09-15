@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { getAdminContext } from "@/lib/server/auth";
+import { requireSameOrigin } from "@/lib/server/security";
 
 function getSupabase() {
   return createClient(
@@ -10,6 +11,8 @@ function getSupabase() {
 
 export async function PATCH(req) {
   try {
+    const originError = requireSameOrigin(req);
+    if (originError) return originError;
     const admin = await getAdminContext();
     if (!admin.ok) {
       return Response.json(
@@ -30,22 +33,39 @@ export async function PATCH(req) {
       );
     }
 
+    const { data: target, error: targetError } = await supabase.from("portal_users")
+      .select("email,client_id").eq("id", id).maybeSingle();
+    if (targetError || !target) return Response.json({ success: false, message: "Usuario no disponible" }, { status: 404 });
+    if (email !== undefined && String(email).trim().toLowerCase() !== target.email) {
+      return Response.json({ success: false, message: "El cambio de correo requiere verificación" }, { status: 400 });
+    }
+    if (role !== undefined && !["owner", "admin", "manager", "agent", "viewer"].includes(role)) {
+      return Response.json({ success: false, message: "Rol no válido" }, { status: 400 });
+    }
+    const { data: authUser, error: authError } = await supabase.from("users").select("role")
+      .eq("email", target.email).eq("client_id", target.client_id).maybeSingle();
+    if (authError || !authUser || (["admin", "super_admin"].includes(authUser.role) && admin.role !== "super_admin")) {
+      return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
+    }
+    if (target.email === admin.userEmail && is_active === false) {
+      return Response.json({ success: false, message: "No puedes desactivar tu propio acceso" }, { status: 400 });
+    }
+
     const { data, error } = await supabase
       .from("portal_users")
       .update({
         full_name,
-        email,
         role,
         phone,
         is_active,
       })
       .eq("id", id)
-      .select()
+      .select("id,email,full_name,role,phone,is_active,client_id")
       .single();
 
     if (error) {
       return Response.json(
-        { success: false, message: error.message },
+        { success: false, message: "No se pudo completar la operación" },
         { status: 500 }
       );
     }
@@ -53,7 +73,7 @@ export async function PATCH(req) {
     return Response.json({ success: true, data });
   } catch (error) {
     return Response.json(
-      { success: false, message: error.message || "Error actualizando usuario" },
+      { success: false, message: "Error actualizando usuario" },
       { status: 500 }
     );
   }

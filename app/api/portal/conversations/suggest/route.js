@@ -1,3 +1,4 @@
+import { reservarGeneracionIA } from "@/lib/server/ai-budget";
 import OpenAI from "openai";
 import { prisma } from "@/lib/prisma";
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
@@ -9,7 +10,7 @@ import { requireSameOrigin } from "@/lib/server/security";
 import { buildConversationAssistPayload } from "@/lib/server/portal-phase-four";
 
 const openai = process.env.OPENAI_API_KEY
-  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 20000, maxRetries: 0 })
   : null;
 
 async function tryAiSuggestion({ client, lead, payload, channel, goal }) {
@@ -40,9 +41,11 @@ Responde SOLO con JSON válido:
 `;
 
   try {
+    await reservarGeneracionIA(client?.id);
     const response = await openai.responses.create({
+      max_output_tokens: 1200,
       model: "gpt-5-mini",
-      input: prompt,
+      input: prompt.slice(0, 16000),
     });
 
     const text = response.output_text?.trim() || "{}";
@@ -156,7 +159,7 @@ export async function POST(req) {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo generar la sugerencia",
+        message: "No se pudo generar la sugerencia",
       },
       { status: 500 }
     );

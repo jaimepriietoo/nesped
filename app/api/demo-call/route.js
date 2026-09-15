@@ -3,14 +3,16 @@ import { ensureDemoWorkspace, isDemoClientId } from "@/lib/clients";
 import { logEvent, observeRoute } from "@/lib/server/observability.mjs";
 import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 import { conCortacircuitos, noEsDelProveedor } from "@/lib/server/cortacircuitos";
+import { getPortalContext, hasRole } from "@/lib/portal-auth";
+import { toE164 } from "@/lib/server/phone";
 
 function normalizePhone(value = "") {
-  return String(value || "").replace(/[^\d+]/g, "").trim();
+  return toE164(value);
 }
 
 function isValidPhone(value = "") {
   const normalized = normalizePhone(value);
-  return normalized.length >= 9 && normalized.length <= 16;
+  return /^\+34(?:[67]\d{8}|[89][1-8]\d{7})$/.test(normalized);
 }
 
 /**
@@ -114,8 +116,12 @@ async function handlePost(req) {
 
     const body = await req.json();
     const telefono = normalizePhone(body.telefono);
-    const clientId = String(body.client_id || "demo").trim() || "demo";
-    const leadId = String(body.lead_id || "").trim();
+    const ctx = await getPortalContext();
+    if (ctx.ok && !hasRole(ctx.role, ["owner", "admin", "manager"])) {
+      return Response.json({ success: false, message: "Sin permisos para llamar" }, { status: 403 });
+    }
+    const clientId = ctx.ok ? ctx.clientId : "demo";
+    const leadId = ctx.ok ? String(body.lead_id || "").trim() : "";
 
     if (!telefono) {
       return Response.json(
@@ -135,13 +141,19 @@ async function handlePost(req) {
       namespace: "demo-call:phone",
       limit: 2,
       windowMs: 30 * 60 * 1000,
-      keyParts: [telefono, clientId],
+      keyParts: [telefono],
+      includeIp: false,
       message:
         "Ese número ya ha recibido demasiadas llamadas de prueba en poco tiempo. Espera unos minutos.",
     });
     if (phoneRateLimitError) return phoneRateLimitError;
 
     const supabase = getSupabase();
+    if (leadId) {
+      const { data: lead, error } = await supabase.from("leads").select("id")
+        .eq("id", leadId).eq("client_id", clientId).maybeSingle();
+      if (error || !lead) return Response.json({ success: false, message: "Contacto no disponible" }, { status: 404 });
+    }
 
     if (isDemoClientId(clientId)) {
       await ensureDemoWorkspace(supabase, clientId);
@@ -173,6 +185,10 @@ async function handlePost(req) {
       );
     }
 
+    const dailyLimit = await requireRateLimitAsync(req, {
+      namespace: "voice:demo:daily", limit: 20, windowMs: 24 * 60 * 60 * 1000, includeIp: false,
+    });
+    if (dailyLimit) return dailyLimit;
     const result = await lanzarLlamadaDeDemostracion({ telefono, clientId, leadId });
 
     return Response.json({
@@ -186,14 +202,14 @@ async function handlePost(req) {
     logEvent("error", "voice.demo_call_failed", {
       error: {
         name: error?.name || "Error",
-        message: error?.message || "Error iniciando llamada",
+        message: "Error iniciando llamada",
       },
     });
 
     return Response.json(
       {
         success: false,
-        message: error?.message || "Error iniciando llamada",
+        message: "Error iniciando llamada",
       },
       { status: 500 }
     );

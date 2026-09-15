@@ -35,7 +35,7 @@ export async function POST(req) {
 
     if (error || !lead) {
       return NextResponse.json(
-        { success: false, message: error?.message || "Lead no encontrado" },
+        { success: false, message: "Lead no encontrado" },
         { status: 404 }
       );
     }

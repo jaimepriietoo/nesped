@@ -1,5 +1,4 @@
 import {
-  isAuthorizedElevenLabsWebhook,
   persistElevenLabsCall,
   verifyElevenLabsWebhookSignature,
 } from "@/lib/server/elevenlabs";
@@ -7,13 +6,12 @@ import {
 export async function POST(req) {
   try {
     const rawBody = await req.text();
-    const hasValidQuerySecret = isAuthorizedElevenLabsWebhook(req);
     const hasValidHmac = verifyElevenLabsWebhookSignature({
       rawBody,
       signatureHeader: req.headers.get("ElevenLabs-Signature") || "",
     });
 
-    if (!hasValidQuerySecret && !hasValidHmac) {
+    if (!hasValidHmac) {
       return Response.json(
         {
           success: false,
@@ -30,11 +28,11 @@ export async function POST(req) {
       success: true,
       data: result,
     });
-  } catch (error) {
+  } catch {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo procesar la llamada de ElevenLabs",
+        message: "No se pudo procesar la llamada de ElevenLabs",
       },
       { status: 500 }
     );

@@ -1,3 +1,4 @@
+import { requireSameOrigin } from "@/lib/server/security";
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
 import { prisma } from "@/lib/prisma";
 import {
@@ -84,7 +85,7 @@ export async function GET() {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo cargar la biblioteca de playbooks",
+        message: "No se pudo cargar la biblioteca de playbooks",
       },
       { status: 500 }
     );
@@ -93,6 +94,8 @@ export async function GET() {
 
 export async function PATCH(req) {
   try {
+    const originError = requireSameOrigin(req);
+    if (originError) return originError;
     const ctx = await getPortalContext();
     if (!ctx.ok) {
       return Response.json(
@@ -138,7 +141,7 @@ export async function PATCH(req) {
     return Response.json(
       {
         success: false,
-        message: error.message || "No se pudo guardar el playbook",
+        message: "No se pudo guardar el playbook",
       },
       { status: 500 }
     );

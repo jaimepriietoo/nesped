@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { getInternalApiHeaders } from "@/lib/server/internal-api";
 import crypto from "crypto";
+import { requireSameOrigin } from "@/lib/server/security";
 import { safeUpsertClientSettings } from "@/lib/client-settings";
 import { getAdminContext, hashPassword } from "@/lib/server/auth";
 
@@ -72,7 +73,7 @@ export async function GET() {
       return Response.json(
         {
           success: false,
-          message: error.message,
+          message: "No se pudo completar la operación",
           data: [],
         },
         { status: 500 }
@@ -99,6 +100,8 @@ export async function GET() {
 
 export async function POST(req) {
   try {
+    const originError = requireSameOrigin(req);
+    if (originError) return originError;
     const admin = await getAdminContext();
     if (!admin.ok) {
       return Response.json(
@@ -196,7 +199,7 @@ export async function POST(req) {
       return Response.json(
         {
           success: false,
-          message: error.message,
+          message: "No se pudo completar la operación",
         },
         { status: 500 }
       );
@@ -218,21 +221,20 @@ export async function POST(req) {
       console.error("Error creando client_settings:", settingsError.message);
     }
 
+    let initialPassword = "";
+    let userWarning = "";
     if (email) {
-      const password = crypto.randomBytes(6).toString("base64url");
+      const password = crypto.randomBytes(18).toString("base64url");
 
-      const { error: userError } = await supabase.from("users").insert([
-        {
-          email,
-          password: hashPassword(password),
-          role: "client",
-          client_id: id,
-        },
-      ]);
+      const { error: userError } = await supabase.rpc("crear_usuario_administrado", {
+        p_actor: admin.userEmail, p_client: id, p_email: email, p_password: hashPassword(password),
+        p_role: "client", p_portal_role: "owner",
+      });
 
       if (userError) {
-        console.error("Error creando usuario automático:", userError.message);
+        userWarning = "Cliente creado, pero el acceso no pudo crearse. Revisa si el correo ya está registrado.";
       } else {
+        initialPassword = password;
         try {
           await fetch(
             `${process.env.NEXT_PUBLIC_APP_URL}/api/onboarding-email`,
@@ -243,7 +245,7 @@ export async function POST(req) {
                 ...getInternalApiHeaders(),
               },
               /* loginUrl ya no viaja: lo construye la propia ruta. */
-              body: JSON.stringify({ email, clientName: name, password }),
+              body: JSON.stringify({ email, clientName: name }),
             }
           );
         } catch (emailErr) {
@@ -255,15 +257,17 @@ export async function POST(req) {
     return Response.json({
       success: true,
       data: mapClient(data),
+      initialPassword,
+      userWarning,
       ok: true,
-    });
+    }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("POST /api/admin/clients error:", error);
 
     return Response.json(
       {
         success: false,
-        message: error.message || "Error creando cliente",
+        message: "Error creando cliente",
       },
       { status: 500 }
     );
@@ -272,6 +276,8 @@ export async function POST(req) {
 
 export async function PATCH(req) {
   try {
+    const originError = requireSameOrigin(req);
+    if (originError) return originError;
     const admin = await getAdminContext();
     if (!admin.ok) {
       return Response.json(
@@ -344,7 +350,7 @@ export async function PATCH(req) {
       return Response.json(
         {
           success: false,
-          message: error.message,
+          message: "No se pudo completar la operación",
         },
         { status: 500 }
       );
@@ -377,7 +383,7 @@ export async function PATCH(req) {
     return Response.json(
       {
         success: false,
-        message: error.message || "Error actualizando cliente",
+        message: "Error actualizando cliente",
       },
       { status: 500 }
     );

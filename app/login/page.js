@@ -17,7 +17,7 @@ const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600"], display
 function Acceso() {
   const searchParams = useSearchParams();
 
-  const [step, setStep] = useState("credentials");
+  const [step, setStep] = useState(searchParams.get("verificar") === "1" ? "verify" : "credentials");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");

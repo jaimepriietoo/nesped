@@ -38,7 +38,7 @@ export async function POST(req) {
     const errorInterno = requireInternalRequest(req);
     if (errorInterno) return errorInterno;
 
-    const { email, clientName, password } = await req.json().catch(() => ({}));
+    const { email, clientName } = await req.json().catch(() => ({}));
 
     if (!email || !clientName) {
       return Response.json({ success: false, message: "Faltan datos" }, { status: 400 });
@@ -63,12 +63,7 @@ export async function POST(req) {
           <h1 style="font-size:22px;margin:0 0 16px;">Bienvenido a ${nombre}</h1>
           <p style="margin:0 0 8px;">Tu acceso ya está listo.</p>
           <p style="margin:0 0 4px;"><strong>Correo:</strong> ${correo}</p>
-          ${
-            password
-              ? `<p style="margin:0 0 4px;"><strong>Contraseña:</strong> ${escaparHtml(password)}</p>
-                 <p style="margin:12px 0 0;font-size:13px;color:#9a9a9a;">Cámbiala en cuanto entres.</p>`
-              : ""
-          }
+          <p style="margin:12px 0 0;font-size:13px;color:#9a9a9a;">Tu administrador te facilitará la contraseña inicial por un canal seguro separado. No enviamos contraseñas por correo.</p>
           <p style="margin-top:24px;">
             <a href="${enlace}" style="background:#fff;color:#000;padding:12px 18px;border-radius:10px;text-decoration:none;">
               Entrar al panel

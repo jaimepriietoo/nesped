@@ -35,6 +35,11 @@ async function handlePost(req) {
   }
 
   const code = generateTwoFactorCode();
+  const accountLimit = await requireRateLimitAsync(req, {
+    namespace: "login:2fa:resend:account", limit: 4,
+    keyParts: [challenge.email], includeIp: false,
+  });
+  if (accountLimit) return accountLimit;
   await setTwoFactorChallenge({
     email: challenge.email,
     clientId: challenge.clientId,

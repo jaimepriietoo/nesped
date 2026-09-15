@@ -41,6 +41,10 @@
     "stripe": "^20.4.1",
     "ws": "^8.19.0"
   },
+  "overrides": {
+    "@prisma/config": { "deepmerge-ts": "8.0.0" },
+    "prisma": { "mysql2": "3.23.1" }
+  },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
     "@tailwindcss/postcss": "^4",

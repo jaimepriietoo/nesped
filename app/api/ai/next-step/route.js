@@ -1,8 +1,11 @@
+import { requireSameOrigin } from "@/lib/server/security";
 import { getPortalContext, hasRole } from "@/lib/portal-auth";
 import { saveNextBestAction } from "@/lib/server/next-best-action-service";
  
 export async function POST(req) {
   try {
+    const originError = requireSameOrigin(req);
+    if (originError) return originError;
     const ctx = await getPortalContext();
     if (!ctx.ok) return Response.json({ success: false, message: ctx.message }, { status: 401 });
     if (!hasRole(ctx.role, ["owner","admin","manager","agent"])) return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
@@ -22,6 +25,6 @@ export async function POST(req) {
  
     return Response.json({ success: true, data: result.lead, recommendation: result.recommendation });
   } catch (err) {
-    return Response.json({ success: false, message: err.message }, { status: 500 });
+    return Response.json({ success: false, message: "No se pudo completar la operación" }, { status: 500 });
   }
 }

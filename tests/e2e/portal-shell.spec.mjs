@@ -17,7 +17,7 @@ function secretoDeSesion() {
   if (process.env.NESPED_SESSION_SECRET) return process.env.NESPED_SESSION_SECRET;
   try {
     const env = fs.readFileSync(".env.local", "utf8");
-    for (const clave of ["NESPED_SESSION_SECRET", "SUPABASE_SERVICE_ROLE_KEY"]) {
+    for (const clave of ["NESPED_SESSION_SECRET"]) {
       const m = env.match(new RegExp(`^${clave}=(.*)$`, "m"));
       if (m) return m[1].trim().replace(/^["']|["']$/g, "");
     }
@@ -27,6 +27,7 @@ function secretoDeSesion() {
 
 function tokenDeSesion({ email, clientId, role }) {
   const carga = {
+    purpose: "session",
     email,
     clientId,
     role,

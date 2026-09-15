@@ -23,6 +23,7 @@ export async function GET() {
         Authorization: `Bearer ${process.env.HUBSPOT_TOKEN}`,
       },
       body: JSON.stringify({
+        filterGroups: [{ filters: [{ propertyName: "nesped_client_id", operator: "EQ", value: clientId }] }],
         limit: 20,
         properties: [
           "firstname",
@@ -32,6 +33,7 @@ export async function GET() {
           "nesped_need",
           "nesped_preference",
           "nesped_source",
+          "nesped_client_id",
         ],
         sorts: [
           {
@@ -61,6 +63,7 @@ export async function GET() {
 
     const allLeads = (json.results || []).map((item, index) => ({
       id: item.id || index,
+      clientId: item.properties?.nesped_client_id || "",
       nombre: item.properties?.firstname || "Sin nombre",
       telefono: item.properties?.phone || "",
       ciudad: item.properties?.city || "",
@@ -73,7 +76,7 @@ export async function GET() {
     }));
 
     const filteredLeads = allLeads.filter((lead) =>
-      (lead.origen || "").includes(clientId)
+      lead.clientId === clientId
     );
 
     return Response.json({

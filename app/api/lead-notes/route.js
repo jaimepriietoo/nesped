@@ -1,4 +1,5 @@
-import { getPortalContext } from "@/lib/portal-auth";
+import { requireSameOrigin } from "@/lib/server/security";
+import { getPortalContext, hasRole } from "@/lib/portal-auth";
 import { exigirContactoPropio } from "@/lib/server/pertenencia";
  
 export async function GET(req) {
@@ -23,14 +24,17 @@ export async function GET(req) {
     if (error) throw new Error(error.message);
     return Response.json({ success: true, data: data || [] });
   } catch (err) {
-    return Response.json({ success: false, message: err.message }, { status: 500 });
+    return Response.json({ success: false, message: "No se pudo completar la operación" }, { status: 500 });
   }
 }
  
 export async function POST(req) {
   try {
+    const originError = requireSameOrigin(req);
+    if (originError) return originError;
     const ctx = await getPortalContext();
     if (!ctx.ok) return Response.json({ success: false, message: ctx.message }, { status: 401 });
+    if (!hasRole(ctx.role, ["owner", "admin", "manager", "agent"])) return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
  
     const { lead_id, body: noteBody } = await req.json();
 
@@ -48,6 +52,6 @@ export async function POST(req) {
     if (error) throw new Error(error.message);
     return Response.json({ success: true, data });
   } catch (err) {
-    return Response.json({ success: false, message: err.message }, { status: 500 });
+    return Response.json({ success: false, message: "No se pudo completar la operación" }, { status: 500 });
   }
 }

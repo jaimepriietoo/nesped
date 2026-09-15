@@ -11,8 +11,6 @@ import { logEvent, observeRoute } from "@/lib/server/observability.mjs";
 import { avisarDeAcceso } from "@/lib/server/aviso-acceso.mjs";
 import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 import { sendTwoFactorCode } from "@/lib/server/two-factor.mjs";
-import { findUser } from "@/lib/auth";
-import { ensureDemoWorkspace, isDemoClientId } from "@/lib/clients";
 
 async function handlePost(req) {
   try {
@@ -48,6 +46,7 @@ async function handlePost(req) {
       limit: 8,
       windowMs: 15 * 60 * 1000,
       keyParts: [email],
+      includeIp: false,
       message: "Demasiados intentos para este usuario. Espera unos minutos e inténtalo de nuevo.",
     });
     if (emailRateLimitError) return emailRateLimitError;
@@ -71,20 +70,6 @@ async function handlePost(req) {
         // La generación de sesión vigente, para firmarla dentro del token.
         sessionEpoch: Number(user.session_epoch || 0),
       };
-    } else {
-      const legacyUser = findUser(email, password);
-
-      if (legacyUser) {
-        if (isDemoClientId(legacyUser.clientId)) {
-          await ensureDemoWorkspace(supabase, legacyUser.clientId);
-        }
-        authenticatedUser = {
-          email: legacyUser.email,
-          client_id: legacyUser.clientId,
-          role: legacyUser.role || "client",
-          clientName: legacyUser.clientName || legacyUser.clientId,
-        };
-      }
     }
 
     if (!authenticatedUser) {
@@ -98,11 +83,22 @@ async function handlePost(req) {
       );
     }
 
+    const { data: profile, error: profileError } = await supabase.from("portal_users")
+      .select("role,is_active,phone").eq("client_id", authenticatedUser.client_id)
+      .eq("email", email).maybeSingle();
+    if (profileError || !profile || profile.is_active !== true) {
+      return Response.json({ success: false, message: "Credenciales incorrectas" }, { status: 401 });
+    }
+
     const { data: client } = await supabase
       .from("clients")
-      .select("id,name")
+      .select("id,name,is_active")
       .eq("id", authenticatedUser.client_id)
       .single();
+
+    if (!client || client.is_active === false) {
+      return Response.json({ success: false, message: "Credenciales incorrectas" }, { status: 401 });
+    }
 
     const normalizedRole = authenticatedUser.role || "client";
     const clientName =
@@ -112,7 +108,7 @@ async function handlePost(req) {
     // pasado aquí.
     const redirectTo = sanitizeNextPath(nextPath);
 
-    if (requiresTwoFactor(normalizedRole)) {
+    if (requiresTwoFactor(normalizedRole) || requiresTwoFactor(profile.role)) {
       const code = generateTwoFactorCode();
       await setTwoFactorChallenge({
         email,
@@ -191,7 +187,7 @@ async function handlePost(req) {
     logEvent("error", "auth.login_error", {
       error: {
         name: error?.name || "Error",
-        message: error?.message || "Error iniciando sesión",
+        message: "Error iniciando sesión",
       },
     });
 

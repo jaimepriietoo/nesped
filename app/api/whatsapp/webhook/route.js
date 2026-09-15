@@ -1,3 +1,4 @@
+import { reservarGeneracionIA } from "@/lib/server/ai-budget";
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { getSupabase } from "@/lib/supabase";
@@ -18,7 +19,9 @@ function getOpenAI() {
   if (openai) return openai;
 
   openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY || "sk-openai-placeholder",
+    apiKey: process.env.OPENAI_API_KEY,
+    timeout: 20000,
+    maxRetries: 0,
   });
 
   return openai;
@@ -268,7 +271,9 @@ Mensaje actual:
 ${message}
 `;
 
+  await reservarGeneracionIA(lead?.client_id);
   const completion = await getOpenAI().chat.completions.create({
+    max_tokens: 1000,
     model: "gpt-4o-mini",
     temperature: 0.2,
     response_format: { type: "json_object" },
@@ -280,7 +285,7 @@ ${message}
       },
       {
         role: "user",
-        content: prompt,
+        content: prompt.slice(0, 16000),
       },
     ],
   });
@@ -467,7 +472,9 @@ Devuélveme solo la respuesta final que enviarías por WhatsApp.
     return fallbackReply;
   }
 
+  await reservarGeneracionIA(lead?.client_id);
   const completion = await getOpenAI().chat.completions.create({
+    max_tokens: 1000,
     model: "gpt-4o-mini",
     temperature: 0.75,
     messages: [
@@ -478,7 +485,7 @@ Devuélveme solo la respuesta final que enviarías por WhatsApp.
       },
       {
         role: "user",
-        content: prompt,
+        content: prompt.slice(0, 16000),
       },
     ],
   });

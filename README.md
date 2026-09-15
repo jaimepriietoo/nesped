@@ -74,6 +74,7 @@ web anunciara un precio y se cobrara otro.
 | [`docs/hasta-donde-aguanta.md`](docs/hasta-donde-aguanta.md) | los límites conocidos, medidos con 506 empresas y 45.000 llamadas |
 | [`docs/copias-y-recuperacion.md`](docs/copias-y-recuperacion.md) | qué se pierde y cuánto se tarda si algo se borra; el simulacro de restauración |
 | [`docs/cuando-se-cae-algo.md`](docs/cuando-se-cae-algo.md) | un runbook por proveedor: detección, impacto, mitigación, vuelta atrás |
+| [`scripts/carga/LEEME.md`](scripts/carga/LEEME.md) | pruebas de carga con k6, sólo contra un entorno de pruebas; se niegan a apuntar a producción |
 | [`tests/unidad/LEEME.md`](tests/unidad/LEEME.md) | qué se prueba y por qué eso y no otra cosa |
 
 ## Despliegue

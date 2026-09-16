@@ -143,7 +143,6 @@ const VISTAS = [
   { id: "agentes", label: "Automatismos", ico: "⚙" },
   { id: "avisos", label: "Departamentos y avisos", ico: "✉" },
   { id: "voz", label: "Calidad de voz", ico: "◎", api: "/api/portal/voice-center", funcion: "llamadas" },
-  { id: "playbooks", label: "Guion comercial", ico: "✎", api: "/api/playbooks", funcion: "llamadas" },
 
   { grupo: "Cuenta" },
   { id: "equipo", label: "Equipo", ico: "○", deps: ["permisos"] },
@@ -206,11 +205,40 @@ async function pedir(url) {
 
 /* ── piezas ──────────────────────────────────────────────────────────── */
 
+/**
+ * Una cifra que sube hasta su valor al aparecer. Sólo la parte numérica
+ * cuenta; el sufijo (%, s) se queda quieto. Con "reducir movimiento" en el
+ * sistema, se pinta el valor final directamente.
+ */
+function Cifra({ valor }) {
+  const texto = String(valor ?? "");
+  const m = texto.match(/^([\d.\s]+)(.*)$/);
+  const objetivo = m ? Number(m[1].replace(/[.\s]/g, "")) : NaN;
+  const nodo = useRef(null);
+  /* Se escribe en el nodo directamente: es una animación de 700 ms, no un
+     estado, y así no hay un render por fotograma. */
+  useEffect(() => {
+    const el = nodo.current;
+    if (!el || !Number.isFinite(objetivo)) return undefined;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) { el.textContent = objetivo.toLocaleString("es-ES"); return undefined; }
+    let raf; const inicio = performance.now(); const dur = 720;
+    const paso = (t) => {
+      const k = Math.min(1, (t - inicio) / dur);
+      el.textContent = Math.round(objetivo * (1 - Math.pow(1 - k, 3))).toLocaleString("es-ES");
+      if (k < 1) raf = requestAnimationFrame(paso);
+    };
+    raf = requestAnimationFrame(paso);
+    return () => cancelAnimationFrame(raf);
+  }, [objetivo]);
+  if (!Number.isFinite(objetivo)) return texto;
+  return <><span ref={nodo}>{objetivo.toLocaleString("es-ES")}</span>{m[2]}</>;
+}
+
 function Tarjeta({ label, valor, detalle, retraso = 0 }) {
   return (
     <div className="pv3-card" style={{ animationDelay: `${retraso}ms` }}>
       <div className="pv3-lab">{label}</div>
-      <div className="pv3-stat">{valor}</div>
+      <div className="pv3-stat"><Cifra valor={valor} /></div>
       {detalle ? <div className="pv3-det">{detalle}</div> : null}
     </div>
   );
@@ -944,7 +972,79 @@ function Copiloto({ hayDatos }) {
   );
 }
 
-function Resumen({ datos }) {
+/** "hace 3 min", "hace 2 h", "ayer". Para el latido. */
+function haceCuanto(valor) {
+  const t = new Date(valor).getTime();
+  if (!Number.isFinite(t)) return "";
+  const min = Math.round((Date.now() - t) / 60000);
+  if (min < 1) return "ahora mismo";
+  if (min < 60) return `hace ${min} min`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `hace ${h} h`;
+  const d = Math.round(h / 24);
+  return d === 1 ? "ayer" : `hace ${d} días`;
+}
+
+/**
+ * El latido: lo último que ha pasado, en una sola línea de tiempo, y se
+ * refresca solo cada pocos segundos mientras la pantalla está abierta. Es
+ * lo que hace que el portal se sienta vivo sin inventar nada: cada punto
+ * es una llamada o un contacto real, con su hora.
+ */
+function Latido({ datos, onRecargar }) {
+  const cada = Math.max(15, Number(datos.settings?.realtime_refresh_seconds || 15)) * 1000;
+  const [tic, setTic] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => { onRecargar?.(); setTic((n) => n + 1); }, cada);
+    return () => clearInterval(id);
+  }, [cada, onRecargar]);
+
+  const hitos = useMemo(() => {
+    const llamadas = (datos.calls || []).map((c) => ({
+      id: `c-${c.id}`, t: c.created_at, tipo: "llamada",
+      titulo: c.lead_captured ? "Llamada con contacto" : "Llamada atendida",
+      detalle: c.summary || c.from_number || "",
+    }));
+    const contactos = (datos.leads || []).map((l) => ({
+      id: `l-${l.id}`, t: l.created_at, tipo: "contacto",
+      titulo: l.nombre ? `Nuevo contacto: ${l.nombre}` : "Nuevo contacto",
+      detalle: [l.necesidad, l.departamento].filter(Boolean).join(" · "),
+    }));
+    const alertas = (datos.alerts || []).slice(0, 5).map((a) => ({
+      id: `a-${a.id}`, t: a.created_at, tipo: "aviso", titulo: a.title || "Aviso", detalle: a.message || "",
+    }));
+    return [...llamadas, ...contactos, ...alertas]
+      .filter((h) => h.t)
+      .sort((a, b) => new Date(b.t) - new Date(a.t))
+      .slice(0, 8);
+  }, [datos.calls, datos.leads, datos.alerts]);
+
+  return (
+    <div className="pv3-card lt-card" key={tic}>
+      <div className="pv3-row">
+        <div className="pv3-lab">LATIDO</div>
+        <span className="lt-vivo"><i />en directo</span>
+      </div>
+      {hitos.length === 0 ? (
+        <p className="pv3-p" style={{ marginTop: 14 }}>Todavía no ha pasado nada. En cuanto entre la primera llamada, aparece aquí al momento.</p>
+      ) : (
+        <ol className="lt-lista">
+          {hitos.map((h, i) => (
+            <li key={h.id} className="lt-hito" data-t={h.tipo} style={{ animationDelay: `${i * 55}ms` }}>
+              <span className="lt-punto" />
+              <div className="lt-txt">
+                <div className="lt-cab"><span className="lt-titulo">{h.titulo}</span><span className="lt-cuando">{haceCuanto(h.t)}</span></div>
+                {h.detalle ? <div className="lt-det">{h.detalle}</div> : null}
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+function Resumen({ datos, onRecargar }) {
   const m = datos.metrics || {};
   const pipeline = datos.pipeline || {};
 
@@ -968,6 +1068,15 @@ function Resumen({ datos }) {
 
   const maximo = Math.max(1, ...serie.map((d) => d.n));
   const totalSerie = serie.reduce((a, d) => a + d.n, 0);
+
+  /* Lo de las últimas 24 horas, para el panel "HOY". */
+  const hoy = useMemo(() => {
+    const corte = new Date().getTime() - 864e5;
+    return {
+      llamadas: (datos.calls || []).filter((c) => new Date(c.created_at).getTime() > corte).length,
+      contactos: (datos.leads || []).filter((l) => new Date(l.created_at).getTime() > corte).length,
+    };
+  }, [datos.calls, datos.leads]);
 
   // La más reciente de todas, para poder situar al usuario cuando no hay
   // nada en la ventana de dos semanas.
@@ -1032,6 +1141,27 @@ function Resumen({ datos }) {
               );
             })}
           </div>
+        </div>
+      </div>
+
+      <div className="pv3-grid" data-c="2">
+        <Latido datos={datos} onRecargar={onRecargar} />
+        <div className="pv3-card">
+          <div className="pv3-lab">HOY</div>
+          <div className="lt-hoy">
+            {[
+              ["llamadas", hoy.llamadas],
+              ["contactos nuevos", hoy.contactos],
+              ["sin responder", Number(m.sinResponder || 0)],
+              ["avisos abiertos", Number(m.alertasAbiertas || 0)],
+            ].map(([k, v]) => (
+              <div key={k} className="lt-hoy-item" data-cero={v ? "0" : "1"}>
+                <div className="lt-hoy-n"><Cifra valor={String(v)} /></div>
+                <div className="lt-hoy-k">{k}</div>
+              </div>
+            ))}
+          </div>
+          <p className="pv3-small" style={{ marginTop: 12 }}>Últimas 24 horas. Se actualiza solo.</p>
         </div>
       </div>
 
@@ -2433,104 +2563,6 @@ function Conversaciones({ inbox, cargando, onRecargar }) {
   );
 }
 
-function Playbooks({ playbooks, cargando, onRecargar }) {
-  const guardado = playbooks?.workspace || null;
-
-  // null = "todavía no lo ha tocado nadie", y entonces se muestra lo guardado.
-  // Así no hace falta sembrar el formulario desde un efecto, que provocaría
-  // un render en cascada y, si se sincronizara, desharía lo que se escribe.
-  const [editado, setEditado] = useState(null);
-
-  if (cargando) {
-    return <div className="pv3-grid" data-c="2">{[0, 1].map((i) => <div key={i} className="pv3-skel" />)}</div>;
-  }
-  if (!playbooks) {
-    return <div style={{ marginTop: 22 }}><Vacio>No se pudieron cargar los playbooks.</Vacio></div>;
-  }
-
-  const f = editado || guardado || {};
-  const campo = (k, v) => setEditado({ ...f, [k]: v });
-
-  return (
-    <div className="pv3-view">
-      {playbooks.summary ? <Resumenes resumen={playbooks.summary} /> : null}
-
-      <h2 className="pv3-h2">Guion de la cuenta</h2>
-      <div className="pv3-card">
-        <div className="pv3-form">
-          <Campo label="Objetivo de la llamada">
-            <input className="pv3-input" value={f.goal || ""}
-              placeholder="Conseguir una cita presencial"
-              onChange={(e) => campo("goal", e.target.value)} />
-          </Campo>
-          <Campo label="Tono">
-            <input className="pv3-input" value={f.tone || ""}
-              placeholder="Cercano, directo, sin tecnicismos"
-              onChange={(e) => campo("tone", e.target.value)} />
-          </Campo>
-          <Campo label="Público">
-            <input className="pv3-input" value={f.audience || ""}
-              placeholder="Particulares que piden presupuesto"
-              onChange={(e) => campo("audience", e.target.value)} />
-          </Campo>
-        </div>
-
-        <Campo label="Apertura">
-          <textarea className="pv3-input" rows={2} value={f.opening || ""}
-            placeholder="Cómo debe presentarse la voz al descolgar"
-            onChange={(e) => campo("opening", e.target.value)} />
-        </Campo>
-
-        <Campo label="Qué debe preguntar siempre">
-          <textarea className="pv3-input" rows={3} value={f.questions || ""}
-            placeholder="Un punto por línea"
-            onChange={(e) => campo("questions", e.target.value)} />
-        </Campo>
-
-        <Campo label="Objeciones y cómo responderlas">
-          <textarea className="pv3-input" rows={3} value={f.objections || ""}
-            placeholder="«Me lo tengo que pensar» → preguntar contra qué compara"
-            onChange={(e) => campo("objections", e.target.value)} />
-        </Campo>
-
-        <Campo label="Cierre">
-          <textarea className="pv3-input" rows={2} value={f.closing || ""}
-            placeholder="Cómo debe cerrar la conversación"
-            onChange={(e) => campo("closing", e.target.value)} />
-        </Campo>
-
-        <Accion
-          variante="light"
-          onRun={async () => {
-            await enviar("/api/playbooks", "PATCH", { workspace: f });
-            await onRecargar();
-          }}
-        >
-          Guardar guion
-        </Accion>
-      </div>
-
-      <Lista titulo="Recomendaciones" items={playbooks.recommendations || playbooks.suggestions} />
-    </div>
-  );
-}
-
-/* ── plan insuficiente ───────────────────────────────────────────────── */
-
-/**
- * Lo que queda fuera del plan.
- *
- * Se cuenta qué hace la pantalla y qué se está perdiendo, no un simple
- * "actualiza tu plan". Alguien que ve para qué sirve lo que no tiene decide;
- * alguien que ve un candado sin explicación, se va.
- */
-/**
- * Cuenta creada pero sin pagar.
- *
- * Se enseña en lugar del portal entero, no como un aviso encima: dejar ver
- * secciones vacías a quien no ha pagado no informa de nada y hace pensar que
- * el producto no funciona.
- */
 function PagoPendiente({ plan, onPagar, ocupado }) {
   return (
     <div className="pv3-view">
@@ -2691,7 +2723,6 @@ const META = {
   llamadas: ["REGISTRO", "Llamadas", "Cada conversación, con grabación y transcripción."],
   conversaciones: ["INBOX", "Conversaciones", "Cada hilo con su historial completo."],
   voz: ["CALIDAD", "Calidad de voz", "Cómo está funcionando el agente, llamada a llamada."],
-  playbooks: ["GUION", "Guion comercial", "Cómo habla la voz y qué tiene que conseguir."],
   equipo: ["ORGANIZACIÓN", "Equipo", "Quién tiene acceso, qué puede hacer y qué ha hecho."],
   ajustes: ["CONFIGURACIÓN", "Ajustes", "Tu cuenta, tus objetivos y tu facturación."],
   estado: ["SISTEMA", "Estado", "Servicios, integraciones y frescura de los datos."],
@@ -2932,7 +2963,7 @@ export default function PortalV3() {
       case "ia": return <ConfiguracionIA />;
       case "agentes": return <Automatismos canalEnPlan={tieneFuncion(planDe(datos.client), "agentes")} />;
       case "avisos": return <DepartamentosYAvisos />;
-      case "resumen": return <Resumen datos={datos} />;
+      case "resumen": return <Resumen datos={datos} onRecargar={recargar} />;
       case "leads": return <Leads datos={datos} onRecargar={recargar} onMas={() => cargarMas("leads")} />;
       case "llamadas": return <Llamadas datos={datos} onMas={() => cargarMas("calls")} />;
       case "ajustes": return <Ajustes datos={datos} onRecargar={recargar} />;
@@ -2951,15 +2982,6 @@ export default function PortalV3() {
 
       case "voz": return <Voz voz={datosVista} cargando={cargandoVista} />;
       case "estado": return <Estado salud={datosVista} cargando={cargandoVista} />;
-
-      case "playbooks":
-        return (
-          <Playbooks
-            playbooks={datosVista}
-            cargando={cargandoVista}
-            onRecargar={() => recargarSeccion("playbooks")}
-          />
-        );
 
       default: return null;
     }

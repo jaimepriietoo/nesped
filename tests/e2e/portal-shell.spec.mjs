@@ -150,9 +150,9 @@ test("el portal carga con la marca y el menú completo", async ({ context, page,
    * pantalla de entrada— y "Automatismos".
    */
   const entradas = page.locator(".pv3-nav");
-  expect(await entradas.count()).toBe(14);
+  expect(await entradas.count()).toBe(13);
 
-  for (const etiqueta of ["Inteligencia", "Resumen", "Contactos", "Llamadas", "Conversaciones", "Tu IA", "Automatismos", "Departamentos y avisos", "Calidad de voz", "Guion comercial", "Equipo", "Ajustes", "Estado"]) {
+  for (const etiqueta of ["Inteligencia", "Resumen", "Contactos", "Llamadas", "Conversaciones", "Tu IA", "Automatismos", "Departamentos y avisos", "Calidad de voz", "Equipo", "Ajustes", "Estado"]) {
     await expect(page.getByRole("button", { name: new RegExp(etiqueta) })).toBeVisible();
   }
 });

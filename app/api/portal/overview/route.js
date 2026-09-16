@@ -2,6 +2,7 @@ import { getPortalContext } from "@/lib/portal-auth";
 import { evaluarConsumo } from "@/lib/server/cuotas";
 import { cursorDe } from "@/lib/server/paginacion";
 import { observeRoute } from "@/lib/server/observability.mjs";
+import { estadoDeLaIA } from "@/lib/server/estado-ia";
 
 function predictCloseProbability(lead) {
   const score = Number(lead.score || 0);
@@ -269,6 +270,7 @@ async function manejarGET() {
       );
     }
 
+    const estadoIA = await estadoDeLaIA(ctx.clientId);
     const client = clientRes.data || null;
     const settings = settingsRes.data || null;
     const users = usersRes.data || [];
@@ -358,6 +360,12 @@ async function manejarGET() {
             acc + Number(lead.valor_estimado || settings?.default_deal_value || 0),
           0
         );
+
+    /* Lo que de verdad pide atención hoy: contactos nuevos a los que nadie
+       ha contestado, y alertas sin leer. Sustituye al "valor potencial"
+       en euros, que dependía de importes puestos a mano. */
+    const sinResponder = leads.filter((l) => String(l.status || "new") === "new" && !l.last_contact_at && !l.last_contacted_at).length;
+    const alertasAbiertas = (alerts || []).filter((a) => !a.is_read && !a.read).length;
 
     const byDay = {};
     const byHour = {};
@@ -481,6 +489,10 @@ async function manejarGET() {
         calls: calls.length >= MAXIMO_LLAMADAS ? cursorDe(calls[calls.length - 1]) : null,
       },
 
+      /* Si la IA está o no, y por qué. El portal lo enseña arriba: nadie
+         debería preguntarse por qué no contesta el copiloto. */
+      ia: { activa: estadoIA.activa, motivo: estadoIA.motivo },
+
       /* Consumo del mes contra el límite del plan. Se enseña siempre, no sólo
          al pasarse: quien ve subir el contador puede llamar antes de que le
          llegue una factura rara. */
@@ -509,6 +521,8 @@ async function manejarGET() {
         avgLeadScore,
         hotLeads,
         totalPotentialRevenue,
+        sinResponder,
+        alertasAbiertas,
         contactedLeads,
         qualifiedLeads,
         wonLeads,

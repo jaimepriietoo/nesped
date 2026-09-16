@@ -24,6 +24,7 @@ function supabaseFalso(porTabla = {}) {
     const eslabon = {
       select: () => eslabon,
       eq: () => eslabon,
+      gte: () => eslabon,
       order: () => eslabon,
       limit: () => Promise.resolve({ data: filas, error: null }),
       maybeSingle: () => Promise.resolve({ data: filas?.[0] ?? null, error: null }),

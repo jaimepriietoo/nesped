@@ -20,7 +20,7 @@ async function manejarGET() {
       );
     }
 
-    if (!puede(ctx.role, "audit.export")) {
+    if (!puede(ctx.role, "audit.export", ctx.permissions)) {
       return Response.json(
         { success: false, message: "Sin permisos para exportar auditoría" },
         { status: 403 }

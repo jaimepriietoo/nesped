@@ -2,8 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { execSync } from "node:child_process";
-import { ACCIONES, puede, rolesQuePueden, sinPermiso } from "@/lib/server/permisos";
+import { getPermissionCatalog } from "@/lib/server/portal-permissions";
+import { ACCIONES, SOLO_CON_CASILLA, puede, rolesQuePueden, sinPermiso } from "@/lib/server/permisos";
 
 /**
  * Qué puede hacer cada rol.
@@ -46,13 +46,19 @@ test("una acción que no existe es que no, y se avisa", () => {
 });
 
 test("ninguna ruta pregunta por una acción que la tabla no conoce", () => {
-  const salida = execSync(`grep -rhoE 'puede\\(ctx\\.role, "[^"]+"\\)' app lib --include='*.js'`, { cwd: RAIZ, encoding: "utf8" });
-  const usadas = [...new Set([...salida.matchAll(/"([^"]+)"/g)].map((m) => m[1]))];
+  const fuentes = ["app", "lib"].flatMap(dir =>
+    fs.readdirSync(path.join(RAIZ, dir), { recursive: true })
+      .filter(file => file.endsWith(".js"))
+      .map(file => fs.readFileSync(path.join(RAIZ, dir, file), "utf8"))
+  ).join("\n");
+  const llamadas = [...fuentes.matchAll(/puede\(ctx\.role, "([^"]+)"([^)]*)\)/g)];
+  const usadas = [...new Set(llamadas.map(m => m[1]))];
   assert.ok(usadas.length >= 15, `se esperaban muchas rutas con puede(); hay ${usadas.length}`);
-  for (const accion of usadas) assert.ok(accion in ACCIONES, `acción sin definir: ${accion}`);
-  /* Y ya no queda ninguna lista de roles suelta en las rutas. */
-  const sueltas = execSync(`grep -rl 'hasRole(ctx.role, \\[' app --include='*.js' || true`, { cwd: RAIZ, encoding: "utf8" }).trim();
-  assert.equal(sueltas, "", `listas de roles fuera de la tabla:\n${sueltas}`);
+  for (const [, accion, argumentos] of llamadas) {
+    assert.ok(accion in ACCIONES, `acción sin definir: ${accion}`);
+    assert.equal(argumentos.trim(), ", ctx.permissions", `${accion}: la ruta olvidó los permisos del usuario`);
+  }
+  assert.doesNotMatch(fuentes, /hasRole\(ctx\.role, \[/, "listas de roles fuera de la tabla");
 });
 
 test("la respuesta de sin permiso es un 403 con la forma de siempre", async () => {
@@ -60,4 +66,74 @@ test("la respuesta de sin permiso es un 403 con la forma de siempre", async () =
   assert.equal(r.status, 403);
   assert.deepEqual(await r.json(), { success: false, message: "Sin permisos" });
   assert.ok(fs.existsSync(path.join(RAIZ, "lib/server/permisos.js")));
+});
+
+test("sin casillas marcadas se conserva exactamente el permiso del rol", () => {
+  for (const rol of ["owner", "admin", "manager", "agent", "viewer"]) {
+    for (const accion of Object.keys(ACCIONES)) {
+      for (const permisos of [undefined, null, [], ["inexistente"], "crm.edit"]) {
+        assert.equal(puede(rol, accion, permisos), puede(rol, accion), rol + ": " + accion);
+      }
+    }
+  }
+});
+
+test("manager y agent sólo conservan las casillas marcadas, sin ganar privilegios", () => {
+  const catalogo = getPermissionCatalog().map(item => item.id);
+  for (const rol of ["manager", "agent"]) {
+    for (const accion of Object.keys(ACCIONES)) {
+      if (SOLO_CON_CASILLA.has(accion)) continue; // se prueban aparte
+      const porRol = puede(rol, accion);
+      assert.equal(puede(rol, accion, catalogo), porRol, "marcar todo no amplía el rol");
+      if (!catalogo.includes(accion)) {
+        assert.equal(puede(rol, accion, ["crm.view"]), porRol, "sin casilla conserva el rol");
+        continue;
+      }
+      assert.equal(puede(rol, accion, [accion]), porRol);
+      assert.equal(puede(rol, accion, ["crm.view"]), false, "una casilla distinta no autoriza");
+    }
+  }
+  assert.equal(puede("MANAGER", "crm.edit", ["crm.edit"]), true);
+  assert.equal(puede("agent", "crm.edit", ["inexistente", "inbox.reply"]), false);
+  assert.equal(puede("agent", "settings.manage", ["security.manage"]), false);
+});
+
+test("owner y admin nunca quedan restringidos por las casillas", () => {
+  for (const rol of ["owner", "admin", "ADMIN"]) {
+    for (const accion of Object.keys(ACCIONES)) {
+      assert.equal(puede(rol, accion, ["crm.view"]), true, rol + ": " + accion);
+    }
+  }
+});
+
+test("las casillas nunca conceden operaciones a viewer ni a roles desconocidos", () => {
+  const todas = getPermissionCatalog().map(item => item.id);
+  for (const rol of ["viewer", "super_admin", "", null]) {
+    for (const accion of Object.keys(ACCIONES)) assert.equal(puede(rol, accion, todas), false);
+  }
+});
+
+test("cambiar o vaciar las casillas se aplica a la siguiente comprobación", () => {
+  assert.equal(puede("agent", "crm.edit", ["crm.edit"]), true);
+  assert.equal(puede("agent", "crm.edit", ["inbox.reply"]), false);
+  assert.equal(puede("agent", "crm.edit", []), true);
+});
+
+test("el perfil carga permisos desde la misma consulta autenticada y acotada", () => {
+  const auth = fs.readFileSync(path.join(RAIZ, "lib/server/auth.js"), "utf8");
+  const consulta = auth.slice(auth.indexOf('const { data: profile,'), auth.indexOf('if (profileError'));
+  assert.match(consulta, /select\("[^"]*permissions[^"]*"\)/);
+  assert.match(consulta, /\.eq\("client_id", session.clientId\)\.eq\("email", email\)/);
+  assert.match(auth, /const \{ permissions, \.\.\.portalUser \} = ctx.profile/);
+});
+
+test("decidir a quién llegan los contactos: manager sólo con su casilla, tenga o no otras", () => {
+  assert.equal(puede("manager", "routing.manage"), false, "sin casilla, no; el rol no lo hereda");
+  assert.equal(puede("manager", "routing.manage", ["crm.edit", "inbox.reply"]), false, "otras casillas no valen");
+  assert.equal(puede("manager", "routing.manage", ["routing.manage"]), true);
+  assert.equal(puede("agent", "routing.manage", ["routing.manage"]), false, "agent no está en el rol");
+  assert.equal(puede("owner", "routing.manage"), true);
+  assert.equal(puede("admin", "routing.manage", ["crm.view"]), true, "owner/admin nunca se restringen");
+  assert.equal(puede("agent", "routing.view"), true, "ver sí lo puede el equipo");
+  assert.equal(puede("manager", "ai.configure", ["routing.manage"]), false, "la IA la configura la empresa");
 });

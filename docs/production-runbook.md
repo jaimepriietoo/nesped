@@ -128,6 +128,9 @@ npm run smoke -- https://tu-dominio.com
 
 Palancas de emergencia (sin desplegar):
 
+- `NESPED_SIN_CORREO=si` — no sale ningún correo (avisos a departamentos,
+  restablecer contraseña); queda apuntado como omitido. Para entornos de
+  prueba con datos reales.
 - `WEBHOOKS_EN_LINEA=si` — los webhooks de ElevenLabs y WhatsApp se procesan
   dentro de la petición, como antes de la bandeja. Para cuando la cola esté
   parada y haya que atenderlos ya. Quitarla cuando la cola vuelva.

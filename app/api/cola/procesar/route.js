@@ -8,6 +8,8 @@ import { pasadaDeMantenimiento } from "@/lib/server/mantenimiento";
 import { copiarGrabacion } from "@/lib/server/grabaciones";
 import { procesarEvento } from "@/lib/server/bandeja-webhooks";
 import { entregarWebhook } from "@/lib/server/webhooks-salientes";
+import { clasificarYActuar } from "@/lib/server/clasificacion";
+import { barridoDeAutomatismos } from "@/lib/server/automatismos";
 import { getSupabase } from "@/lib/supabase";
 
 /**
@@ -63,6 +65,15 @@ const OFICIOS = {
      éste, con los reintentos de la cola. */
   webhook: (t) => procesarEvento(t.datos?.evento_id),
   webhook_saliente: (t) => entregarWebhook(t.datos?.entrega_id),
+  clasificar_lead: (t) =>
+    clasificarYActuar({
+      clientId: t.client_id,
+      leadId: t.datos?.lead_id,
+      nuevo: Boolean(t.datos?.nuevo),
+      textoExtra: Array.isArray(t.datos?.texto_extra) ? t.datos.texto_extra : [],
+      disparo: t.datos?.disparo || null,
+    }),
+  automatismos_barrido: () => barridoDeAutomatismos(),
 
   /**
    * Mover lo viejo al archivo y pasar la retención.
@@ -101,6 +112,17 @@ async function pedirMantenimientoDelDia() {
   });
 }
 
+/**
+ * El barrido de automatismos se pide cada quince minutos, también solo: la
+ * clave lleva el cuarto de hora, así que por muchas pasadas que haya en ese
+ * rato entra un barrido. Con el latido de Railway son quince minutos de
+ * verdad; con sólo el cron diario de Vercel, uno al día.
+ */
+async function pedirBarridoDeAutomatismos() {
+  const cuarto = Math.floor(Date.now() / (15 * 60 * 1000));
+  await encolar({ tipo: "automatismos_barrido", clave: `automatismos_barrido:${cuarto}`, unaSolaVez: true });
+}
+
 async function procesar(req) {
   const errorInterno = requireInternalRequest(req);
   if (errorInterno) return errorInterno;
@@ -134,6 +156,7 @@ async function procesar(req) {
        clave con la fecha hace que sólo entre uno al día por mucho que esta
        ruta se llame cada cinco minutos. */
     await pedirMantenimientoDelDia();
+    await pedirBarridoDeAutomatismos();
 
     const trabajos = await tomarTrabajos({
       cuantos: POR_PASADA,

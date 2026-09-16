@@ -20,7 +20,7 @@ async function manejarPOST(req) {
       );
     }
 
-    if (!puede(ctx.role, "automations.run")) {
+    if (!puede(ctx.role, "automations.run", ctx.permissions)) {
       return Response.json(
         { success: false, message: "Sin permisos para ejecutar la acción" },
         { status: 403 }

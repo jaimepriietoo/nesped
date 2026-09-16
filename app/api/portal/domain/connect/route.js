@@ -21,7 +21,7 @@ async function manejarPOST(req) {
       );
     }
 
-    if (!puede(ctx.role, "settings.manage")) {
+    if (!puede(ctx.role, "settings.manage", ctx.permissions)) {
       return Response.json(
         { success: false, message: "Sin permisos para conectar dominio" },
         { status: 403 }

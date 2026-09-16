@@ -13,7 +13,7 @@ async function manejarPOST(req) {
       );
     }
 
-    if (!puede(ctx.role, "automations.run")) {
+    if (!puede(ctx.role, "automations.run", ctx.permissions)) {
       return NextResponse.json(
         { success: false, message: "Sin permisos para automatizar WhatsApp" },
         { status: 403 }

@@ -45,7 +45,7 @@ async function manejarPOST(req) {
       );
     }
 
-    if (!puede(ctx.role, "experiments.manage")) {
+    if (!puede(ctx.role, "experiments.manage", ctx.permissions)) {
       return NextResponse.json(
         { success: false, message: "Sin permisos para crear variantes" },
         { status: 403 }

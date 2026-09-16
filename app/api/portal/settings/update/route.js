@@ -29,7 +29,7 @@ async function manejarPATCH(req) {
       );
     }
 
-    if (!puede(ctx.role, "settings.manage")) {
+    if (!puede(ctx.role, "settings.manage", ctx.permissions)) {
       return Response.json(
         { success: false, message: "Sin permisos para actualizar ajustes" },
         { status: 403 }

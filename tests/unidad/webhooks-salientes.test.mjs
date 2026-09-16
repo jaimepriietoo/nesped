@@ -40,6 +40,6 @@ test("la llamada terminada y el contacto actualizado avisan sin await", () => {
 test("el portal enseña las entregas acotadas a la empresa y sólo quien puede probar el webhook", () => {
   const s = leer("app/api/portal/webhook/entregas/route.js");
   assert.match(s, /ctx\.datos\.from\("webhook_entregas"\)/);
-  assert.match(s, /puede\(ctx\.role, "api\.test"\)/);
+  assert.match(s, /puede\(ctx\.role, "api\.test", ctx\.permissions\)/);
   assert.match(s, /requireSameOrigin\(req\)/);
 });

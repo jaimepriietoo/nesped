@@ -12,16 +12,26 @@ import {
 import { requireSameOrigin } from "@/lib/server/security";
 import { buildConversationAssistPayload } from "@/lib/server/portal-phase-four";
 import { observeRoute } from "@/lib/server/observability.mjs";
+import { iaDisponible } from "@/lib/server/estado-ia";
+import { configIA, promptDeEmpresa } from "@/lib/server/ia-config";
 
 const openai = process.env.OPENAI_API_KEY
   ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 20000, maxRetries: 0 })
   : null;
 
 async function tryAiSuggestion({ client, lead, payload, channel, goal }) {
-  if (!openai) return payload;
+  /* Sin IA no se finge: se devuelve la base con `iaActiva: false` y el
+     motivo, y el portal lo enseña en vez de hacer pasar la plantilla por
+     una sugerencia de la IA. */
+  const ia = await iaDisponible(client?.id);
+  if (!openai || !ia.ok) return { ...payload, iaActiva: false, motivoSinIA: ia.motivo || "No hay clave de OpenAI configurada." };
+  const configEmpresa = await configIA(client?.id);
+  const promptEmpresa = promptDeEmpresa(configEmpresa, { empresa: client?.brand_name || client?.name || "", sector: client?.industry || "" });
 
   const prompt = `
-Eres un closer premium de Nesped. Genera una respuesta breve, humana y muy vendible.
+${promptEmpresa}
+
+Con eso delante, genera una respuesta breve y humana para este contacto.
 
 Marca: ${client?.brand_name || client?.name || "Nesped"}
 Canal: ${channel}
@@ -59,6 +69,7 @@ Responde SOLO con JSON válido:
 
     return {
       ...payload,
+      iaActiva: true,
       primary: String(parsed?.primary || payload.primary).trim(),
       alternatives: Array.isArray(parsed?.alternatives) && parsed.alternatives.length
         ? parsed.alternatives.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 3)
@@ -86,7 +97,7 @@ async function manejarPOST(req) {
       );
     }
 
-    if (!puede(ctx.role, "inbox.reply")) {
+    if (!puede(ctx.role, "inbox.reply", ctx.permissions)) {
       return Response.json(
         { success: false, message: "Sin permisos para pedir sugerencias IA" },
         { status: 403 }

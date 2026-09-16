@@ -15,6 +15,10 @@ import {
 import { toE164 } from "@/lib/server/phone";
 import { observeRoute } from "@/lib/server/observability.mjs";
 import { MensajeTwilio, validar } from "@/lib/server/esquemas";
+import { iaDisponible } from "@/lib/server/estado-ia";
+import { configIA, promptDeEmpresa } from "@/lib/server/ia-config";
+import { departamentosDeEmpresa } from "@/lib/server/departamentos";
+import { pedirClasificacion } from "@/lib/server/clasificacion";
 
 let openai = null;
 const supabase = getSupabase();
@@ -121,7 +125,7 @@ async function resolveClientContext(to = "") {
   const normalizedTo = normalizePhone(to);
   const { data, error } = await supabase
     .from("clients")
-    .select("id,name,brand_name,twilio_number")
+    .select("id,name,brand_name,industry,twilio_number")
     .limit(200);
 
   if (error) {
@@ -388,7 +392,7 @@ function getObjectionStrategy(analysis, paymentLink, bookingUrl) {
   return map[objection] || map.otro;
 }
 
-async function generateSalesReply({ message, historyText, lead, analysis }) {
+async function generateSalesReply({ message, historyText, lead, analysis, promptEmpresa = "" }) {
   function selectPaymentLink() {
     const score = Number(lead?.score || 0);
     const prob = Number(analysis?.close_probability || 0);
@@ -487,8 +491,13 @@ Devuélveme solo la respuesta final que enviarías por WhatsApp.
     messages: [
       {
         role: "system",
-        content:
-          "Eres un closer experto en WhatsApp. Tu trabajo es resolver objeciones y convertir leads en citas o pagos.",
+        /* Manda lo que la empresa configuró en su IA (tono, límites,
+           derivaciones, horario). Lo de cerrar ventas va después y sólo
+           dentro de esos límites. */
+        content: [
+          promptEmpresa,
+          "Además, cuando la conversación es comercial, resuelves objeciones y llevas hacia una cita o un pago, sin salirte de lo que la empresa permite.",
+        ].filter(Boolean).join("\n\n"),
       },
       {
         role: "user",
@@ -712,6 +721,39 @@ export async function procesarMensajeEntrante(campos) {
     const lead = await findLeadByPhone(phone, clientContext.id);
     const history = await getLeadHistoryForClient(phone, clientContext.id);
 
+    /* ¿Está la IA? Si no, no se finge: el mensaje se guarda, se avisa a
+       una persona con el motivo, y se pide la clasificación (que sin IA va
+       por palabras clave). No sale ninguna respuesta automática. */
+    const ia = await iaDisponible(clientContext.id);
+    if (!ia.ok) {
+      await saveLeadEventForClient({
+        clientId: clientContext.id, leadId: lead?.id || null, phone,
+        type: "incoming_whatsapp", message: inboundMessage,
+      });
+      await saveLeadEventForClient({
+        clientId: clientContext.id, leadId: lead?.id || null, phone,
+        type: "ia_desactivada", message: `Sin respuesta automática: ${ia.motivo}`,
+      });
+      await supabase.from("alerts").insert({
+        client_id: clientContext.id, kind: "ia_desactivada", severity: "medium",
+        title: "Mensaje de WhatsApp sin responder",
+        message: `La IA no está activa (${ia.motivo}). Hay que contestar a mano.`,
+        related_lead_id: lead?.id || null,
+      });
+      if (lead?.id) void pedirClasificacion({ clientId: clientContext.id, leadId: lead.id, textoExtra: [inboundMessage], disparo: "mensaje.entrante" });
+      return respuesta({ success: true, iaDesactivada: true, motivo: ia.motivo, clientId: clientContext.id });
+    }
+
+    const [configEmpresa, { lista: departamentosEmpresa }] = await Promise.all([
+      configIA(clientContext.id),
+      departamentosDeEmpresa(clientContext.id),
+    ]);
+    const promptEmpresa = promptDeEmpresa(configEmpresa, {
+      empresa: clientContext.brand_name || clientContext.name || "",
+      sector: clientContext.industry || "",
+      departamentos: departamentosEmpresa,
+    });
+
 const historyText = history
   .slice(0, 12)
   .reverse()
@@ -749,6 +791,7 @@ const reply = await generateSalesReply({
   historyText,
   lead,
   analysis,
+  promptEmpresa,
 });
 
     await saveLeadEventForClient({
@@ -818,6 +861,9 @@ await sendWhatsapp(phone, finalReply);
   ].join(" ").trim(),
 });
 }
+
+    /* Departamento y automatismos, por la cola, con el mensaje como texto. */
+    if (lead?.id) void pedirClasificacion({ clientId: clientContext.id, leadId: lead.id, textoExtra: [inboundMessage], disparo: "mensaje.entrante" });
 
     return respuesta({
       success: true,

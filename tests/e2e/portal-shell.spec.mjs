@@ -115,6 +115,19 @@ async function montarPortal(context, page, baseURL, { romper = null, plan = "int
       } }));
     }
 
+    if (ruta === "/api/portal/automatismos") {
+      return route.fulfill(json({ success: true, data: [], ejecuciones: [], disparos: {}, ia: { activa: false, motivo: "prueba", funciones: {} }, pausa: { global: false }, puedeEditar: true }));
+    }
+    if (ruta === "/api/portal/agentes") {
+      return route.fulfill(json({ success: true, modos: [], agentes: [] }));
+    }
+    if (ruta === "/api/portal/ia") {
+      return route.fulfill(json({ success: true, data: {}, prompt: "", estado: { activa: false, motivo: "prueba", causas: [], funciones: {} }, opciones: { tonos: {}, autonomia: {}, porDefecto: {} }, departamentos: [], empresa: "", puedeEditar: true }));
+    }
+    if (ruta === "/api/portal/departamentos" || ruta === "/api/portal/destinatarios") {
+      return route.fulfill(json({ success: true, data: [], notificaciones: [], deSerie: true, puedeEditar: true }));
+    }
+
     if (ruta === "/api/portal/contacto") {
       return route.fulfill(json({ success: true, lead: {}, recorrido: [], perfil: { disponible: false, falta: "" }, siguiente: { disponible: false, falta: "" } }));
     }
@@ -137,9 +150,9 @@ test("el portal carga con la marca y el menú completo", async ({ context, page,
    * pantalla de entrada— y "Automatismos".
    */
   const entradas = page.locator(".pv3-nav");
-  expect(await entradas.count()).toBe(12);
+  expect(await entradas.count()).toBe(14);
 
-  for (const etiqueta of ["Inteligencia", "Resumen", "Contactos", "Llamadas", "Conversaciones", "Automatismos", "Calidad de voz", "Guion comercial", "Equipo", "Ajustes", "Estado"]) {
+  for (const etiqueta of ["Inteligencia", "Resumen", "Contactos", "Llamadas", "Conversaciones", "Tu IA", "Automatismos", "Departamentos y avisos", "Calidad de voz", "Guion comercial", "Equipo", "Ajustes", "Estado"]) {
     await expect(page.getByRole("button", { name: new RegExp(etiqueta) })).toBeVisible();
   }
 });
@@ -302,8 +315,10 @@ test("Growth no entra en Intelligence ni en Enterprise", async ({ context, page,
   await expect(page.getByText(/TU PLAN ES GROWTH/i)).toBeVisible();
   await expect(page.getByRole("button", { name: /Pasar a Intelligence/i })).toBeVisible();
 
-  await page.getByRole("button", { name: /Automatismos/ }).click();
+  // Los automatismos entran en todos los planes; lo que queda en Enterprise
+  // son los agentes de canal, y el candado está dentro de esa pantalla.
   // Enterprise no se contrata con tarjeta: se habla antes.
+  await page.getByRole("button", { name: /Automatismos/ }).click();
   await expect(page.getByRole("link", { name: /Hablar con nosotros/i })).toBeVisible();
 });
 

@@ -50,7 +50,7 @@ async function manejarPATCH(req) {
     if (!ctx.ok) {
       return Response.json({ success: false, message: ctx.message }, { status: 401 });
     }
-    if (!puede(ctx.role, "agents.manage")) {
+    if (!puede(ctx.role, "agents.manage", ctx.permissions)) {
       return Response.json(
         { success: false, message: "Solo el propietario puede cambiar cómo actúan los agentes." },
         { status: 403 }

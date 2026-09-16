@@ -38,7 +38,7 @@ línea de GLSL que no tiene nada malo.
 
 ```
 app/                  rutas. page.js es la película de la portada
-  portal/             el área de clientes (~3.000 líneas, once pantallas)
+  portal/             el área de clientes (page.js + ia.js, doce pantallas)
   admin/              la administración de Nesped, no la del cliente
   api/                todo el servidor. Ninguna página vive aquí (hay prueba)
 components/nucleo/    la Apertura Neural: el objeto vivo y sus once estados

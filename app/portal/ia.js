@@ -77,6 +77,27 @@ function Frases({ valor = [], onChange, sugerencias = [], placeholder, max = 20,
   );
 }
 
+/** Texto que se escribe solo, como si lo tecleara la IA. */
+function Tecleado({ texto }) {
+  const nodo = useRef(null);
+  useEffect(() => {
+    const el = nodo.current;
+    if (!el) return undefined;
+    const completo = String(texto || "");
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) { el.textContent = completo; return undefined; }
+    let i = 0; let id;
+    const paso = () => {
+      i = Math.min(completo.length, i + 2);
+      el.textContent = completo.slice(0, i);
+      if (i < completo.length) id = setTimeout(paso, 14);
+    };
+    el.textContent = "";
+    id = setTimeout(paso, 120);
+    return () => clearTimeout(id);
+  }, [texto]);
+  return <span ref={nodo}>{texto}</span>;
+}
+
 function Seccion({ n, titulo, sub, children }) {
   return (
     <section className="ia-seccion" style={{ animationDelay: `${(n || 0) * 45}ms` }}>
@@ -300,7 +321,7 @@ export function ConfiguracionIA() {
           <div className="ia-burbujas">
             <div className="ia-burbuja" data-quien="cliente">{prueba}</div>
             {respuesta.iaActiva ? (
-              <div className="ia-burbuja" data-quien="ia">{respuesta.respuesta}</div>
+              <div className="ia-burbuja" data-quien="ia"><Tecleado texto={respuesta.respuesta} /></div>
             ) : (
               <div className="ia-burbuja" data-quien="aviso">La IA está apagada ({respuesta.motivo}). No se puede generar una respuesta, pero esto es lo que sabría:</div>
             )}
@@ -525,8 +546,10 @@ export function Automatismos({ canalEnPlan = true }) {
     return [...m.entries()];
   }, [datos]);
 
+  const [pulso, setPulso] = useState("");
   async function cambiar(tipo, cambios) {
     setTocando(tipo); setError("");
+    if (cambios.activo === true) { setPulso(tipo); setTimeout(() => setPulso(""), 900); }
     setDatos((d) => ({ ...d, data: d.data.map((a) => (a.id === tipo ? { ...a, ...cambios, config: { ...a.config, ...(cambios.config || {}) } } : a)) }));
     try { await pedir("/api/portal/automatismos", { method: "PATCH", body: JSON.stringify({ tipo, ...cambios }) }); }
     catch (e) { setError(e.message); await cargar().catch(() => {}); }
@@ -564,7 +587,7 @@ export function Automatismos({ canalEnPlan = true }) {
           <div className="ia-seccion-cab"><span className="ia-num">{String(gi + 1).padStart(2, "0")}</span><h2 className="ia-titulo">{categoria}</h2></div>
           <div className="au-lista">
             {piezas.map((a) => (
-              <div key={a.id} className="au-pieza" data-on={a.activo ? "1" : "0"}>
+              <div key={a.id} className="au-pieza" data-on={a.activo ? "1" : "0"} data-pulso={pulso === a.id ? "1" : undefined}>
                 <div className="au-pieza-cab">
                   <Interruptor on={a.activo} disabled={!puedeEditar || a.fijo || tocando === a.id} etiqueta={a.nombre} onChange={(v) => cambiar(a.id, { activo: v })} />
                   <div style={{ minWidth: 0, flex: 1 }}>

@@ -234,6 +234,10 @@ function Acceso() {
             <button className="v3-btn v3-btn--white" type="submit" disabled={loading || !listo}>
               {loading ? "Entrando…" : "Entrar"}
             </button>
+
+            <p className="v3-legal" style={{ marginTop: 4 }}>
+              <Link href={`/restablecer${email ? `?email=${encodeURIComponent(email)}` : ""}`}>¿Has olvidado tu contraseña?</Link>
+            </p>
           </form>
         ) : (
           <form className="v3-auth-form" onSubmit={handleVerify}>

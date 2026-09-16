@@ -10,7 +10,7 @@ async function manejarPOST(req) {
     if (originError) return originError;
     const ctx = await getPortalContext();
     if (!ctx.ok) return Response.json({ success: false, message: ctx.message }, { status: 401 });
-    if (!puede(ctx.role, "ai.use")) return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
+    if (!puede(ctx.role, "ai.use", ctx.permissions)) return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
  
     const body = await req.json();
     const { leadId } = body;

@@ -21,7 +21,7 @@ async function handlePost(req) {
       );
     }
 
-    if (!puede(ctx.role, "api.test")) {
+    if (!puede(ctx.role, "api.test", ctx.permissions)) {
       return Response.json(
         { success: false, message: "Sin permisos para probar webhooks" },
         { status: 403 }

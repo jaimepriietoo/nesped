@@ -34,7 +34,7 @@ async function manejarPOST(req) {
       );
     }
 
-    if (!puede(ctx.role, "billing.checkout")) {
+    if (!puede(ctx.role, "billing.checkout", ctx.permissions)) {
       return NextResponse.json(
         { success: false, message: "Sin permisos para crear un checkout" },
         { status: 403 }
@@ -65,7 +65,7 @@ async function manejarPOST(req) {
     }
 
     const isClientPlanCheckout = !leadId;
-    if (isClientPlanCheckout && !puede(ctx.role, "billing.manage")) {
+    if (isClientPlanCheckout && !puede(ctx.role, "billing.manage", ctx.permissions)) {
       return NextResponse.json({ success: false, message: "Sin permisos de facturación" }, { status: 403 });
     }
 

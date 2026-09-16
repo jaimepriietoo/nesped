@@ -66,7 +66,7 @@ async function manejarGET() {
       );
     }
 
-    if (!puede(ctx.role, "crm.export")) {
+    if (!puede(ctx.role, "crm.export", ctx.permissions)) {
       return Response.json(
         { success: false, message: "Sin permisos para exportar contactos" },
         { status: 403 }

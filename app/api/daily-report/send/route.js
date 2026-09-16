@@ -22,7 +22,7 @@ async function manejarPOST(req) {
     if (originError) return originError;
     const ctx = await getPortalContext();
     if (!ctx.ok) return Response.json({ success: false, message: ctx.message }, { status: 401 });
-    if (!puede(ctx.role, "reports.send")) return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
+    if (!puede(ctx.role, "reports.send", ctx.permissions)) return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
 
     /* La clave lleva la fecha: pulsar el botón cinco veces la misma mañana no
        manda cinco correos, y mañana sí se puede volver a pedir. */

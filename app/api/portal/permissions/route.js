@@ -58,7 +58,7 @@ async function manejarPATCH(req) {
       );
     }
 
-    if (!puede(ctx.role, "users.manage")) {
+    if (!puede(ctx.role, "users.manage", ctx.permissions)) {
       return Response.json(
         { success: false, message: "Sin permisos para editar permisos finos" },
         { status: 403 }

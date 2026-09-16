@@ -18,7 +18,7 @@ async function manejarPOST(req) {
       );
     }
 
-    if (!puede(ctx.role, "inbox.reply")) {
+    if (!puede(ctx.role, "inbox.reply", ctx.permissions)) {
       return Response.json(
         { success: false, message: "Sin permisos para enviar SMS" },
         { status: 403 }

@@ -13,7 +13,7 @@ async function manejarPOST(req) {
       );
     }
 
-    if (!puede(ctx.role, "inbox.reply")) {
+    if (!puede(ctx.role, "inbox.reply", ctx.permissions)) {
       return NextResponse.json(
         { success: false, message: "Sin permisos" },
         { status: 403 }

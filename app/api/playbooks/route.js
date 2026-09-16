@@ -106,7 +106,7 @@ async function manejarPATCH(req) {
       );
     }
 
-    if (!puede(ctx.role, "playbooks.manage")) {
+    if (!puede(ctx.role, "playbooks.manage", ctx.permissions)) {
       return Response.json(
         { success: false, message: "Sin permisos para actualizar playbooks" },
         { status: 403 }

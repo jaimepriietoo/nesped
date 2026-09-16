@@ -10,7 +10,7 @@ import { observeRoute } from "@/lib/server/observability.mjs";
 async function manejarGET(req) {
   const ctx = await getPortalContext();
   if (!ctx.ok) return Response.json({ success: false, message: "No autorizado", data: [] }, { status: 401 });
-  if (!puede(ctx.role, "audit.export")) return Response.json({ success: false, message: "Sin permisos", data: [] }, { status: 403 });
+  if (!puede(ctx.role, "audit.export", ctx.permissions)) return Response.json({ success: false, message: "Sin permisos", data: [] }, { status: 403 });
 
   const url = new URL(req.url);
   try {

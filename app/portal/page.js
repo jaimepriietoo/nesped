@@ -27,6 +27,7 @@ import {
 import { NucleoMarca, estadoDe } from "@/components/nucleo/marca";
 import { EntradaNesped } from "@/components/nucleo/entrada";
 import "./portal.css";
+import { ConfiguracionIA, DepartamentosYAvisos, Automatismos } from "./ia";
 
 /* ── utilidades ──────────────────────────────────────────────────────── */
 
@@ -138,7 +139,9 @@ const VISTAS = [
   { id: "conversaciones", label: "Conversaciones", ico: "◈", api: "/api/portal/inbox", funcion: "crm" },
 
   { grupo: "El agente" },
-  { id: "agentes", label: "Automatismos", ico: "⚙", api: "/api/portal/agentes", funcion: "agentes" },
+  { id: "ia", label: "Tu IA", ico: "✦" },
+  { id: "agentes", label: "Automatismos", ico: "⚙" },
+  { id: "avisos", label: "Departamentos y avisos", ico: "✉" },
   { id: "voz", label: "Calidad de voz", ico: "◎", api: "/api/portal/voice-center", funcion: "llamadas" },
   { id: "playbooks", label: "Guion comercial", ico: "✎", api: "/api/playbooks", funcion: "llamadas" },
 
@@ -376,6 +379,8 @@ function FichaLead({ lead, usuarios, onCerrar, onCambiado }) {
       </div>
 
       {lead.interes ? <p className="pv3-p" style={{ marginTop: 14 }}>{lead.interes}</p> : null}
+
+      <Departamento lead={lead} onCambiado={onCambiado} />
 
       {ficha?.siguiente?.disponible && (
         <>
@@ -651,6 +656,41 @@ function FichaLead({ lead, usuarios, onCerrar, onCambiado }) {
 }
 
 /** Lista corta de notas/comentarios/recordatorios ya existentes. */
+/**
+ * El departamento de un contacto y por qué. Con botón para clasificar ahora:
+ * útil tras editar la necesidad, o si el contacto entró antes de que
+ * existiera la clasificación.
+ */
+function Departamento({ lead, onCambiado }) {
+  const [ocupado, setOcupado] = useState(false);
+  const [aviso, setAviso] = useState("");
+  const senales = Object.entries(lead.senales || {}).filter(([k, v]) => v === true && k !== "fuente").map(([k]) => k);
+  async function clasificar() {
+    setOcupado(true); setAviso("");
+    try {
+      const res = await fetch("/api/portal/contactos/clasificar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lead_id: lead.id }) });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) { setAviso(json?.message || "No se pudo clasificar."); return; }
+      const c = json.clasificacion;
+      setAviso(`${c.fuente === "ia" ? "La IA" : c.fuente === "palabras" ? "Por palabras clave (la IA no está)" : "Sin texto que leer"}: ${c.nombreDepartamento || c.departamento || "—"}. ${json.automatismos?.length || 0} automatismos revisados.`);
+      await onCambiado?.();
+    } catch (e) { setAviso(e?.message || "No se pudo clasificar."); } finally { setOcupado(false); }
+  }
+  return (
+    <div className="fc-nba" data-p="low" style={{ borderLeftColor: lead.departamento ? "var(--ok)" : "var(--muted)" }}>
+      <div className="pv3-row" style={{ alignItems: "flex-start" }}>
+        <div>
+          <div className="fc-nba-acc">{lead.departamento ? `DEPARTAMENTO · ${String(lead.departamento).toUpperCase()}` : "SIN CLASIFICAR"}</div>
+          {lead.departamento_motivo ? <p className="fc-nba-motivo">{lead.departamento_motivo}</p> : <p className="fc-nba-motivo">La IA aún no ha leído este contacto.</p>}
+          {senales.length > 0 && <div className="fc-etiquetas">{senales.map((x) => <span key={x}>{x}</span>)}</div>}
+        </div>
+        <button type="button" className="pv3-btn" onClick={clasificar} disabled={ocupado}>{ocupado ? "Leyendo…" : lead.departamento ? "Volver a clasificar" : "Clasificar ahora"}</button>
+      </div>
+      {aviso && <p className="pv3-small" style={{ marginTop: 8 }}>{aviso}</p>}
+    </div>
+  );
+}
+
 function Historial({ items, campo, vacio }) {
   if (!Array.isArray(items) || items.length === 0) {
     return <p className="pv3-small" style={{ marginTop: 10 }}>{vacio}</p>;
@@ -802,18 +842,9 @@ function Inteligencia({ datos }) {
   );
 }
 
-/**
- * Qué hace Nesped solo.
- *
- * El orden de los modos —avisar, preparar, hacerlo solo— no es decorativo:
- * describe cómo se gana la confianza. Nada arranca pudiendo ejecutar, y nada
- * puede llegar a "hacerlo solo" mientras el canal que necesita no exista.
- *
- * Se enseña el modo EFECTIVO, no el guardado. Si alguien dejó un agente en
- * automático y luego se cayó el canal, aquí sale lo que de verdad va a pasar.
- * Un interruptor que dice "encendido" con la bombilla fundida es peor que uno
- * apagado.
- */
+/* Los automatismos, la configuración de la IA y los departamentos viven en
+   ./ia.js: son pantallas de edición largas con su propio estado. */
+
 /**
  * Preguntarle a Nesped.
  *
@@ -913,81 +944,6 @@ function Copiloto({ hayDatos }) {
   );
 }
 
-function Agentes({ datos, onCambiado }) {
-  const [tocando, setTocando] = useState("");
-  const [aviso, setAviso] = useState("");
-
-  if (!datos) return <Vacio>No hemos podido leer los automatismos.</Vacio>;
-
-  const { agentes = [], modos = [] } = datos;
-
-  async function cambiar(agenteId, modo) {
-    setTocando(`${agenteId}:${modo}`);
-    setAviso("");
-    try {
-      const res = await fetch("/api/portal/agentes", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agenteId, modo }),
-      });
-      const json = await res.json().catch(() => null);
-      if (!res.ok || !json?.success) {
-        setAviso(json?.message || "No se pudo cambiar.");
-        return;
-      }
-      await onCambiado();
-    } finally {
-      setTocando("");
-    }
-  }
-
-  return (
-    <div className="pv3-view">
-      <div className="ag-lista">
-        {agentes.map((a) => (
-          <div className="ag-tarjeta" key={a.id} data-bloqueado={a.puedeEjecutar ? undefined : "1"}>
-            <div className="ag-fila">
-              <div>
-                <div className="ag-nombre">{a.nombre}</div>
-                <p className="ag-que">{a.queHace}</p>
-                <p className="ag-cuando">{a.cuandoActua}</p>
-              </div>
-
-              <div className="ag-modos">
-                {modos.map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    className="ag-modo"
-                    aria-pressed={a.modoEfectivo === m.id}
-                    title={m.descripcion}
-                    disabled={
-                      (m.id === "solo" && !a.puedeEjecutar) ||
-                      tocando === `${a.id}:${m.id}`
-                    }
-                    onClick={() => cambiar(a.id, m.id)}
-                  >
-                    {m.nombre}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {a.motivoBloqueo && <p className="ag-bloqueo">{a.motivoBloqueo}</p>}
-          </div>
-        ))}
-      </div>
-
-      {aviso && <p className="pv3-p" style={{ marginTop: 14, color: "var(--bad)" }}>{aviso}</p>}
-
-      <p className="pv3-p" style={{ marginTop: 20, fontSize: 13, color: "var(--muted)", maxWidth: "70ch" }}>
-        Todo lo que haga un agente queda registrado con su hora en el historial
-        de la cuenta, hagas lo que hagas con estos interruptores.
-      </p>
-    </div>
-  );
-}
-
 function Resumen({ datos }) {
   const m = datos.metrics || {};
   const pipeline = datos.pipeline || {};
@@ -1023,7 +979,7 @@ function Resumen({ datos }) {
         <Tarjeta label="LLAMADAS" valor={num(m.totalCalls)} detalle={`${duracion(m.avgDuration)} de media`} retraso={0} />
         <Tarjeta label="LEADS" valor={num(m.totalLeads)} detalle={`${num(m.hotLeads)} calientes`} retraso={60} />
         <Tarjeta label="CONVERSIÓN" valor={`${num(m.conversionRate)}%`} detalle={`${num(m.wonLeads)} ganados`} retraso={120} />
-        <Tarjeta label="PIPELINE" valor={eur(m.totalPotentialRevenue)} detalle="Valor potencial estimado" retraso={180} />
+        <Tarjeta label="SIN RESPONDER" valor={num(m.sinResponder)} detalle={m.sinResponder ? "contactos nuevos esperando" : "nadie espera respuesta"} retraso={180} />
       </div>
 
       <div className="pv3-grid" data-c="2">
@@ -1170,7 +1126,7 @@ function Leads({ datos, onRecargar, onMas }) {
           <table className="pv3-table">
             <thead>
               <tr>
-                <th>NOMBRE</th><th>TELÉFONO</th><th>ESTADO</th><th>SCORE</th>
+                <th>NOMBRE</th><th>TELÉFONO</th><th>ESTADO</th><th>DEPTO.</th><th>SCORE</th>
                 <th>VALOR</th><th>INTERÉS</th><th>SIGUIENTE PASO</th><th>ALTA</th>
               </tr>
             </thead>
@@ -1193,6 +1149,7 @@ function Leads({ datos, onRecargar, onMas }) {
                   <td className="pv3-strong">{l.nombre || l.customer_name || "Sin nombre"}</td>
                   <td>{l.telefono || l.phone || "—"}</td>
                   <td><Tag estado={l.status || "new"} /></td>
+                  <td>{l.departamento ? <span className="pv3-tag" data-t="grey">{l.departamento}</span> : "—"}</td>
                   <td>{l.score != null ? num(l.score) : "—"}</td>
                   <td>{l.valor_estimado ? eur(l.valor_estimado) : "—"}</td>
                   <td style={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis" }}>{l.interes || "—"}</td>
@@ -2040,18 +1997,6 @@ function Ajustes({ datos, onRecargar }) {
           <CodigosRecuperacion />
         </div>
 
-        <div className="pv3-card">
-          <div className="pv3-lab">OBJETIVOS</div>
-          <div style={{ marginTop: 14, display: "grid", gap: 11 }}>
-            <div className="pv3-row"><span className="pv3-small">Leads al mes</span><span className="pv3-strong">{num(s.monthly_target_leads)}</span></div>
-            <div className="pv3-row"><span className="pv3-small">Conversión objetivo</span><span className="pv3-strong">{num(s.monthly_target_conversion)}%</span></div>
-            <div className="pv3-row"><span className="pv3-small">Valor por operación</span><span className="pv3-strong">{eur(s.default_deal_value)}</span></div>
-            <div className="pv3-row"><span className="pv3-small">Refresco en tiempo real</span><span className="pv3-strong">{num(s.realtime_refresh_seconds)} s</span></div>
-          </div>
-          <p className="pv3-p" style={{ marginTop: 16, color: "var(--muted)" }}>
-            Los cambias más abajo, en esta misma pantalla.
-          </p>
-        </div>
       </div>
 
       <h2 className="pv3-h2">Objetivos y avisos</h2>
@@ -2429,6 +2374,12 @@ function Conversaciones({ inbox, cargando, onRecargar }) {
                           json?.message;
                         if (!texto) throw new Error("No se pudo generar una sugerencia.");
                         setMensaje(texto);
+                        /* Si la IA no está, lo que llega es una plantilla, y
+                           se dice: nadie debe mandar una plantilla creyendo
+                           que la escribió la IA con el contexto delante. */
+                        if (json?.data?.iaActiva === false || json?.iaActiva === false) {
+                          throw new Error(`Plantilla base (la IA no está: ${json?.data?.motivoSinIA || json?.motivoSinIA || "apagada"}). Revísala antes de enviar.`);
+                        }
                       }}
                     >
                       Sugerir respuesta
@@ -2732,7 +2683,9 @@ class Aislante extends React.Component {
 /** Encabezado de cada vista: antetítulo, título y una línea que la explica. */
 const META = {
   inteligencia: ["INTELIGENCIA", "Qué está pasando", "Lo que Nesped puede afirmar hoy sobre tu negocio, y con qué fundamento."],
+  ia: ["TU IA", "Cómo trabaja tu IA", "Cómo habla, qué puede, cuándo pasa a una persona. Y pruébalo antes de guardar."],
   agentes: ["AUTOMATISMOS", "Qué hace Nesped solo", "Qué vigila, cuándo salta y cuánta libertad le das."],
+  avisos: ["DEPARTAMENTOS Y AVISOS", "A quién le llega cada contacto", "Los departamentos de tu empresa y quién recibe cada uno por correo."],
   resumen: ["PANEL", "Resumen", "Lo que ha pasado y lo que hay abierto ahora mismo."],
   leads: ["CAPTACIÓN", "Leads", "Todo lo que la voz ha capturado, en lista o por fases."],
   llamadas: ["REGISTRO", "Llamadas", "Cada conversación, con grabación y transcripción."],
@@ -2976,7 +2929,9 @@ export default function PortalV3() {
 
     switch (vista) {
       case "inteligencia": return <Inteligencia datos={datosVista} />;
-      case "agentes": return <Agentes datos={datosVista} onCambiado={() => recargarSeccion("agentes")} />;
+      case "ia": return <ConfiguracionIA />;
+      case "agentes": return <Automatismos canalEnPlan={tieneFuncion(planDe(datos.client), "agentes")} />;
+      case "avisos": return <DepartamentosYAvisos />;
       case "resumen": return <Resumen datos={datos} />;
       case "leads": return <Leads datos={datos} onRecargar={recargar} onMas={() => cargarMas("leads")} />;
       case "llamadas": return <Llamadas datos={datos} onMas={() => cargarMas("calls")} />;
@@ -3103,6 +3058,11 @@ export default function PortalV3() {
                   <span className="pv3-dot" /> {TEXTO_ESTADO[estadoNucleo]}
                 </span>
                 <span className="pv3-live-dice">{FRASE_ESTADO[estadoNucleo] || FRASE_ESTADO.IDLE}</span>
+                {datos?.ia && !datos.ia.activa ? (
+                  <button type="button" className="pv3-ia-off" onClick={() => abrir("ia")} title={datos.ia.motivo}>
+                    IA apagada · {datos.ia.motivo}
+                  </button>
+                ) : null}
               </span>
             </span>
           </div>

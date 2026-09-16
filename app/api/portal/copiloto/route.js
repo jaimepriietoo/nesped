@@ -6,6 +6,7 @@ import { evaluarInteligencia } from "@/lib/server/inteligencia";
 import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 import { limpiarItems, limpiarTextoAjeno } from "@/lib/server/texto-ajeno";
 import { observeRoute } from "@/lib/server/observability.mjs";
+import { iaDisponible } from "@/lib/server/estado-ia";
 
 /**
  * Preguntarle a Nesped.
@@ -128,10 +129,12 @@ async function manejarPOST(req) {
       });
     }
 
-    if (!process.env.OPENAI_API_KEY) {
+    const ia = await iaDisponible(ctx.clientId);
+    if (!ia.ok) {
       return Response.json({
         success: false,
-        message: "El copiloto no está configurado en este entorno.",
+        iaDesactivada: true,
+        message: `El copiloto no puede contestar: ${ia.motivo}`,
       }, { status: 503 });
     }
 

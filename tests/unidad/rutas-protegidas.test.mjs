@@ -30,6 +30,10 @@ const RAIZ = path.resolve(import.meta.dirname, "../..");
 const PUBLICAS = [
   "", "login", "registro", "precios", "legal", "gracias", "demo",
   "contacto", "blog", "casos", "producto", "soluciones", "recuperar",
+  /* Restablecer la contraseña con el enlace del correo. No enseña datos de
+     nadie: pide un correo o una contraseña nueva, y el servidor contesta
+     lo mismo exista o no la cuenta. */
+  "restablecer",
   /* Alias en inglés de /precios. */
   "pricing",
   /* La ficha de una empresa por su enlace, para que pueda repartirlo. Pinta

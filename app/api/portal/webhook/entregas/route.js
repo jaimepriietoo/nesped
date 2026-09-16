@@ -13,7 +13,7 @@ import { reintentarEntrega } from "@/lib/server/webhooks-salientes";
 async function manejarGET(req) {
   const ctx = await getPortalContext();
   if (!ctx.ok) return Response.json({ success: false, message: "No autorizado", data: [] }, { status: 401 });
-  if (!puede(ctx.role, "api.test")) return Response.json({ success: false, message: "Sin permisos", data: [] }, { status: 403 });
+  if (!puede(ctx.role, "api.test", ctx.permissions)) return Response.json({ success: false, message: "Sin permisos", data: [] }, { status: 403 });
 
   const url = new URL(req.url);
   const estado = String(url.searchParams.get("estado") || "").trim();
@@ -38,7 +38,7 @@ async function manejarPOST(req) {
   if (originError) return originError;
   const ctx = await getPortalContext();
   if (!ctx.ok) return Response.json({ success: false, message: "No autorizado" }, { status: 401 });
-  if (!puede(ctx.role, "api.test")) return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
+  if (!puede(ctx.role, "api.test", ctx.permissions)) return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
 
   const body = await req.json().catch(() => ({}));
   const id = String(body?.entrega || "").trim();

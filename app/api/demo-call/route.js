@@ -123,7 +123,7 @@ async function handlePost(req) {
     const body = await req.json();
     const telefono = normalizePhone(body.telefono);
     const ctx = await getPortalContext();
-    if (ctx.ok && !puede(ctx.role, "voice.demo")) {
+    if (ctx.ok && !puede(ctx.role, "voice.demo", ctx.permissions)) {
       return Response.json({ success: false, message: "Sin permisos para llamar" }, { status: 403 });
     }
     const clientId = ctx.ok ? ctx.clientId : "demo";

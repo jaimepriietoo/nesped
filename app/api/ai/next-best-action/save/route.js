@@ -30,7 +30,7 @@ async function manejarPOST(req) {
 
       const ctx = await getPortalContext();
       if (!ctx.ok) return Response.json({ success: false, message: ctx.message }, { status: 401 });
-      if (!puede(ctx.role, "ai.use")) return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
+      if (!puede(ctx.role, "ai.use", ctx.permissions)) return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
       supabase = ctx.supabase;
       clientId = ctx.clientId;
       actor = ctx.currentUser?.full_name || ctx.userEmail || "portal";

@@ -4,11 +4,9 @@ Una voz que contesta el teléfono de un negocio, apunta quién ha llamado y qué
 quería, y lo deja en un CRM. **Twilio** pone la línea, **ElevenLabs Agents**
 lleva la conversación entera y Nesped guarda contexto, contactos y llamadas.
 
-> **Hay número (+34 883 827 930) pero aún no está conectado.** Está en otra
-> cuenta de Twilio distinta de la configurada, y el agente de ElevenLabs no lo
-> tiene asignado, así que hoy no entra ni sale ninguna llamada. Los pasos y el
-> guion que lo conecta (`npm run conectar:numero`) están en
-> [`docs/voz-elevenlabs-twilio.md`](docs/voz-elevenlabs-twilio.md).
+> **Número de voz: +34 883 827 930**, conectado a ElevenLabs y asignado a la
+> empresa `fibergreen` el 17 de septiembre de 2026. Cómo se conectó y cómo
+> cambiarlo: [`docs/voz-elevenlabs-twilio.md`](docs/voz-elevenlabs-twilio.md).
 
 ## Arrancar
 

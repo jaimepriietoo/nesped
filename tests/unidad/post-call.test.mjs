@@ -1,6 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import { persistElevenLabsCall } from "../../lib/server/elevenlabs.js";
+
+const RAIZ = path.resolve(import.meta.dirname, "../..");
 
 /**
  * El webhook post-call de ElevenLabs no puede duplicar una llamada.
@@ -107,4 +111,18 @@ test("sin identificador de conversación no se reclama nada y se procesa igual",
   const resultado = await persistElevenLabsCall({ supabase: bd, payload: sinId });
   assert.notEqual(resultado.duplicated, true);
   assert.equal(bd.apuntes.some((a) => a.rpc === "reclamar_webhook"), false);
+});
+
+test("el webhook de inicio contesta con la forma que ElevenLabs espera y siempre contesta", () => {
+  const s = fs.readFileSync(path.join(RAIZ, "app/api/voice/elevenlabs/context/route.js"), "utf8");
+  assert.match(s, /type: "conversation_initiation_client_data"/);
+  assert.match(s, /body\?\.caller_id/, "lee lo que manda ElevenLabs (snake_case)");
+  assert.match(s, /nombre_empresa:/);
+  assert.match(s, /contexto_empresa:/, "lleva la configuración de Tu IA a la llamada");
+  assert.match(s, /requireInternalRequest\(req\)/);
+  /* Y si el CRM falla, devuelve variables vacías en vez de un 500: mejor una
+     llamada atendida a secas que un agente que no descuelga. */
+  const catchBlock = s.slice(s.indexOf("} catch (error) {"));
+  assert.match(catchBlock, /type: "conversation_initiation_client_data"/);
+  assert.doesNotMatch(catchBlock, /status: 500/);
 });

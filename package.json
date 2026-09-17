@@ -23,7 +23,8 @@
     "probar:voz": "node scripts/probar-voz.mjs",
     "probar:conversacion": "node scripts/probar-conversacion.mjs",
     "volcar:migraciones": "node scripts/volcar-migraciones.mjs",
-    "revisar:shaders": "node scripts/revisar-shaders.mjs"
+    "revisar:shaders": "node scripts/revisar-shaders.mjs",
+    "conectar:numero": "node scripts/conectar-numero.mjs"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.50.0",

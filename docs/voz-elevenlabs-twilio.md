@@ -20,21 +20,29 @@ pasaron a Twilio (`lib/server/twilio.js`).
 
 ## Lo que falta para que suene el teléfono
 
-**No hay ningún número.** Comprobado el 2026-09-09: la cuenta de Twilio está
-activa y es de pago pero tiene cero líneas, y la de Telnyx también cero. El
-agente `Nesped · Recepción` existe en ElevenLabs y no tiene número asignado.
+**Hay número: +34 883 827 930** (desde el 17 de septiembre de 2026). Está en
+**otra cuenta de Twilio**, no en la que tiene Nesped en `.env.local`/Vercel
+(`AC9ff7…`, que sigue con cero líneas). Hasta que no se conecte, no entra ni
+sale ninguna llamada. Los pasos, y el guion que los hace:
 
-Hasta que eso se resuelva, no entra ni sale ninguna llamada. Los pasos:
+1. En `.env.local` y en Vercel, poner `TWILIO_ACCOUNT_SID` y
+   `TWILIO_AUTH_TOKEN` **de la cuenta que tiene el número**, y
+   `TWILIO_PHONE_NUMBER=+34883827930`. (Los WhatsApp/SMS salen de la misma
+   cuenta: si la otra cuenta no tiene remitente de WhatsApp, esa parte
+   quedará sin conectar, como hoy.)
+2. `npm run conectar:numero -- --empresa=<id>` (`scripts/conectar-numero.mjs`):
+   comprueba que el número está en esa cuenta y tiene voz, lo importa en
+   ElevenLabs y lo asigna al agente `Nesped · Recepción` (ElevenLabs deja
+   configurado el número en Twilio), y guarda `clients.twilio_number` en la
+   empresa. Con `--solo-comprobar` no cambia nada.
+3. Poner en Vercel el `ELEVENLABS_PHONE_NUMBER_ID` que imprime el guion y
+   redesplegar. Sin él, la llamada de demostración contesta 503 y el panel
+   de salud marca la telefonía en amarillo, que es lo correcto.
+4. Llamar al número. La llamada tiene que aparecer en Llamadas del portal de
+   esa empresa en menos de un minuto de colgar.
 
-1. Comprar un número en Twilio con capacidad de voz. Para España, uno `+34`.
-2. En ElevenLabs, **Phone Numbers → Import from Twilio**, con el SID y el token
-   de la cuenta. ElevenLabs devuelve un `phone_number_id`.
-3. Asignar ese número al agente `Nesped · Recepción`.
-4. Poner `ELEVENLABS_PHONE_NUMBER_ID` en Vercel con ese id. Sin él, la llamada
-   de demostración contesta 503 y el panel de salud marca la telefonía en
-   amarillo, que es lo correcto: no está lista.
-5. Actualizar `voiceNumber` en `lib/clients.js` y el `twilio_number` de cada
-   empresa, que hoy apuntan a un `+34983460825` que ya no es de nadie.
+El `+34983460825` que había en los seeds de `lib/clients.js` ya no es de
+nadie y se ha quitado.
 
 ## Variables de entorno
 

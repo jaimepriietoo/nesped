@@ -5,8 +5,10 @@ quería, y lo deja en un CRM. **Twilio** pone la línea, **ElevenLabs Agents**
 lleva la conversación entera y Nesped guarda contexto, contactos y llamadas.
 
 > **Número de voz: +34 883 827 930**, conectado a ElevenLabs y asignado a la
-> empresa `fibergreen` el 17 de septiembre de 2026. Cómo se conectó y cómo
-> cambiarlo: [`docs/voz-elevenlabs-twilio.md`](docs/voz-elevenlabs-twilio.md).
+> empresa `nesped` (la cuenta propia) desde el 18 de septiembre de 2026. Cómo
+> se conectó y cómo cambiarlo: [`docs/voz-elevenlabs-twilio.md`](docs/voz-elevenlabs-twilio.md).
+> Si las llamadas no aparecen en el portal: `docs/cuando-se-cae-algo.md` →
+> "Las llamadas no llegan".
 
 ## Arrancar
 

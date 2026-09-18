@@ -102,7 +102,7 @@ const OFICIOS = {
 
 /** El mantenimiento se pide una vez al día, y se pide solo. */
 async function pedirMantenimientoDelDia() {
-  const { error } = await getSupabase().rpc("purgar_seguridad_caducada");
+  const { error } = await getSupabase().rpc("purgar_seguridad_caducada", { p_lote: 5000 });
   if (error) throw new Error("No se pudo limpiar el estado de seguridad caducado");
   const hoy = new Date().toISOString().slice(0, 10);
   await encolar({
@@ -222,6 +222,9 @@ async function procesar(req) {
       fallidos,
     });
   } catch (error) {
+    /* Se registra: una pasada que falla en silencio es una cola parada sin
+       que nadie sepa por qué. logEvent en error avisa a operaciones. */
+    logEvent("error", "cola.pasada_fallida", { error: String(error?.message || error).slice(0, 300) });
     return Response.json(
       { success: false, message: "Error procesando la cola" },
       { status: 500 }

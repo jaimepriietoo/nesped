@@ -1,0 +1,14 @@
+-- Una sola purgar_seguridad_caducada().
+--
+-- Había dos: la de Codex sin parámetros y la de la fase de operaciones con
+-- p_lote. PostgREST no sabe cuál elegir cuando se llama sin argumentos
+-- ("Could not choose the best candidate function"), y como la primera
+-- pasada de la cola la llama así, TODAS las pasadas de la cola fallaban con
+-- 500 desde el 15 de septiembre: ningún trabajo se procesaba. El código
+-- llama ya con p_lote explícito; esto quita la ambigüedad de raíz.
+--
+-- PENDIENTE DE APLICAR: escrita el 18-09-2026 sin acceso DDL desde el
+-- repositorio. Aplicar desde el editor SQL de Supabase (o con la
+-- herramienta de migraciones cuando vuelva) y ejecutar
+-- `npm run volcar:migraciones`.
+drop function if exists public.purgar_seguridad_caducada();

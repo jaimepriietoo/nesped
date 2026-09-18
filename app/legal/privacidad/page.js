@@ -88,9 +88,11 @@ export default function Privacidad() {
 
       <h2>Grabación de llamadas</h2>
       <p>
-        Antes de que el agente empiece a hablar se avisa de que la llamada la
-        atiende una inteligencia artificial y de que se graba. Quien llama puede
-        pedir otra vía de contacto en cualquier momento y no se insiste.
+        Al descolgar, la asistente dice que es una asistente virtual y que la
+        llamada se graba para atender mejor. Quien llama puede pedir otra vía de
+        contacto en cualquier momento y no se insiste. La explicación corta para
+        quien acaba de llamar, con cómo pedir su grabación o su borrado, está en{" "}
+        <a href="/llamadas">nesped.com/llamadas</a>.
       </p>
       <p>
         Las grabaciones se conservan{" "}

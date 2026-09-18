@@ -19,5 +19,6 @@ export default function sitemap() {
     { url: `${BASE}/legal/terminos`, lastModified: ahora, changeFrequency: "yearly", priority: 0.3 },
     { url: `${BASE}/legal/cookies`, lastModified: ahora, changeFrequency: "yearly", priority: 0.2 },
     { url: `${BASE}/legal/voice-compliance`, lastModified: ahora, changeFrequency: "yearly", priority: 0.3 },
+    { url: `${BASE}/llamadas`, lastModified: ahora, changeFrequency: "yearly", priority: 0.3 },
   ];
 }

@@ -34,6 +34,9 @@ const PUBLICAS = [
      nadie: pide un correo o una contraseña nueva, y el servidor contesta
      lo mismo exista o no la cuenta. */
   "restablecer",
+  /* Información para quien llama: es el "más información" del aviso que
+     da la asistente al descolgar. No enseña datos de nadie. */
+  "llamadas",
   /* Alias en inglés de /precios. */
   "pricing",
   /* La ficha de una empresa por su enlace, para que pueda repartirlo. Pinta

@@ -132,7 +132,7 @@ export function Footer() {
               <a className="v3-foot-link" href="/legal/privacidad">Privacidad</a>
               <a className="v3-foot-link" href="/legal/terminos">Términos</a>
               <a className="v3-foot-link" href="/legal/cookies">Cookies</a>
-              <a className="v3-foot-link" href="/legal/voice-compliance">Grabaciones</a>
+              <a className="v3-foot-link" href="/llamadas">Tu llamada</a>
             </div>
             <div>
               <span className="v3-foot-title">Contacto</span>

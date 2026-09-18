@@ -17,7 +17,7 @@ const RAIZ = path.resolve(import.meta.dirname, "../..");
  * Lo que esta prueba sujeta, con una base de datos simulada que apunta lo
  * que se le pide:
  *
- *   1. la llamada se escribe con upsert sobre (client_id, call_sid), que es
+ *   1. la llamada se escribe una vez por (client_id, call_sid), que es
  *      lo que hace atómica la operación junto con el índice único;
  *   2. lo que viene después —eventos, consumo— se hace UNA vez por
  *      conversación: la segunda entrega ve reclamar_webhook() en false y no
@@ -74,17 +74,27 @@ const PAYLOAD = {
   },
 };
 
-test("la llamada se guarda con upsert sobre (client_id, call_sid)", async () => {
+/* La fake devuelve `filas[tabla]` a cualquier select: con calls sin filas
+   (null) el código inserta; con una fila, actualiza. */
+test("la llamada se guarda por (client_id, call_sid): inserta si no está, actualiza si está; nunca upsert", async () => {
   const bd = baseFalsa({ filas: { clients: EMPRESA, leads: [] }, reclamar: true });
   await persistElevenLabsCall({ supabase: bd, payload: PAYLOAD });
 
   const escrituras = bd.apuntes.filter((a) => a.tabla === "calls" && a.op !== "select");
   assert.equal(escrituras.length, 1, "una sola escritura en calls");
-  assert.equal(escrituras[0].op, "upsert");
-  assert.equal(escrituras[0].opciones?.onConflict, "client_id,call_sid");
+  assert.equal(escrituras[0].op, "insert", "no estaba: se inserta");
   assert.equal(escrituras[0].datos.call_sid, "conv_123");
   assert.equal(escrituras[0].datos.client_id, "demo");
-  assert.equal(bd.apuntes.some((a) => a.tabla === "calls" && a.op === "insert"), false, "ningún insert a pelo");
+  /* upsert con onConflict sobre el índice parcial fallaba SIEMPRE en
+     PostgREST ("no unique or exclusion constraint"): ninguna llamada real se
+     guardó hasta que se quitó. Que no vuelva. */
+  assert.equal(bd.apuntes.some((a) => a.tabla === "calls" && a.op === "upsert"), false, "nada de upsert en calls");
+
+  const ya = baseFalsa({ filas: { clients: EMPRESA, leads: [], calls: { id: "c-1" } }, reclamar: true });
+  await persistElevenLabsCall({ supabase: ya, payload: PAYLOAD });
+  const escrituras2 = ya.apuntes.filter((a) => a.tabla === "calls" && a.op !== "select");
+  assert.equal(escrituras2.length, 1);
+  assert.equal(escrituras2[0].op, "update", "ya estaba: se actualiza");
 });
 
 test("la segunda entrega del mismo webhook no vuelve a anotar consumo ni eventos", async () => {
@@ -97,9 +107,9 @@ test("la segunda entrega del mismo webhook no vuelve a anotar consumo ni eventos
   const resultado = await persistElevenLabsCall({ supabase: segunda, payload: PAYLOAD });
 
   assert.equal(resultado.duplicated, true);
-  /* La llamada sí se vuelve a escribir —es un upsert, no pasa nada— pero
-     nada más: ni consumo, ni eventos, ni auditoría. */
-  assert.equal(segunda.apuntes.filter((a) => a.tabla === "calls" && a.op === "upsert").length, 1);
+  /* La llamada sí se vuelve a escribir —misma fila— pero nada más: ni
+     consumo, ni eventos, ni auditoría. */
+  assert.equal(segunda.apuntes.filter((a) => a.tabla === "calls" && a.op !== "select").length, 1);
   assert.equal(segunda.apuntes.filter((a) => a.rpc === "anotar_consumo").length, 0);
   assert.equal(segunda.apuntes.filter((a) => a.tabla === "lead_events" && a.op === "insert").length, 0);
   assert.equal(segunda.apuntes.filter((a) => a.tabla === "audit_logs" && a.op === "insert").length, 0);

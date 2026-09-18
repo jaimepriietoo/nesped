@@ -132,6 +132,30 @@ cargos inesperados; una clave en un sitio público.
 **Comunicación.** Si hubo acceso a datos personales, es un incidente RGPD:
 72 horas para notificar a la AEPD. Guardar la línea temporal.
 
+## Las llamadas no llegan al portal
+
+**Detección.** Se hacen llamadas y no aparecen en Llamadas; `calls` no crece;
+`webhook_events` sin filas nuevas de `elevenlabs`.
+**Lo que ya pasó (16–18 de septiembre de 2026), por si se repite.**
+1. El webhook post-call de ElevenLabs apuntaba a `https://nesped.com/…`, que
+   Vercel redirige con 307 a `www`; ElevenLabs no sigue redirecciones en
+   POST. Los webhooks tienen que ir siempre a **`https://www.nesped.com`**.
+2. `persistElevenLabsCall` usaba `upsert` con `onConflict` sobre un índice
+   parcial: PostgREST lo rechaza siempre. Ahora busca y actualiza o inserta.
+3. Una llamada de un número desconocido reventaba al escribir `lead_events`
+   sin `lead_id`. Ahora, sin contacto no hay evento y la llamada se guarda.
+4. La cola llevaba parada desde el 15 porque `purgar_seguridad_caducada`
+   tenía dos versiones y PostgREST no elegía; cada pasada devolvía 500 en
+   silencio. Se llama con `p_lote` explícito y queda una migración
+   pendiente que borra la versión sin parámetros.
+**Recuperación.** `node --import ./tests/alias.mjs scripts/recuperar-llamadas.mjs --desde=AAAA-MM-DD [--empresa=<id>]`
+trae de ElevenLabs las conversaciones que no llegaron y las pasa por el
+mismo camino que el webhook. Si el latido de Railway no procesa la cola,
+`node --import ./tests/alias.mjs scripts/procesar-cola-local.mjs` la
+procesa desde el portátil con el `.env.local`.
+**Verificación.** La siguiente llamada aparece en el portal en menos de un
+minuto, con grabación (la baja la cola de ElevenLabs) y contacto clasificado.
+
 ## Despliegue defectuoso
 
 **Detección.** Sentry se llena tras un despliegue; los e2e de `verificar`

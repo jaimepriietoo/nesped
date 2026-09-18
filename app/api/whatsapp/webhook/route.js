@@ -153,7 +153,7 @@ async function getLeadHistoryForClient(phone, clientId) {
     const { data, error } = await supabase
       .from("lead_events")
       .select("*")
-      .eq("phone", phone)
+      .eq("meta->>phone", normalizePhone(phone))
       .eq("client_id", clientId)
       .order("created_at", { ascending: false })
       .limit(80);
@@ -176,17 +176,18 @@ async function saveLeadEventForClient({
   message,
   meta = null,
 }) {
-  try {
-    await supabase.from("lead_events").insert({
-      client_id: clientId,
-      lead_id: leadId,
-      phone,
-      type,
-      message: meta ? JSON.stringify({ message, meta }) : message,
-    });
-  } catch (err) {
-    console.error("Error guardando evento:", err);
-  }
+  /* lead_events no tiene columnas phone ni message: son title/description/
+     meta. Antes se insertaba con las columnas viejas, supabase-js no lanza,
+     y el historial de WhatsApp se perdía sin un solo aviso. */
+  const { error } = await supabase.from("lead_events").insert({
+    client_id: clientId,
+    lead_id: leadId,
+    type,
+    title: type,
+    description: String(message || ""),
+    meta: { ...(meta || {}), phone: normalizePhone(phone) },
+  });
+  if (error) console.error("Error guardando evento:", error.message);
 }
 
 async function findLeadByPhone(phone, clientId) {
@@ -758,7 +759,8 @@ const historyText = history
   .slice(0, 12)
   .reverse()
   .map((e) => {
-    let content = e.message;
+    /* Filas nuevas: description. Filas viejas: message (texto o JSON). */
+    let content = e.description ?? e.message ?? "";
     try {
       const parsed = JSON.parse(e.message);
       if (parsed?.message) content = parsed.message;

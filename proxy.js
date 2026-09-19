@@ -24,7 +24,9 @@ const CONEXIONES = [
 ];
 
 /** Orígenes desde los que se sirven medios (el vídeo de la portada). */
-const MEDIOS = ["'self'", "blob:", "data:", "https://*.cloudfront.net"];
+/* Las grabaciones propias se sirven desde el almacenamiento de Supabase con
+   una dirección firmada; sin este origen el navegador bloquea el <audio>. */
+const MEDIOS = ["'self'", "blob:", "data:", "https://*.cloudfront.net", "https://*.supabase.co"];
 
 /**
  * Devuelve la directiva de scripts.

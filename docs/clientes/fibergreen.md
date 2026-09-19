@@ -1,75 +1,85 @@
 # Fibergreen — lo que la asistente sabe
 
-Recogido de fibergreen.es y de las "Condiciones generales de las ofertas
-desde el 17/07/2025" el 19 de septiembre de 2026. Lo que se pasa a la IA en
-cada llamada está en Tu IA → "con tus palabras" de la empresa `fibergreen`
-(versión corta, cabe en 4.000 caracteres); esto es la referencia completa.
-**Los precios cambian: revisar cada vez que Fibergreen saque oferta nueva.**
+Tomado de lo que **se ve** en fibergreen.es el 19 de septiembre de 2026
+(portada, fibra, solo fibra, líneas adicionales, wimax, TV, alarmas,
+empresas, contacto), tarjeta a tarjeta con el navegador; nada de PDFs ni de
+bloques ocultos. La versión corta viaja al agente en cada llamada desde
+Tu IA → "con tus palabras" de la empresa `fibergreen` (cabe en 4.000
+caracteres). **Cuando Fibergreen cambie la web, hay que actualizar esto.**
 
 ## La empresa
-- Primer operador de fibra óptica de Castilla y León; red propia; misión:
-  llevar fibra a zonas rurales. Sede: C/ Cromo 46B, Pol. Ind. San Cristóbal,
-  47012 Valladolid. CIF B-47784814.
+- Operador de fibra óptica y móvil de referencia en las zonas rurales de
+  Castilla y León; red propia; "conectamos tu mundo".
+- Sede: C/ Cromo 46B, Pol. Ind. San Cristóbal, 47012 Valladolid (CIF B-47784814).
 - Tiendas: C/ Enrique Cubero 164, 47014 Valladolid · Plaza San Lázaro 6,
-  34001 Palencia. Horario: L–V 9:00–14:00 y 17:00–20:00; sábados 10:00–14:00
-  (Valladolid).
-- Teléfonos: 983 090 909 (Valladolid) · 979 050 205 (Palencia) · 900 899 140
-  (atención al cliente / cobertura SMART / bonos) · 900 899 399 · alarmas
-  983 91 25 45. Correo: atencionalcliente@fibergreen.es. Área de cliente:
-  clientes.fibergreen.es.
-- Cobertura: municipios de Ávila, León, Burgos, Palencia, Salamanca,
-  Valladolid y Zamora; ciudades como Valladolid, Palencia, Arroyo de la
-  Encomienda, Laguna de Duero. La 1.000 Mb depende de la zona. Se comprueba
-  por dirección exacta.
+  34001 Palencia. Horario: L–V 9:00–14:00 y 17:00–20:00; sábados
+  10:00–14:00 (Valladolid).
+- Teléfonos: 983 090 909 (Valladolid) · 979 050 205 (Palencia) ·
+  900 899 140 (atención al cliente y cobertura SMART) · alarmas 983 91 25 45.
+  Correo: atencionalcliente@fibergreen.es. Área de cliente: clientes.fibergreen.es.
+- Cobertura: se comprueba por código postal / dirección en la web; la fibra
+  SMART sólo en zonas con red propia de Fibergreen. Donde no llega la fibra
+  hay Wimax.
 
-## Tarifas (IVA incluido, nuevas altas residenciales)
-**Fibra + móvil SMART** (sólo en zonas con red propia; promoción):
-- Fiber Max Pro SMART: 1 €/mes los 3 primeros meses, después 27 €/mes —
-  fibra 1.000 Mb + móvil 100 GB + llamadas ilimitadas + fijo flexible.
-- Fiber Max Total SMART: 1 €/mes 3 meses, después 29 €/mes — 1.000 Mb +
-  GB ilimitados + llamadas ilimitadas + fijo flexible.
-- Fiber SMART: 19,99 €/mes — 600 Mb + 1 línea con llamadas y GB ilimitados.
-- Fiber SMART PRO: 20,99 €/mes — 1.000 Mb + 1 línea con llamadas y GB ilimitados.
+## Promoción de portada ("¡Empieza el curso con Fibergreen!")
+- **Fiber SMART 19,99 €/mes**: fibra 600 Mb + 1 línea móvil con llamadas y
+  GB ilimitados + fijo "paga por lo que llamas".
+- **Por 1 € más al mes, 1.000 Mb** (es el Fiber SMART PRO, 20,99 €/mes).
+- **Líneas adicionales con 50 % de descuento.**
 
-**Fibra + móvil**
-- Fiber Max Lite: 25,99 €/mes — 600 Mb + móvil 60 GB + llamadas ilimitadas.
-- Fiber Max Pro: 27,99 €/mes — 1.000 Mb + 100 GB.
-- Fiber Max Total: 29,99 €/mes — 1.000 Mb + GB ilimitados.
-- Fiber Max Duo: 30,99 €/mes — 1.000 Mb + 2 líneas de 80 GB.
-- Fiber Max Duo+: 33,99 €/mes — 1.000 Mb + 2 líneas de 100 GB.
-- (Otras zonas) Fiber Lite: 300 Mb + móvil 5G 50 GB; Fiber Pro: 1.000 Mb + 100 GB.
+## Tarifas (€/mes, IVA incluido, tal como aparecen)
+**Fibra + móvil SMART** (zonas con red propia; incluye fijo flexible "paga por lo que llamas")
+- Fiber SMART: **19,99** — 600 Mb + 1 línea móvil, llamadas y GB ilimitados.
+- Fiber SMART PRO: **20,99** — 1.000 Mb + 1 línea móvil, llamadas y GB ilimitados.
 
-**Solo fibra**: Fiber Max Lite 27,99 €/mes (600 Mb) · Fiber Max Pro 29,99 €/mes
-(1.000 Mb). Fijo opcional.
+**Fibra + móvil** (todas con llamadas ilimitadas y fijo flexible)
+- Fiber Max Lite: **25** — 600 Mb + móvil 60 GB.
+- Fiber Max Pro: **27** — 1.000 Mb + móvil 100 GB.
+- Fiber Max Total: **29** — 1.000 Mb + GB ilimitados.
+- Fiber Max Duo: **30** — 1.000 Mb + 2 líneas de 80 GB cada una.
+- Fiber Max Duo+: **33** — 1.000 Mb + 2 líneas de 100 GB cada una.
 
-**Wimax** (donde no llega la fibra): Wimax Lite 25: 25,99 €/mes (25 Mb + 50 GB
-móvil) · Wimax Pro 50: 30,99 €/mes (50 Mb + 100 GB).
+**Solo fibra** (fijo opcional)
+- Fiber Max Lite Solo Fibra: **27,99** — 600 Mb.
+- Fiber Max Pro Solo Fibra: **29,99** — 1.000 Mb.
 
-**Líneas móviles adicionales** ("para siempre"): 5 €/mes 25 GB · 5,99 € 50 GB ·
-6,99 € 100 GB · 14,99 € GB ilimitados; todas con llamadas ilimitadas.
-**Fijo**: "flexible", pagas por lo que hablas; tarifa plana a fijos y móviles
-nacionales por 2,99 €/mes.
-**TV**: desde 5 €/mes, 3 primeros meses gratis (TDT, autonómicos, temáticos,
-a la carta); LaLiga Hypermotion +6 €/mes.
-**Alarmas**: Fiber Max Alarma 25 €/mes (35 € no clientes); Premium 35 €/mes
-(43 € no clientes). App, fotodetector, videovigilancia.
-**Empresas**: fibra hasta 1 Gb, IP fija incluida, fijo, móviles, centralita
-virtual. Presupuesto a medida.
-**Tarifa vulnerable**: 300 Mb por 25 €/mes IVA incluido (colectivos vulnerables).
+**Líneas móviles adicionales** (5G, llamadas ilimitadas; "a partir de 6 € al mes")
+- **6,99** — 60 GB · **7,99** — 100 GB · **9,99** — GB ilimitados.
 
-## Condiciones que importan al teléfono
-- Router WiFi 6 incluido. Alta (99 €) e instalación (299 €) **gratis** con
-  12 meses de permanencia. Baja antes de 6 meses: 299 €; del mes 7 al 12: 180 €.
-- Solo fibra con permanencia: depósito de garantía de 59 € en efectivo al
-  instalar, devuelto al dar de baja si se devuelven los equipos y se está al
-  corriente de pago.
-- Traslado de domicilio: 99 €, sólo con cobertura en la nueva dirección, y
-  nueva permanencia de 12 meses.
-- Móvil: cobertura 5G (red Orange). Al agotar los GB: 1 GB más a velocidad
-  reducida y después se corta hasta el mes siguiente; bonos llamando al
-  900 899 140. SMS nacional 0,15 €.
-- Ofertas exclusivas para nuevas altas; no aplican a domicilios/clientes que
-  ya tuvieron Fibergreen. Precio fijo "sin sorpresas".
-- Averías y soporte: se recoge qué pasa (luz del router, desde cuándo, si
-  han reiniciado) y se pasa a Soporte. Facturación: área de cliente o
-  atencionalcliente@fibergreen.es.
+**Wimax** (internet por ondas donde no hay fibra; fijo opcional)
+- Wimax Lite: **25** — 25 Mb + móvil 50 GB.
+- Wimax Pro: **30** — 50 Mb + móvil 100 GB.
+- Tarifa plana para el fijo: **2,99 €/mes** (llamadas ilimitadas a fijos + 500 min a móviles nacionales).
+
+**Televisión**: Fibergreen TV, **5 €/mes**, **primeros 3 meses gratis**, más de
+80 canales, multidispositivo (tele, PC, móvil, Smart TV, PlayStation).
+
+**Alarmas** (para clientes o no de Fibergreen)
+- Fiber Max Alarma: **25 €/mes** (35 € para no clientes) — central con doble
+  comunicación, teclado inalámbrico con sirena, 2 detectores IR, 1
+  fotodetector, 2 placas disuasorias, anti-inhibidores, control por app.
+- Fiber Max Alarma Premium: **35 €/mes** (43 € para no clientes) — lo mismo
+  con 3 detectores, 2 fotodetectores y cámara HD.
+
+**Empresas**: fibra óptica, líneas móviles 5G con llamadas ilimitadas,
+teléfono fijo (desde "paga por lo que llamas" hasta 5.000 minutos),
+centralita virtual, e internet inalámbrico hasta 300 Mbps en cualquier
+rincón de Castilla y León. Presupuesto a medida.
+
+## Lo que la web dice que incluye la fibra
+Router WiFi 6 incluido · alta e instalación del router gratuitas · precio
+fijo garantizado, "sin sorpresas en la factura" · asistencia técnica ·
+cobertura móvil 5G (red Orange) · llamadas ilimitadas a fijos y móviles
+nacionales en las tarifas con móvil.
+
+## Cómo actúa la asistente
+- Contratar / precio / cobertura → orienta con la tarifa que encaje, pide
+  la dirección exacta para comprobar cobertura, nombre y teléfono, y un
+  comercial llama para cerrarlo (Ventas). Precio final y condiciones
+  (permanencia, plazos) los confirma el comercial.
+- Avería / va lento → qué luz tiene el router, desde cuándo, si lo han
+  reiniciado; pasa a Soporte.
+- Facturas / cobros → Facturación (o el área de cliente).
+- Instalación / cita / traslado → Instalaciones.
+- Baja / portabilidad / cambio de titular → Administración.
+- Nunca promete fecha de instalación ni descuentos que no estén en la web.

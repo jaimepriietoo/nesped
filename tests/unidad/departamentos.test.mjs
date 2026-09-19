@@ -47,7 +47,7 @@ function baseFalsa(filas = {}) {
   const apuntes = [];
   const from = (tabla) => {
     const b = { _op: "select", _datos: null,
-      select() { return b; }, eq() { return b; }, order() { return b; }, limit() { return b; }, in() { return b; },
+      select() { return b; }, eq() { return b; }, gte() { return b; }, order() { return b; }, limit() { return b; }, in() { return b; },
       insert(d) { b._op = "insert"; b._datos = d; return b; }, update(d) { b._op = "update"; b._datos = d; return b; },
       maybeSingle() { return b; }, single() { return b; },
       then(r) { apuntes.push({ tabla, op: b._op, datos: b._datos }); const data = b._op === "select" ? (filas[tabla] ?? null) : b._datos; return Promise.resolve({ data, error: null }).then(r); },
@@ -119,4 +119,35 @@ test("en pruebas no sale ningún correo: queda apuntado como omitido", async () 
   const apuntadas = base.apuntes.filter((a) => a.tabla === "notificaciones_lead" && a.op === "insert");
   assert.equal(apuntadas.length, 2);
   assert.ok(apuntadas.every((a) => a.datos.estado === "omitido"));
+});
+
+test("cada llamada entera va a quien recibe copia de todo, sin repetir a quien acaba de recibir el aviso del contacto", async () => {
+  const { correoDeLlamada, notificarLlamada } = await import("@/lib/server/destinatarios");
+  const { asunto, html } = correoDeLlamada({ empresa: "Fibergreen", llamada: { created_at: "2026-09-19T10:00:00Z", from_number: "+34600", duration_seconds: 42, status: "completed", summary: "Pide fibra", transcript: "Agente: hola\nUsuario: quiero fibra" }, lead: { nombre: "Luis", departamento: "ventas", tags: ["urgente"] }, destinatario: { nombre: "Central" }, urlPortal: "https://x/portal" });
+  assert.match(asunto, /^Llamada en Fibergreen: Luis · 42 s$/);
+  assert.match(html, /Transcripción/);
+  assert.match(html, /quiero fibra/);
+  assert.match(html, /urgente/);
+
+  /* Con la fake: calls devuelve la llamada, destinatarios la central, leads
+     el contacto y notificaciones_lead un aviso reciente a esa misma central. */
+  const base = baseFalsa({
+    calls: { id: "c1", call_sid: "conv_1", client_id: "acme", lead_id: "l1", from_number: "+34600", duration_seconds: 10 },
+    destinatarios: [{ id: "d1", nombre: "Central", email: "central@acme.es", recibe_todo: true, activo: true }],
+    leads: { id: "l1", nombre: "Luis" },
+    notificaciones_lead: [{ email: "central@acme.es" }],
+    clients: { brand_name: "Acme" },
+  });
+  const r = await notificarLlamada({ clientId: "acme", callSid: "conv_1", supabase: base });
+  assert.equal(r.enviados, 0);
+  assert.equal(r.omitidos, 1, "ya recibió el aviso del contacto hace nada: no se repite");
+
+  const base2 = baseFalsa({
+    calls: { id: "c1", call_sid: "conv_1", client_id: "acme", lead_id: null, from_number: "", duration_seconds: 10 },
+    destinatarios: [{ id: "d1", nombre: "Central", email: "central@acme.es", recibe_todo: true, activo: true }],
+    clients: { brand_name: "Acme" },
+  });
+  const r2 = await notificarLlamada({ clientId: "acme", callSid: "conv_1", supabase: base2 });
+  assert.equal(r2.omitidos, 1, "en pruebas no sale correo: queda apuntado como omitido");
+  assert.ok(base2.apuntes.some((a) => a.tabla === "notificaciones_lead" && a.op === "insert" && a.datos.motivo === "llamada:conv_1"));
 });

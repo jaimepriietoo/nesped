@@ -10,6 +10,7 @@ import { procesarEvento } from "@/lib/server/bandeja-webhooks";
 import { entregarWebhook } from "@/lib/server/webhooks-salientes";
 import { clasificarYActuar } from "@/lib/server/clasificacion";
 import { barridoDeAutomatismos } from "@/lib/server/automatismos";
+import { notificarLlamada } from "@/lib/server/destinatarios";
 import { getSupabase } from "@/lib/supabase";
 
 /**
@@ -74,6 +75,7 @@ const OFICIOS = {
       disparo: t.datos?.disparo || null,
     }),
   automatismos_barrido: () => barridoDeAutomatismos(),
+  notificar_llamada: (t) => notificarLlamada({ clientId: t.client_id, callSid: t.datos?.callSid }),
 
   /**
    * Mover lo viejo al archivo y pasar la retención.

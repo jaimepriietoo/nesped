@@ -75,6 +75,7 @@ web anunciara un precio y se cobrara otro.
 | [`docs/hasta-donde-aguanta.md`](docs/hasta-donde-aguanta.md) | los límites conocidos, medidos con 506 empresas y 45.000 llamadas |
 | [`docs/copias-y-recuperacion.md`](docs/copias-y-recuperacion.md) | qué se pierde y cuánto se tarda si algo se borra; el simulacro de restauración |
 | [`docs/cuando-se-cae-algo.md`](docs/cuando-se-cae-algo.md) | un runbook por proveedor: detección, impacto, mitigación, vuelta atrás |
+| [`docs/legal/contrato-encargo-fibergreen.md`](docs/legal/contrato-encargo-fibergreen.md) | borrador del contrato de encargo del tratamiento (art. 28 RGPD) con Fibergreen; revisar con un abogado antes de firmar |
 | [`docs/clientes/fibergreen.md`](docs/clientes/fibergreen.md) | lo que la asistente sabe de Fibergreen: tarifas, condiciones, teléfonos, cómo actuar; revisar con cada oferta nueva |
 | [`docs/derechos-de-quien-llama.md`](docs/derechos-de-quien-llama.md) | qué se hace cuando alguien que llamó pide su grabación o que se borre |
 | [`docs/departamentos-y-automatismos.md`](docs/departamentos-y-automatismos.md) | cómo se clasifica cada contacto, a quién se avisa, qué hacen los automatismos y cómo dejar lista una empresa |

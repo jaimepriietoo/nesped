@@ -22,6 +22,12 @@ automatismos hacen lo que la empresa haya decidido, con límites y registro.
    departamento, quienes reciben copia de todo, y quienes tienen Dirección
    si el contacto es importante. Cada intento queda en `notificaciones_lead`.
 
+Además, **cada llamada entera** (quién, cuánto, resumen, transcripción,
+contacto, departamento) llega por correo a quien tenga **copia de todo**,
+un minuto después de guardarse (`notificar_llamada`, en la cola). Si esa
+persona acaba de recibir el aviso del contacto por departamento, no se le
+repite.
+
 Desde la ficha de un contacto se puede **clasificar ahora** a mano
 (`POST /api/portal/contactos/clasificar`).
 

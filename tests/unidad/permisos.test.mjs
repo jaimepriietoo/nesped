@@ -69,6 +69,7 @@ test("cada escritura de negocio del portal pasa por puede()", () => {
     // Operaciones de seguridad sobre la propia cuenta, nunca sobre otra.
     "codigos-recuperacion/route.js",
     "sesiones/revocar/route.js",
+    "sesiones/route.js",
     "totp/route.js",
     // Las tres rutas llaman al mismo helper, que comprueba users.manage.
     "users/create/route.js",
@@ -92,6 +93,7 @@ test("cada escritura autenticada fuera del portal pasa también por puede()", ()
   const excepcionesDeCuentaPropia = new Set([
     "portal/codigos-recuperacion/route.js",
     "portal/sesiones/revocar/route.js",
+    "portal/sesiones/route.js",
     "portal/totp/route.js",
   ]);
   const rutas = fs.readdirSync(raizApi, { recursive: true })

@@ -13,6 +13,8 @@ import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/li
 import { sendTwoFactorCode } from "@/lib/server/two-factor.mjs";
 import { Login, validar } from "@/lib/server/esquemas";
 import { estadoTotp } from "@/lib/server/totp";
+import { anotarPais, paisNuevo } from "@/lib/server/anomalias";
+import { tienePasskeys } from "@/lib/server/passkeys";
 
 async function handlePost(req) {
   try {
@@ -107,7 +109,16 @@ async function handlePost(req) {
     const redirectTo = sanitizeNextPath(nextPath);
 
     const totp = await estadoTotp({ email, clientId: authenticatedUser.client_id });
-    if (totp.enabled || requiresTwoFactor(normalizedRole) || requiresTwoFactor(profile.role)) {
+    const passkey = await tienePasskeys({ email, clientId: authenticatedUser.client_id });
+    /* Un país desde el que esta cuenta nunca había entrado exige el segundo
+       factor aunque el rol no lo pida. El país lo pone Vercel; fuera de
+       Vercel no hay cabecera y no se exige nada. */
+    const pais = String(req.headers.get("x-vercel-ip-country") || "").toUpperCase();
+    const origen = await paisNuevo({ email, clientId: authenticatedUser.client_id, pais });
+    if (origen.nuevo) {
+      logEvent("warn", "auth.pais_nuevo", { client_id: authenticatedUser.client_id, pais, conocidos: origen.conocidos });
+    }
+    if (passkey || totp.enabled || origen.nuevo || requiresTwoFactor(normalizedRole) || requiresTwoFactor(profile.role)) {
       const code = generateTwoFactorCode();
       await setTwoFactorChallenge({
         email,
@@ -117,15 +128,22 @@ async function handlePost(req) {
         nextPath: redirectTo,
         code,
         sessionEpoch: authenticatedUser.sessionEpoch || 0,
-        factorType: totp.enabled ? "totp" : "email",
+        /* Passkey antes que TOTP, TOTP antes que correo: del factor que no
+           se puede phishear al que sí. */
+        factorType: passkey ? "passkey" : totp.enabled ? "totp" : "email",
+        totpEnabled: totp.enabled,
+        pais,
       });
 
-      if (totp.enabled) {
+      if (passkey || totp.enabled) {
         return Response.json({
           success: true,
           requiresTwoFactor: true,
           challengeExpiresIn: 10 * 60,
-          verificationMethod: "totp",
+          verificationMethod: passkey ? "passkey" : "totp",
+          /* Con passkey, la casilla de código sigue valiendo para TOTP (si
+             lo hay) o para un código de recuperación. */
+          totpFallback: passkey && totp.enabled,
         });
       }
 
@@ -163,6 +181,7 @@ async function handlePost(req) {
       clientName,
       sessionEpoch: authenticatedUser.sessionEpoch || 0,
     });
+    void anotarPais({ email, clientId: authenticatedUser.client_id, pais });
 
     /*
      * Aviso de acceso, sin esperar a que salga.
@@ -176,6 +195,7 @@ async function handlePost(req) {
       email,
       rol: normalizedRole,
       clientName,
+      pais,
       ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "",
       agente: req.headers.get("user-agent") || "",
     });

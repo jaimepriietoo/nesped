@@ -34,6 +34,9 @@ const PUBLICAS = [
      nadie: pide un correo o una contraseña nueva, y el servidor contesta
      lo mismo exista o no la cuenta. */
   "restablecer",
+  /* La página a la que apunta security.txt: qué hacemos y cómo avisarnos.
+     No enseña datos de nadie. */
+  "seguridad",
   /* Información para quien llama: es el "más información" del aviso que
      da la asistente al descolgar. No enseña datos de nadie. */
   "llamadas",

@@ -5,7 +5,10 @@ import { ImageResponse } from "next/og";
  * Se genera aquí en vez de subir un PNG para que el texto siga al del sitio
  * si cambia, y no se quede una imagen vieja pegada durante meses.
  */
-export const runtime = "edge";
+/* En Node, no en Edge: con next 16.3.5 el bundle de next/og pasa de 1 MB y el
+   plan Hobby limita las Edge Functions a 1 MB. Una imagen que se genera una
+   vez y se cachea no necesita Edge. */
+export const runtime = "nodejs";
 export const alt = "Nesped — Cero llamadas sin contestar";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";

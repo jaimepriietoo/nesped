@@ -33,7 +33,7 @@ async function handlePost(req) {
       { status: 400 }
     );
   }
-  if (challenge.factorType === "totp") {
+  if (challenge.factorType === "totp" || challenge.factorType === "passkey") {
     return Response.json(
       { success: false, message: "Usa el código de tu aplicación autenticadora" },
       { status: 400 },

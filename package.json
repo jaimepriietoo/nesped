@@ -29,27 +29,27 @@
     "conectar:numero": "node scripts/conectar-numero.mjs"
   },
   "dependencies": {
-    "@sentry/nextjs": "^10.50.0",
+    "@sentry/nextjs": "^10.75.0",
     "@sentry/node": "^10.50.0",
     "@simplewebauthn/browser": "^14.0.0",
     "@simplewebauthn/server": "^14.0.2",
-    "@supabase/supabase-js": "^2.99.3",
+    "@supabase/supabase-js": "^2.116.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "next": "^16.2.3",
+    "next": "^16.3.5",
     "openai": "^6.34.0",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "resend": "^6.9.4",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "resend": "^6.28.1",
     "stripe": "^20.4.1",
     "ws": "^8.19.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@playwright/test": "^1.59.1",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "eslint": "^9",
-    "eslint-config-next": "16.2.0",
+    "eslint-config-next": "16.3.5",
     "tailwindcss": "^4"
   }
 }

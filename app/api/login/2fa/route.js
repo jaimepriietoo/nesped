@@ -9,6 +9,7 @@ import { observeRoute } from "@/lib/server/observability.mjs";
 import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 import { SegundoFactor, validar } from "@/lib/server/esquemas";
 import { verificarYConsumirTotp } from "@/lib/server/totp";
+import { anotarPais } from "@/lib/server/anomalias";
 
 async function handlePost(req) {
   const originError = requireSameOrigin(req);
@@ -64,7 +65,8 @@ async function handlePost(req) {
     action: recovery ? "2fa_recuperacion_usada" : totp ? "totp_verified" : "2fa_verified",
     actor: challenge.email,
   });
-  void avisarDeAcceso({ email: challenge.email, rol: user.role, clientName: challenge.clientName });
+  void anotarPais({ email: challenge.email, clientId: challenge.clientId, pais: challenge.pais || "" });
+  void avisarDeAcceso({ email: challenge.email, rol: user.role, clientName: challenge.clientName, pais: challenge.pais || "" });
   return Response.json({ success: true, redirectTo: challenge.nextPath || "/portal" });
 }
 export const POST = observeRoute("api.login.2fa.post", handlePost);

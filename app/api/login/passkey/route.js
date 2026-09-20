@@ -1,55 +1,48 @@
 import { getSupabase } from "@/lib/supabase";
-import { avisarDeAcceso } from "@/lib/server/aviso-acceso.mjs";
 import {
-  clearTwoFactorChallenge, getTwoFactorChallenge, setAuthCookies,
-  tomarIntentoTwoFactor, verifyTwoFactorCode, consumirTwoFactor,
+  clearTwoFactorChallenge,
+  getTwoFactorChallenge,
+  setAuthCookies,
+  tomarIntentoTwoFactor,
 } from "@/lib/server/auth";
-import { consumirCodigo } from "@/lib/server/codigos-recuperacion";
-import { observeRoute } from "@/lib/server/observability.mjs";
-import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
-import { SegundoFactor, validar } from "@/lib/server/esquemas";
-import { verificarYConsumirTotp } from "@/lib/server/totp";
+import { avisarDeAcceso } from "@/lib/server/aviso-acceso.mjs";
 import { anotarPais } from "@/lib/server/anomalias";
+import { validar } from "@/lib/server/esquemas";
+import { AccesoConPasskey } from "@/lib/server/esquemas-portal";
+import { observeRoute } from "@/lib/server/observability.mjs";
+import { verificarAutenticacion } from "@/lib/server/passkeys";
+import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 
+/**
+ * Segundo paso del acceso con passkey. Mismo recorrido que /api/login/2fa,
+ * con la firma del dispositivo en vez de un código.
+ */
 async function handlePost(req) {
   const originError = requireSameOrigin(req);
   if (originError) return originError;
   const challenge = await getTwoFactorChallenge();
-  if (!challenge) return Response.json({ success: false, message: "La verificación ha caducado. Vuelve a entrar." }, { status: 400 });
+  if (!challenge || challenge.factorType !== "passkey") {
+    return Response.json({ success: false, message: "La verificación ha caducado." }, { status: 400 });
+  }
   const limited = await requireRateLimitAsync(req, {
-    namespace: "login:2fa", limit: 12, windowMs: 15 * 60 * 1000,
-    keyParts: [challenge.email], includeIp: false,
+    namespace: "login:passkey", limit: 10, keyParts: [challenge.email], includeIp: false,
   });
   if (limited) return limited;
-  const cuerpo = await leerJsonLimitado(req, { maxBytes: 4 * 1024 });
+  const cuerpo = await leerJsonLimitado(req, { maxBytes: 16 * 1024 });
   if (cuerpo.respuesta) return cuerpo.respuesta;
-  const leido = validar(SegundoFactor, cuerpo.datos, { mensaje: "Código no válido" });
+  const leido = validar(AccesoConPasskey, cuerpo.datos, { mensaje: "Respuesta no válida" });
   if (leido.respuesta) return leido.respuesta;
-  const { code } = leido.datos;
-  // El contador está en la base de datos; repetir una cookie no lo reinicia.
+
   const attempt = await tomarIntentoTwoFactor(challenge);
   if (!attempt) return Response.json({ success: false, message: "La verificación ha caducado." }, { status: 400 });
-  const recovery = /^[A-Za-z0-9]{5}-?[A-Za-z0-9]{5}$/.test(code);
-  /* Con reto de passkey esta ruta es sólo el plan B: TOTP si lo hay, o un
-     código de recuperación. Nunca un código por correo, que no se envió. */
-  const totp = challenge.factorType === "totp"
-    || (challenge.factorType === "passkey" && challenge.totpEnabled === true);
-  const valid = recovery
-    ? await consumirCodigo({ email: challenge.email, codigo: code })
-    : totp
-      ? await verificarYConsumirTotp({
-          email: challenge.email, clientId: challenge.clientId, codigo: code,
-        })
-      : challenge.factorType === "passkey"
-        ? false
-        : verifyTwoFactorCode(attempt, code);
+  const valid = await verificarAutenticacion({
+    email: challenge.email, clientId: challenge.clientId, respuesta: leido.datos.response,
+  });
   if (!valid) {
     if (attempt.attempts >= 5) await clearTwoFactorChallenge();
-    return Response.json({ success: false, message: "Código incorrecto o caducado." }, { status: 401 });
+    return Response.json({ success: false, message: "La passkey no se pudo verificar." }, { status: 401 });
   }
-  if (!await consumirTwoFactor(challenge)) {
-    return Response.json({ success: false, message: "El código ya se ha utilizado." }, { status: 401 });
-  }
+
   const supabase = getSupabase();
   const { data: user, error } = await supabase.from("users")
     .select("role,session_epoch").eq("email", challenge.email).eq("client_id", challenge.clientId).maybeSingle();
@@ -67,11 +60,11 @@ async function handlePost(req) {
   });
   await supabase.from("audit_logs").insert({
     client_id: challenge.clientId, entity_type: "auth", entity_id: challenge.email,
-    action: recovery ? "2fa_recuperacion_usada" : totp ? "totp_verified" : "2fa_verified",
-    actor: challenge.email,
+    action: "passkey_verified", actor: challenge.email,
   });
   void anotarPais({ email: challenge.email, clientId: challenge.clientId, pais: challenge.pais || "" });
   void avisarDeAcceso({ email: challenge.email, rol: user.role, clientName: challenge.clientName, pais: challenge.pais || "" });
   return Response.json({ success: true, redirectTo: challenge.nextPath || "/portal" });
 }
-export const POST = observeRoute("api.login.2fa.post", handlePost);
+
+export const POST = observeRoute("api.login.passkey.post", handlePost);

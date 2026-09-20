@@ -66,7 +66,7 @@ test("cada regla tiene id, título, severidad y evaluador; los ids no se repiten
 test("un país nuevo exige segundo factor en el login y se anota al entrar", () => {
   const login = leer("app/api/login/route.js");
   assert.match(login, /x-vercel-ip-country/);
-  assert.match(login, /if \(totp\.enabled \|\| origen\.nuevo \|\|/);
+  assert.match(login, /origen\.nuevo \|\| requiresTwoFactor\(normalizedRole\)/);
   assert.match(login, /anotarPais\(/);
   const dosFa = leer("app/api/login/2fa/route.js");
   assert.match(dosFa, /anotarPais\(\{ email: challenge\.email, clientId: challenge\.clientId, pais: challenge\.pais/);

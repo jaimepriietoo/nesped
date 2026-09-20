@@ -20,6 +20,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { startRegistration } from "@simplewebauthn/browser";
 import {
   PLANES, PLAN_POR_DEFECTO, planDe, planSiguiente,
   tieneFuncion, planQueIncluye, VALOR_BLOQUEADO,
@@ -2079,6 +2080,101 @@ function SesionesActivas() {
   );
 }
 
+function Passkeys() {
+  const [estado, setEstado] = useState(null);
+  const [nombre, setNombre] = useState("");
+  const [codigo, setCodigo] = useState("");
+  const [ocupado, setOcupado] = useState(false);
+  const [error, setError] = useState("");
+
+  async function pedir(body) {
+    const res = await fetch("/api/portal/passkeys", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.success) throw new Error(json?.message || "No se pudo actualizar la passkey");
+    return json;
+  }
+
+  async function cargar() {
+    const res = await fetch("/api/portal/passkeys", { cache: "no-store" });
+    const json = await res.json().catch(() => null);
+    if (json?.success) setEstado(json);
+  }
+
+  useEffect(() => { cargar().catch(() => {}); }, []);
+
+  async function anadir() {
+    setOcupado(true);
+    setError("");
+    try {
+      const { opciones } = await pedir({ action: "start" });
+      const response = await startRegistration({ optionsJSON: opciones });
+      await pedir({ action: "finish", response, nombre });
+      setNombre("");
+      await cargar();
+    } catch (e) {
+      setError(e?.name === "NotAllowedError" ? "Se ha cancelado." : (e?.message || "No se pudo añadir la passkey"));
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  async function quitar(id) {
+    setOcupado(true);
+    setError("");
+    try {
+      await pedir({ action: "delete", id, ...(codigo ? { code: codigo } : {}) });
+      setCodigo("");
+      await cargar();
+    } catch (e) {
+      setError(e?.message || "No se pudo quitar la passkey");
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  const lista = estado?.passkeys || [];
+  return (
+    <div className="pv3-card" style={{ marginTop: 12 }}>
+      <p className="pv3-p" style={{ marginBottom: 10 }}>
+        <strong>Passkeys.</strong> Entra con la huella, la cara o el PIN del
+        dispositivo. No se pueden copiar ni engañar con una web falsa: es el
+        segundo factor más seguro que hay. Si tienes alguna, se te pedirá
+        antes que el código.
+      </p>
+      {estado?.obligatoria && lista.length === 0 ? (
+        <p className="pv3-p" style={{ marginBottom: 10, fontSize: 13, color: "var(--bad)" }}>
+          Tu rol requiere una passkey desde el {new Date(estado.obligatoriaDesde).toLocaleDateString("es-ES")}. Añade una.
+        </p>
+      ) : null}
+      {lista.map((p) => (
+        <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "8px 0", borderTop: "1px solid var(--line, #eee)" }}>
+          <div>
+            <div style={{ fontWeight: 500 }}>{p.nombre || (p.device_type === "multiDevice" ? "Passkey sincronizada" : "Passkey del dispositivo")}</div>
+            <div className="pv3-p" style={{ fontSize: 12, opacity: 0.75 }}>
+              creada {new Date(p.created_at).toLocaleDateString("es-ES")}{p.last_used_at ? ` · usada ${new Date(p.last_used_at).toLocaleDateString("es-ES")}` : ""}
+            </div>
+          </div>
+          <Accion variante="light" onRun={() => quitar(p.id)} confirmar="¿Quitar esta passkey?">Quitar</Accion>
+        </div>
+      ))}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+        <input className="pv3-input" placeholder="Nombre (p. ej. iPhone de Jaime)" value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={80} style={{ flex: 1, minWidth: 200 }} />
+        <Accion onRun={anadir} disabled={ocupado}>Añadir passkey</Accion>
+      </div>
+      {lista.length ? (
+        <input className="pv3-input" placeholder="Código TOTP o de recuperación (sólo para quitar, si tienes TOTP)" value={codigo} onChange={(e) => setCodigo(e.target.value)} maxLength={16} style={{ marginTop: 8, width: "100%" }} />
+      ) : null}
+      {error ? (
+        <p className="pv3-p" style={{ marginTop: 10, fontSize: 13, color: "var(--bad)" }}>{error}</p>
+      ) : null}
+    </div>
+  );
+}
+
 function SegundoFactorTotp() {
   const [estado, setEstado] = useState(null);
   const [alta, setAlta] = useState(null);
@@ -2295,6 +2391,7 @@ function Ajustes({ datos, onRecargar }) {
 
         <div className="pv3-card">
           <div className="pv3-lab">ACCESO</div>
+          <Passkeys />
           <SegundoFactorTotp />
           <div style={{ marginTop: 18, paddingTop: 18, borderTop: "1px solid var(--line)" }}>
             <div className="pv3-lab">CÓDIGOS DE RECUPERACIÓN</div>

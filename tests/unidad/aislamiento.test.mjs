@@ -9,12 +9,10 @@ import { TABLAS_POR_EMPRESA } from "../../lib/server/datos-cliente.js";
  *
  * Esta es la prueba más importante del proyecto y conviene explicar por qué.
  *
- * La aplicación habla con Postgres usando la clave de servicio, que tiene
- * BYPASSRLS: las políticas de la base de datos no intervienen nunca. El
- * aislamiento entre empresas vive entero en que cada consulta lleve su
- * `.eq("client_id", …)`. Un olvido no da error, no rompe nada visible y no
- * aparece en ninguna prueba funcional: simplemente devuelve los datos de todo
- * el mundo.
+ * El filtro de aplicación sigue siendo obligatorio aunque el portal tenga
+ * ahora una segunda defensa en RLS. Tener las dos permite detectar el olvido
+ * aquí —en vez de esconderlo tras una respuesta vacía— y hace que Postgres lo
+ * contenga si alguna consulta nueva se cuela sin `.eq("client_id", …)`.
  *
  * En una sola revisión aparecieron cinco casos, y en uno de ellos se leyeron
  * seis eventos de otra empresa con una cuenta recién creada.

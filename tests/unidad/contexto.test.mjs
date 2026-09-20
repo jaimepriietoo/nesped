@@ -1,6 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { conContexto, contextoActual, ampliarContexto, idDePeticion, CABECERA_PETICION } from "../../lib/server/contexto.mjs";
+import {
+  conContexto,
+  contextoActual,
+  ampliarContexto,
+  fijarClienteDeDatos,
+  clienteDeDatosActual,
+  idDePeticion,
+  CABECERA_PETICION,
+} from "../../lib/server/contexto.mjs";
 
 /**
  * El contexto de una operación sigue a las promesas y llega a los registros.
@@ -28,6 +36,21 @@ test("un contexto interior suma al exterior y se puede ampliar sobre la marcha",
     });
     assert.equal(contextoActual().job_id, undefined, "lo interior no se escapa hacia fuera");
   });
+});
+
+test("el cliente RLS acompaña la petición sin aparecer en los logs", async () => {
+  const cliente = { secretoInterno: "no-serializar" };
+  await conContexto({ request_id: "r-rls" }, async () => {
+    fijarClienteDeDatos(cliente);
+    assert.equal(clienteDeDatosActual(), cliente);
+    assert.deepEqual(contextoActual(), { request_id: "r-rls" });
+
+    await conContexto({ tramo: "interior" }, async () => {
+      assert.equal(clienteDeDatosActual(), cliente, "el cliente atraviesa contextos interiores");
+      assert.equal(JSON.stringify(contextoActual()).includes("no-serializar"), false);
+    });
+  });
+  assert.equal(clienteDeDatosActual(), null, "el cliente no se escapa a otra petición");
 });
 
 test("el id de petición viene de la cabecera del proxy, o se inventa uno", () => {

@@ -81,6 +81,7 @@ web anunciara un precio y se cobrara otro.
 | [`docs/copias-y-recuperacion.md`](docs/copias-y-recuperacion.md) | qué se pierde y cuánto se tarda si algo se borra; el simulacro de restauración |
 | [`docs/cuando-se-cae-algo.md`](docs/cuando-se-cae-algo.md) | un runbook por proveedor: detección, impacto, mitigación, vuelta atrás |
 | [`docs/auditoria-seguridad-2026-09-20.md`](docs/auditoria-seguridad-2026-09-20.md) | hallazgos de la auditoría, explotación, arreglo, pruebas y decisiones pendientes |
+| [`docs/rls-por-empresa.md`](docs/rls-por-empresa.md) | despliegue por fases, variables, prueba cruzada y rollback del rol de mínimo privilegio |
 | [`docs/legal/contrato-encargo-fibergreen.md`](docs/legal/contrato-encargo-fibergreen.md) | borrador del contrato de encargo del tratamiento (art. 28 RGPD) con Fibergreen; revisar con un abogado antes de firmar |
 | [`docs/clientes/fibergreen.md`](docs/clientes/fibergreen.md) | lo que la asistente sabe de Fibergreen: tarifas, condiciones, teléfonos, cómo actuar; revisar con cada oferta nueva |
 | [`docs/derechos-de-quien-llama.md`](docs/derechos-de-quien-llama.md) | qué se hace cuando alguien que llamó pide su grabación o que se borre |

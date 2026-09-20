@@ -20,6 +20,7 @@
     "revisar:portal": "node scripts/revisar-portal.mjs",
     "revisar:admin": "node scripts/revisar-admin.mjs",
     "revisar:seguridad": "node scripts/revisar-seguridad.mjs",
+    "revisar:secretos": "node scripts/revisar-secretos.mjs",
     "probar:voz": "node scripts/probar-voz.mjs",
     "probar:conversacion": "node scripts/probar-conversacion.mjs",
     "volcar:migraciones": "node scripts/volcar-migraciones.mjs",

@@ -29,6 +29,12 @@ test("cada envío comprueba la URL, va firmado, y un 4xx no se reintenta", () =>
   assert.match(entregar, /throw new SinArreglo/);
 });
 
+test("el aviso operativo también usa el transporte protegido contra SSRF", () => {
+  const s = leer("lib/server/observability.mjs");
+  assert.match(s, /peticionExternaSegura\(webhookUrl/);
+  assert.doesNotMatch(s, /fetch\(webhookUrl/);
+});
+
 test("la llamada terminada y el contacto actualizado avisan sin await", () => {
   assert.match(leer("lib/server/elevenlabs.js"), /void emitirWebhook\(\{[\s\S]*EVENTOS\.LLAMADA_TERMINADA/);
   assert.match(leer("app/api/leads/update/route.js"), /void emitirWebhook\(\{[\s\S]*EVENTOS\.CONTACTO_ACTUALIZADO/);

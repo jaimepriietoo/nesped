@@ -1,6 +1,6 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { paginar, cuantasFilas, respuestaPaginada, CursorInvalido } from "@/lib/server/paginacion";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * Los contactos de la empresa, por cursor.
@@ -22,7 +22,7 @@ async function manejarGET(req) {
     return respuestaPaginada(pagina);
   } catch (err) {
     if (err instanceof CursorInvalido) return Response.json({ success: false, message: err.message, data: [] }, { status: 400 });
-    console.error("[portal/contactos]", err?.message || err);
+    logErrorSeguro("portal.contacts_load_failed", err);
     return Response.json({ success: false, message: "No se pudieron cargar los contactos", data: [] }, { status: 500 });
   }
 }

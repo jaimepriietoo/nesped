@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { urlDeSitio } from "@/lib/server/sitio";
 import { getPortalContext } from "@/lib/portal-auth";
 import { puede } from "@/lib/server/permisos";
-import { requireSameOrigin } from "@/lib/server/security";
+import { validar } from "@/lib/server/esquemas";
+import { CheckoutStripe } from "@/lib/server/esquemas-operaciones";
+import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 import { exigirContactoPropio } from "@/lib/server/pertenencia";
 import {
   getClientBillingState,
@@ -11,7 +13,7 @@ import {
   resolveCheckoutConfig,
   stripe,
 } from "@/lib/server/stripe-utils";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 async function manejarPOST(req) {
   try {
@@ -41,7 +43,15 @@ async function manejarPOST(req) {
       );
     }
 
-    const body = await req.json();
+    const limite = await requireRateLimitAsync(req, {
+      namespace: "stripe-checkout", limit: 20, keyParts: [ctx.clientId, ctx.userEmail],
+    });
+    if (limite) return limite;
+    const cuerpo = await leerJsonLimitado(req, { maxBytes: 8 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
+    const entrada = validar(CheckoutStripe, cuerpo.datos);
+    if (entrada.respuesta) return entrada.respuesta;
+    const body = entrada.datos;
     const {
       leadId,
       plan = "pro",
@@ -169,7 +179,7 @@ async function manejarPOST(req) {
       productName: config.productName,
     });
   } catch (error) {
-    console.error("POST /api/stripe/checkout error:", error);
+    logErrorSeguro("stripe.checkout_failed", error);
     return NextResponse.json(
       { success: false, message: "No se pudo abrir el checkout" },
       { status: 500 }

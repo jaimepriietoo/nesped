@@ -1,7 +1,8 @@
 import { verifyElevenLabsWebhookSignature } from "@/lib/server/elevenlabs";
 import { guardarEvento } from "@/lib/server/bandeja-webhooks";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 import { PostCallElevenLabs, validar } from "@/lib/server/esquemas";
+import { leerTextoLimitado } from "@/lib/server/security";
 
 /**
  * ElevenLabs avisa de que una llamada ha terminado.
@@ -17,7 +18,9 @@ import { PostCallElevenLabs, validar } from "@/lib/server/esquemas";
  * efectos, así que no hay forma de contar una llamada dos veces.
  */
 async function manejarPOST(req) {
-  const rawBody = await req.text();
+  const cuerpo = await leerTextoLimitado(req, { maxBytes: 2 * 1024 * 1024 });
+  if (cuerpo.respuesta) return cuerpo.respuesta;
+  const rawBody = cuerpo.datos;
   const hasValidHmac = verifyElevenLabsWebhookSignature({
     rawBody,
     signatureHeader: req.headers.get("ElevenLabs-Signature") || "",
@@ -49,6 +52,12 @@ async function manejarPOST(req) {
   }
 
   const conversationId = String(payload?.data?.conversation_id || "").trim() || null;
+  if (!conversationId) {
+    return Response.json(
+      { success: false, message: "Falta el identificador de conversación" },
+      { status: 400 }
+    );
+  }
   const dinamicas = payload?.data?.conversation_initiation_client_data?.dynamic_variables || {};
   const clientId = String(dinamicas.client_id || dinamicas.clientId || "").trim() || null;
 
@@ -62,7 +71,7 @@ async function manejarPOST(req) {
     });
     return Response.json({ success: true, encolado: guardado.encolado, evento: guardado.id });
   } catch (err) {
-    console.error("post-call de ElevenLabs:", err);
+    logErrorSeguro("elevenlabs.post_call_store_failed", err);
     return Response.json(
       { success: false, message: "No se pudo guardar la llamada de ElevenLabs" },
       { status: 500 }

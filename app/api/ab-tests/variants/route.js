@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { variantes, crearVariante } from "@/lib/server/datos";
 import { getPortalContext } from "@/lib/portal-auth";
 import { puede } from "@/lib/server/permisos";
-import { requireSameOrigin } from "@/lib/server/security";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { validar } from "@/lib/server/esquemas";
+import { CrearVarianteMensaje } from "@/lib/server/esquemas-operaciones";
+import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 async function manejarGET() {
   try {
@@ -22,7 +24,7 @@ async function manejarGET() {
       data: rows,
     });
   } catch (err) {
-    console.error(err);
+    logErrorSeguro("experiments.variants_read_failed", err);
     return NextResponse.json({
       success: false,
       message: "Error obteniendo variantes",
@@ -52,7 +54,15 @@ async function manejarPOST(req) {
       );
     }
 
-    const body = await req.json();
+    const limite = await requireRateLimitAsync(req, {
+      namespace: "experiment-variant-create", limit: 30, keyParts: [ctx.clientId, ctx.userEmail],
+    });
+    if (limite) return limite;
+    const cuerpo = await leerJsonLimitado(req, { maxBytes: 16 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
+    const entrada = validar(CrearVarianteMensaje, cuerpo.datos);
+    if (entrada.respuesta) return entrada.respuesta;
+    const body = entrada.datos;
 
     const row = await crearVariante({
       client_id: ctx.clientId,
@@ -68,7 +78,7 @@ async function manejarPOST(req) {
       data: row,
     });
   } catch (err) {
-    console.error(err);
+    logErrorSeguro("experiments.variant_create_failed", err);
     return NextResponse.json({
       success: false,
       message: "Error creando variante",

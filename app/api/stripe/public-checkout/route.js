@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { urlDeSitio } from "@/lib/server/sitio";
 import { observeRoute } from "@/lib/server/observability.mjs";
+import { ConsultaCheckoutPublico, validar } from "@/lib/server/esquemas";
 
 /**
  * Cobro sin cuenta: retirado.
@@ -14,13 +15,13 @@ import { observeRoute } from "@/lib/server/observability.mjs";
  * Se conserva como redirección al alta, conservando el plan que se pedía.
  */
 
-const PLANES_PUBLICOS = new Set(["growth", "intelligence"]);
-
 async function manejarGET(req) {
   const BASE_URL = urlDeSitio(req);
   const { searchParams } = new URL(req.url);
-  const plan = String(searchParams.get("plan") || "growth").toLowerCase();
-  const destino = PLANES_PUBLICOS.has(plan) ? `/registro?plan=${plan}` : "/pricing";
+  const entrada = validar(ConsultaCheckoutPublico, {
+    plan: searchParams.get("plan")?.toLowerCase() || undefined,
+  });
+  const destino = entrada.respuesta ? "/pricing" : `/registro?plan=${entrada.datos.plan}`;
 
   return NextResponse.redirect(`${BASE_URL}${destino}`, 308);
 }

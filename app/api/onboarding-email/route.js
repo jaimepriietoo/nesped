@@ -1,6 +1,9 @@
 import { enviarCorreo } from "@/lib/server/correo";
 import { requireInternalRequest } from "@/lib/server/internal-api";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
+import { validar } from "@/lib/server/esquemas";
+import { CorreoOnboarding } from "@/lib/server/esquemas-operaciones";
+import { leerJsonLimitado } from "@/lib/server/security";
 
 /**
  * Correo de bienvenida a un usuario recién creado.
@@ -39,11 +42,11 @@ async function manejarPOST(req) {
     const errorInterno = requireInternalRequest(req);
     if (errorInterno) return errorInterno;
 
-    const { email, clientName } = await req.json().catch(() => ({}));
-
-    if (!email || !clientName) {
-      return Response.json({ success: false, message: "Faltan datos" }, { status: 400 });
-    }
+    const cuerpo = await leerJsonLimitado(req, { maxBytes: 4 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
+    const entrada = validar(CorreoOnboarding, cuerpo.datos);
+    if (entrada.respuesta) return entrada.respuesta;
+    const { email, clientName } = entrada.datos;
 
     /* El destino lo decide el servidor. Aceptarlo del cuerpo permitía mandar
        a alguien un correo con nuestro remite y un botón a cualquier sitio. */
@@ -79,7 +82,7 @@ async function manejarPOST(req) {
        gratis para quien estuviera probando la ruta. */
     return Response.json({ success: true });
   } catch (error) {
-    console.error("POST /api/onboarding-email error:", error);
+    logErrorSeguro("onboarding_email.failed", error);
     /* Sin devolver el mensaje interno: decía cosas como qué proveedor de
        correo falla y con qué error, que es información gratis para quien
        esté probando. */

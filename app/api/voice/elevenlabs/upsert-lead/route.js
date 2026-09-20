@@ -1,13 +1,19 @@
 import { requireInternalRequest } from "@/lib/server/internal-api";
 import { upsertElevenLabsLead } from "@/lib/server/elevenlabs";
 import { observeRoute } from "@/lib/server/observability.mjs";
+import { LeadElevenLabs, validar } from "@/lib/server/esquemas";
+import { leerJsonLimitado } from "@/lib/server/security";
 
 async function manejarPOST(req) {
   try {
     const authError = requireInternalRequest(req);
     if (authError) return authError;
 
-    const body = await req.json().catch(() => ({}));
+    const cuerpo = await leerJsonLimitado(req, { maxBytes: 64 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
+    const leido = validar(LeadElevenLabs, cuerpo.datos, { mensaje: "Lead no válido" });
+    if (leido.respuesta) return leido.respuesta;
+    const body = leido.datos;
     const result = await upsertElevenLabsLead({
       clientId: body?.clientId,
       callerId: body?.callerId,

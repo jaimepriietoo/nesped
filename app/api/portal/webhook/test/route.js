@@ -1,9 +1,11 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { puede } from "@/lib/server/permisos";
 import { logEvent, observeRoute } from "@/lib/server/observability.mjs";
-import { requireSameOrigin, requireRateLimitAsync } from "@/lib/server/security";
+import { leerJsonLimitado, requireSameOrigin, requireRateLimitAsync } from "@/lib/server/security";
 import { comprobarUrlExterna, peticionExternaSegura } from "@/lib/server/url-segura";
 import { signWebhook } from "@/lib/server/webhook-signing";
+import { validar } from "@/lib/server/esquemas";
+import { ProbarWebhook } from "@/lib/server/esquemas-portal";
 
 async function handlePost(req) {
   try {
@@ -28,10 +30,13 @@ async function handlePost(req) {
       );
     }
 
-    const body = await req.json().catch(() => ({}));
     const limited = await requireRateLimitAsync(req, { namespace: "webhook:test", limit: 10, keyParts: [ctx.clientId], includeIp: false });
     if (limited) return limited;
-    const providedUrl = String(body?.url || "").trim();
+    const cuerpo = await leerJsonLimitado(req, { maxBytes: 4 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
+    const leido = validar(ProbarWebhook, cuerpo.datos);
+    if (leido.respuesta) return leido.respuesta;
+    const providedUrl = leido.datos.url;
 
     const { data: client, error } = await ctx.supabase
       .from("clients")

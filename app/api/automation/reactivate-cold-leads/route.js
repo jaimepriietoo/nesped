@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { crearEventoLead, eventosDeLead, reactivacionesDeLead, crearReactivacion } from "@/lib/server/datos";
 import { getInternalApiHeaders } from "@/lib/server/internal-api";
 import { requireInternalRequest } from "@/lib/server/internal-api";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 const BOOKING_URL = process.env.BOOKING_URL || "";
@@ -150,7 +150,7 @@ async function manejarPOST(req) {
           stage,
         });
       } catch (err) {
-        console.error(err);
+        logErrorSeguro("automation.reactivation_item_failed", err);
         failed.push({
           leadId: lead?.id || null,
         });
@@ -164,7 +164,7 @@ async function manejarPOST(req) {
       data: processed,
     });
   } catch (err) {
-    console.error(err);
+    logErrorSeguro("automation.reactivation_failed", err);
     return NextResponse.json({
       success: false,
       message: "Error reactivando leads fríos",

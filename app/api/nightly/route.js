@@ -10,7 +10,7 @@ import {
   runVoiceCallsAutomation,
   sendWhatsAppMessage,
 } from "@/lib/server/automation-service";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 function hoursBetween(dateA, dateB) {
   const a = new Date(dateA).getTime();
@@ -139,7 +139,7 @@ async function manejarPOST(req) {
 
         processed.push({ phone, stage });
       } catch (err) {
-        console.error(err);
+        logErrorSeguro("nightly.payment_item_failed", err);
         failed.push({ phone: paymentEvent.phone || null });
       }
     }
@@ -169,7 +169,7 @@ async function manejarPOST(req) {
       },
     });
   } catch (err) {
-    console.error(err);
+    logErrorSeguro("nightly.failed", err);
     return NextResponse.json({
       success: false,
       message: "Error ejecutando follow-up automático",

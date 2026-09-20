@@ -1,6 +1,7 @@
 import { getSupabase } from "@/lib/supabase";
 import { getClientById, isDemoClientId, mapClientToPublicShape } from "@/lib/clients";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
+import { HostPublico, validar } from "@/lib/server/esquemas";
 
 const supabase = getSupabase();
 
@@ -27,7 +28,9 @@ function mapClient(client) {
 async function manejarGET(req) {
   try {
     const host = req.headers.get("host") || "";
-    const hostname = host.split(":")[0];
+    const hostValidado = validar(HostPublico, host.split(":")[0], { mensaje: "Dominio no válido" });
+    if (hostValidado.respuesta) return hostValidado.respuesta;
+    const hostname = hostValidado.datos;
 
     const parts = hostname.split(".");
     let subdomain = "";
@@ -66,7 +69,7 @@ async function manejarGET(req) {
       client: query ? mapClient(query) : fallbackClient,
     });
   } catch (error) {
-    console.error("public-client error:", error);
+    logErrorSeguro("public_client.lookup_failed", error);
 
     return Response.json(
       {

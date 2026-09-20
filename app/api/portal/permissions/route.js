@@ -1,7 +1,9 @@
 import { filasDePermisos, fijarPermisosDeUsuario } from "@/lib/server/datos";
 import { getPortalContext } from "@/lib/portal-auth";
-import { puede } from "@/lib/server/permisos";
-import { requireSameOrigin } from "@/lib/server/security";
+import { puede, sinPermiso } from "@/lib/server/permisos";
+import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
+import { validar } from "@/lib/server/esquemas";
+import { ActualizarPermisosPortal } from "@/lib/server/esquemas-portal";
 import {
   buildPermissionMatrix,
   getPermissionCatalog,
@@ -17,6 +19,7 @@ async function manejarGET() {
         { status: 401 }
       );
     }
+    if (!puede(ctx.role, "users.manage", ctx.permissions)) return sinPermiso();
 
     const { data: portalUsers, error } = await ctx.supabase
       .from("portal_users")
@@ -36,7 +39,7 @@ async function manejarGET() {
         users: portalUsers || [],
         permissionRows,
       }),
-    });
+    }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return Response.json(
       { success: false, message: "No se pudieron cargar permisos" },
@@ -65,19 +68,28 @@ async function manejarPATCH(req) {
       );
     }
 
-    const body = await req.json();
-    const userId = String(body?.userId || "").trim();
-    const scopes = Array.isArray(body?.scopes) ? body.scopes.map((item) => String(item || "").trim()) : [];
+    const limited = await requireRateLimitAsync(req, {
+      namespace: "portal:permissions",
+      limit: 30,
+      keyParts: [ctx.clientId, ctx.userEmail],
+      includeIp: false,
+    });
+    if (limited) return limited;
 
-    if (!userId) {
-      return Response.json(
-        { success: false, message: "Falta userId" },
-        { status: 400 }
-      );
-    }
+    const cuerpo = await leerJsonLimitado(req, { maxBytes: 8 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
+    const leido = validar(ActualizarPermisosPortal, cuerpo.datos);
+    if (leido.respuesta) return leido.respuesta;
+    const { userId, scopes } = leido.datos;
 
     const allowedScopes = new Set(getPermissionCatalog().map((item) => item.id));
-    const safeScopes = scopes.filter((scope) => allowedScopes.has(scope));
+    if (scopes.some((scope) => !allowedScopes.has(scope))) {
+      return Response.json(
+        { success: false, message: "Hay permisos desconocidos" },
+        { status: 400 },
+      );
+    }
+    const safeScopes = [...new Set(scopes)];
 
     const { data: target, error: targetError } = await ctx.supabase.from("portal_users")
       .select("id,role").eq("id", userId).eq("client_id", ctx.clientId).maybeSingle();

@@ -1,6 +1,6 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { exigirContactoPropio } from "@/lib/server/pertenencia";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * Historial de eventos de un contacto.
@@ -48,7 +48,7 @@ async function manejarGET(req) {
 
     return Response.json({ success: true, data: data || [] });
   } catch (error) {
-    console.error("GET /api/lead-events error:", error);
+    logErrorSeguro("lead_events.load_failed", error);
     return Response.json(
       { success: false, message: "No se pudo leer el historial" },
       { status: 500 }

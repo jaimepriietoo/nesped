@@ -1,5 +1,5 @@
 import { getPortalContext } from "@/lib/portal-auth";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 async function manejarGET() {
   try {
@@ -49,7 +49,7 @@ async function manejarGET() {
     const text = await res.text();
 
     if (!res.ok) {
-      console.error("HubSpot API error:", text);
+      logErrorSeguro("hubspot.contacts_failed", new Error(`HubSpot respondió ${res.status}`));
       return Response.json(
         {
           success: false,
@@ -86,7 +86,7 @@ async function manejarGET() {
       data: filteredLeads,
     });
   } catch (error) {
-    console.error("Error cargando leads reales:", error);
+    logErrorSeguro("hubspot.contacts_load_failed", error);
 
     return Response.json(
       {

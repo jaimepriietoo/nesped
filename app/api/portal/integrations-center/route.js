@@ -1,6 +1,7 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { buildIntegrationsCenterData } from "@/lib/server/portal-phase-four";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { puede, sinPermiso } from "@/lib/server/permisos";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 async function manejarGET() {
   try {
@@ -11,6 +12,7 @@ async function manejarGET() {
         { status: 401 }
       );
     }
+    if (!puede(ctx.role, "api.manage", ctx.permissions)) return sinPermiso();
 
     const [clientRes, settingsRes] = await Promise.all([
       ctx.supabase
@@ -36,8 +38,9 @@ async function manejarGET() {
         client: clientRes.data || {},
         settings: settingsRes.data || {},
       }),
-    });
+    }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
+    logErrorSeguro("portal.integrations_center_failed", error);
     return Response.json(
       {
         success: false,

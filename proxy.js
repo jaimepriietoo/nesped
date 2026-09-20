@@ -148,7 +148,9 @@ function aplicarCabeceras(response, req, nonce, conNonce, idPeticion = "") {
 
   // Cabeceras que sólo delatan con qué está hecho el sitio.
   response.headers.delete("X-Powered-By");
-  response.headers.set("X-Robots-Tag", "index, follow");
+  const pathname = req.nextUrl?.pathname || new URL(req.url).pathname;
+  const noIndexar = pathname.startsWith("/portal") || pathname.startsWith("/admin") || pathname.startsWith("/api");
+  response.headers.set("X-Robots-Tag", noIndexar ? "noindex, nofollow" : "index, follow");
 
   const protocolo = String(req.headers.get("x-forwarded-proto") || "").toLowerCase();
   if (process.env.NODE_ENV === "production" && protocolo === "https") {

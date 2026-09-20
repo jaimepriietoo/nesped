@@ -1,11 +1,13 @@
 import { getAdminContext } from "@/lib/server/auth";
 import { getSupabase } from "@/lib/supabase";
-import { requireSameOrigin } from "@/lib/server/security";
+import { validar } from "@/lib/server/esquemas";
+import { InterruptoresAdmin } from "@/lib/server/esquemas-operaciones";
+import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 import {
   interruptoresDePlataforma, interruptoresDeEmpresa,
   fijarInterruptoresDePlataforma, fijarInterruptoresDeEmpresa,
 } from "@/lib/server/interruptores";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * Los interruptores de emergencia, desde la administración de Nesped.
@@ -35,7 +37,17 @@ async function manejarPOST(req) {
   const originError = requireSameOrigin(req);
   if (originError) return originError;
 
-  const body = await req.json().catch(() => ({}));
+  const limite = await requireRateLimitAsync(req, {
+    namespace: "admin-interruptores",
+    limit: 60,
+    keyParts: [admin.userEmail || "admin"],
+  });
+  if (limite) return limite;
+  const cuerpo = await leerJsonLimitado(req, { maxBytes: 4 * 1024 });
+  if (cuerpo.respuesta) return cuerpo.respuesta;
+  const entrada = validar(InterruptoresAdmin, cuerpo.datos);
+  if (entrada.respuesta) return entrada.respuesta;
+  const body = entrada.datos;
   const actor = admin.userEmail || "admin";
 
   try {
@@ -43,20 +55,24 @@ async function manejarPOST(req) {
     if (body.empresa) {
       const empresa = String(body.empresa).trim();
       resultado = await fijarInterruptoresDeEmpresa(empresa, body);
-      await getSupabase().from("audit_logs").insert({
+      const { error: auditError } = await getSupabase().from("audit_logs").insert({
         client_id: empresa, entity_type: "interruptores", entity_id: empresa,
-        action: "interruptores_empresa", actor, changes: resultado,
+        action: "interruptores_empresa", actor,
+        changes: { fields: Object.keys(body).filter((campo) => campo !== "empresa").sort() },
       });
+      if (auditError) throw new Error("No se pudo registrar la auditoría");
     } else {
       resultado = await fijarInterruptoresDePlataforma(body, { actor });
-      await getSupabase().from("audit_logs").insert({
+      const { error: auditError } = await getSupabase().from("audit_logs").insert({
         client_id: null, entity_type: "interruptores", entity_id: "plataforma",
-        action: "interruptores_plataforma", actor, changes: resultado,
+        action: "interruptores_plataforma", actor,
+        changes: { fields: Object.keys(body).sort() },
       });
+      if (auditError) throw new Error("No se pudo registrar la auditoría");
     }
     return Response.json({ success: true, data: resultado }, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
-    console.error("interruptores:", err);
+    logErrorSeguro("admin.interruptores_failed", err);
     return Response.json({ success: false, message: "No se pudo completar la operación" }, { status: 500 });
   }
 }

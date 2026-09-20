@@ -1,6 +1,6 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { paginar, cuantasFilas, respuestaPaginada, CursorInvalido } from "@/lib/server/paginacion";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * Las llamadas de la empresa, por cursor. Misma forma que /api/calls (sin
@@ -23,7 +23,7 @@ async function manejarGET(req) {
     return respuestaPaginada(pagina);
   } catch (err) {
     if (err instanceof CursorInvalido) return Response.json({ success: false, message: err.message, data: [] }, { status: 400 });
-    console.error("[portal/llamadas]", err?.message || err);
+    logErrorSeguro("portal.calls_load_failed", err);
     return Response.json({ success: false, message: "No se pudieron cargar las llamadas", data: [] }, { status: 500 });
   }
 }

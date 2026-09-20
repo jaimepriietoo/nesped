@@ -1,6 +1,7 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { buildApiHubData } from "@/lib/server/portal-phase-three";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { puede, sinPermiso } from "@/lib/server/permisos";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 async function manejarGET(req) {
   try {
@@ -11,6 +12,7 @@ async function manejarGET(req) {
         { status: 401 }
       );
     }
+    if (!puede(ctx.role, "api.manage", ctx.permissions)) return sinPermiso();
 
     const [clientRes, settingsRes] = await Promise.all([
       ctx.supabase
@@ -62,8 +64,9 @@ async function manejarGET(req) {
         settings: settingsRes.data || {},
         domainStatus,
       }),
-    });
+    }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
+    logErrorSeguro("portal.api_hub_failed", error);
     return Response.json(
       {
         success: false,

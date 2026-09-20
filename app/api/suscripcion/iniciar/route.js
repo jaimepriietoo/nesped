@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { getPortalContext } from "@/lib/portal-auth";
+import { puede } from "@/lib/server/permisos";
+import { requireRateLimitAsync } from "@/lib/server/security";
 import { resolveCheckoutConfig, stripe } from "@/lib/server/stripe-checkout";
 import { urlDeSitio } from "@/lib/server/sitio";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
+import { ConsultaCheckoutPublico, validar } from "@/lib/server/esquemas";
 
 /**
  * Manda a pagar a alguien que YA tiene cuenta.
@@ -16,18 +19,19 @@ import { observeRoute } from "@/lib/server/observability.mjs";
  * Sin sesión no se puede pagar: se manda a acceder y se vuelve aquí después.
  */
 
-const PLANES_PUBLICOS = new Set(["growth", "intelligence"]);
-
 async function manejarGET(req) {
   const BASE_URL = urlDeSitio(req);
 
   try {
     const { searchParams } = new URL(req.url);
-    const plan = String(searchParams.get("plan") || "growth").toLowerCase();
+    const entrada = validar(ConsultaCheckoutPublico, {
+      plan: searchParams.get("plan")?.toLowerCase() || undefined,
+    });
 
-    if (!PLANES_PUBLICOS.has(plan)) {
+    if (entrada.respuesta) {
       return NextResponse.redirect(`${BASE_URL}/pricing`, 303);
     }
+    const plan = entrada.datos.plan;
 
     const ctx = await getPortalContext();
     if (!ctx.ok) {
@@ -35,6 +39,19 @@ async function manejarGET(req) {
          desde allí puede saltar a acceder si resulta que ya era cliente. */
       return NextResponse.redirect(`${BASE_URL}/registro?plan=${plan}`, 303);
     }
+
+    if (!puede(ctx.role, "billing.manage", ctx.permissions)) {
+      return NextResponse.redirect(`${BASE_URL}/portal?error=sin-permiso-facturacion`, 303);
+    }
+
+    const limited = await requireRateLimitAsync(req, {
+      namespace: "billing:subscription-checkout",
+      limit: 10,
+      windowMs: 15 * 60 * 1000,
+      keyParts: [ctx.clientId, ctx.userEmail],
+      includeIp: false,
+    });
+    if (limited) return limited;
 
     const { data: cliente } = await ctx.supabase
       .from("clients")
@@ -97,9 +114,11 @@ async function manejarGET(req) {
       return NextResponse.redirect(`${BASE_URL}/pricing?checkout=unavailable`, 303);
     }
 
-    return NextResponse.redirect(sesion.url, 303);
+    const respuesta = NextResponse.redirect(sesion.url, 303);
+    respuesta.headers.set("Cache-Control", "no-store");
+    return respuesta;
   } catch (error) {
-    console.error("GET /api/suscripcion/iniciar error:", error);
+    logErrorSeguro("stripe.subscription_checkout_failed", error);
     return NextResponse.redirect(`${BASE_URL}/pricing?checkout=error`, 303);
   }
 }

@@ -1,14 +1,7 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { puede } from "@/lib/server/permisos";
+import { campoCsvSeguro } from "@/lib/server/csv";
 import { observeRoute } from "@/lib/server/observability.mjs";
-
-function csvEscape(value = "") {
-  const text = String(value ?? "");
-  if (text.includes(",") || text.includes('"') || text.includes("\n")) {
-    return `"${text.replace(/"/g, '""')}"`;
-  }
-  return text;
-}
 
 async function manejarGET() {
   try {
@@ -39,17 +32,27 @@ async function manejarGET() {
     }
 
     const rows = data || [];
+    const { error: auditError } = await ctx.datos.from("audit_logs").insert({
+      client_id: ctx.clientId,
+      entity_type: "export",
+      entity_id: ctx.clientId,
+      action: "audit_exported",
+      actor: ctx.userEmail,
+      changes: { rows: rows.length, format: "csv" },
+    });
+    if (auditError) throw new Error("No se pudo registrar la exportación");
+
     const csv = [
       ["id", "entity_type", "entity_id", "action", "actor", "created_at", "changes"].join(","),
       ...rows.map((row) =>
         [
-          csvEscape(row.id),
-          csvEscape(row.entity_type),
-          csvEscape(row.entity_id),
-          csvEscape(row.action),
-          csvEscape(row.actor),
-          csvEscape(row.created_at),
-          csvEscape(
+          campoCsvSeguro(row.id),
+          campoCsvSeguro(row.entity_type),
+          campoCsvSeguro(row.entity_id),
+          campoCsvSeguro(row.action),
+          campoCsvSeguro(row.actor),
+          campoCsvSeguro(row.created_at),
+          campoCsvSeguro(
             typeof row.changes === "string"
               ? row.changes
               : JSON.stringify(row.changes || {})
@@ -58,11 +61,12 @@ async function manejarGET() {
       ),
     ].join("\n");
 
-    return new Response(csv, {
+    return new Response(`﻿${csv}`, {
       status: 200,
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename="audit-${ctx.clientId}.csv"`,
+        "Cache-Control": "no-store",
       },
     });
   } catch (error) {

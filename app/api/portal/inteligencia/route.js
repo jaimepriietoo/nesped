@@ -1,6 +1,6 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { evaluarInteligencia } from "@/lib/server/inteligencia";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * Estado de inteligencia de la cuenta: qué se puede afirmar y qué falta.
@@ -26,7 +26,7 @@ async function manejarGET() {
 
     return Response.json({ success: true, ...datos });
   } catch (error) {
-    console.error("GET /api/portal/inteligencia error:", error);
+    logErrorSeguro("portal.intelligence_load_failed", error);
     return Response.json(
       { success: false, message: "No se pudo evaluar el estado de los datos" },
       { status: 500 }

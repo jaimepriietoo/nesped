@@ -1,7 +1,8 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { buildBrandLabWorkspace } from "@/lib/portal-product";
 import { productos } from "@/lib/server/datos";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { puede, sinPermiso } from "@/lib/server/permisos";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 function buildServices(client, settings) {
   const hayVozConfigurada = Boolean(
@@ -59,6 +60,7 @@ async function manejarGET() {
         { status: 401 }
       );
     }
+    if (!puede(ctx.role, "brand.manage", ctx.permissions)) return sinPermiso();
 
     const [clientRes, settingsRes, products] = await Promise.all([
       ctx.supabase
@@ -93,8 +95,9 @@ async function manejarGET() {
         products,
         services,
       }),
-    });
+    }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
+    logErrorSeguro("portal.brand_lab_failed", error);
     return Response.json(
       {
         success: false,

@@ -2008,6 +2008,106 @@ function CodigosRecuperacion() {
   );
 }
 
+function SegundoFactorTotp() {
+  const [estado, setEstado] = useState(null);
+  const [alta, setAlta] = useState(null);
+  const [codigo, setCodigo] = useState("");
+  const [ocupado, setOcupado] = useState(false);
+  const [error, setError] = useState("");
+
+  async function pedir(body) {
+    const res = await fetch("/api/portal/totp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.success) throw new Error(json?.message || "No se pudo actualizar TOTP");
+    return json;
+  }
+
+  useEffect(() => {
+    let vivo = true;
+    fetch("/api/portal/totp", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (vivo && j?.success) setEstado(j); })
+      .catch(() => {});
+    return () => { vivo = false; };
+  }, []);
+
+  async function ejecutar(accion) {
+    setOcupado(true);
+    setError("");
+    try {
+      const json = await pedir({ action: accion, ...(accion === "start" ? {} : { code: codigo }) });
+      if (accion === "start") setAlta({ secret: json.secret, uri: json.uri });
+      if (accion === "confirm") {
+        setEstado({ enabled: true, configured: true });
+        setAlta(null);
+        setCodigo("");
+      }
+      if (accion === "disable") {
+        setEstado({ enabled: false, configured: false });
+        setAlta(null);
+        setCodigo("");
+      }
+    } catch (e) {
+      setError(e?.message || "No se pudo actualizar TOTP");
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  return (
+    <div>
+      <div className="pv3-lab">APLICACIÓN AUTENTICADORA</div>
+      <p className="pv3-p" style={{ marginTop: 12, fontSize: 13.5, color: "var(--dim)" }}>
+        Usa códigos de Google Authenticator, 1Password, Authy o cualquier aplicación TOTP.
+      </p>
+
+      {estado?.enabled ? (
+        <>
+          <p className="pv3-p" style={{ marginTop: 10, color: "var(--ok)" }}>TOTP está activado.</p>
+          <Campo label="Código actual o de recuperación">
+            <input className="pv3-input" inputMode="numeric" autoComplete="one-time-code"
+              value={codigo} onChange={(e) => setCodigo(e.target.value)} />
+          </Campo>
+          <button type="button" className="pv3-btn" style={{ marginTop: 12 }}
+            onClick={() => ejecutar("disable")} disabled={ocupado || !codigo.trim()}>
+            {ocupado ? "Comprobando…" : "Desactivar TOTP"}
+          </button>
+        </>
+      ) : alta ? (
+        <>
+          <p className="pv3-p" style={{ marginTop: 10 }}>
+            Añade esta clave en tu aplicación. Se sustituirá si reinicias el alta.
+          </p>
+          <div style={{ marginTop: 10, padding: 12, border: "1px solid var(--line)", borderRadius: 8,
+            fontFamily: "monospace", overflowWrap: "anywhere" }}>{alta.secret}</div>
+          <a className="pv3-btn" href={alta.uri} style={{ marginTop: 10, display: "inline-flex" }}>
+            Abrir en la aplicación
+          </a>
+          <Campo label="Código de seis dígitos">
+            <input className="pv3-input" inputMode="numeric" autoComplete="one-time-code"
+              value={codigo} onChange={(e) => setCodigo(e.target.value)} />
+          </Campo>
+          <button type="button" className="pv3-btn" data-v="light" style={{ marginTop: 12 }}
+            onClick={() => ejecutar("confirm")} disabled={ocupado || !/^\d{6}$/.test(codigo)}>
+            {ocupado ? "Comprobando…" : "Confirmar y activar"}
+          </button>
+        </>
+      ) : (
+        <button type="button" className="pv3-btn" data-v="light" style={{ marginTop: 12 }}
+          onClick={() => ejecutar("start")} disabled={ocupado || estado === null}>
+          {ocupado ? "Preparando…" : "Activar TOTP"}
+        </button>
+      )}
+
+      {error ? <p className="pv3-p" style={{ marginTop: 10, color: "var(--bad)" }}>{error}</p> : null}
+    </div>
+  );
+}
+
 function Ajustes({ datos, onRecargar }) {
   const c = datos.client || {};
   const s = datos.settings || {};
@@ -2124,7 +2224,11 @@ function Ajustes({ datos, onRecargar }) {
 
         <div className="pv3-card">
           <div className="pv3-lab">ACCESO</div>
+          <SegundoFactorTotp />
+          <div style={{ marginTop: 18, paddingTop: 18, borderTop: "1px solid var(--line)" }}>
+            <div className="pv3-lab">CÓDIGOS DE RECUPERACIÓN</div>
           <CodigosRecuperacion />
+          </div>
         </div>
 
       </div>
@@ -2410,6 +2514,9 @@ function Conversaciones({ inbox, cargando, onRecargar }) {
   const [abierto, setAbierto] = useState(null);
   const [canal, setCanal] = useState("whatsapp");
   const [mensaje, setMensaje] = useState("");
+  /* Un reintento conserva la misma clave. Sólo cambia al editar el mensaje,
+     cambiar de canal/contacto o después de un envío confirmado. */
+  const idEnvio = useRef(null);
 
   if (cargando) return <div className="pv3-grid" data-c="4">{[0, 1, 2, 3].map((i) => <div key={i} className="pv3-skel" />)}</div>;
   if (!inbox) return <div style={{ marginTop: 22 }}><Vacio>No se pudo cargar el inbox.</Vacio></div>;
@@ -2430,7 +2537,10 @@ function Conversaciones({ inbox, cargando, onRecargar }) {
               <button
                 key={h.id}
                 type="button"
-                onClick={() => setAbierto(abierto === h.id ? null : h.id)}
+                onClick={() => {
+                  idEnvio.current = null;
+                  setAbierto(abierto === h.id ? null : h.id);
+                }}
                 className="pv3-card"
                 style={{
                   textAlign: "left", cursor: "pointer", font: "inherit", color: "inherit",
@@ -2473,7 +2583,10 @@ function Conversaciones({ inbox, cargando, onRecargar }) {
                 <div className="pv3-responder">
                   <div className="pv3-form">
                     <Campo label="Canal">
-                      <select className="pv3-input" value={canal} onChange={(e) => setCanal(e.target.value)}>
+                      <select className="pv3-input" value={canal} onChange={(e) => {
+                        idEnvio.current = null;
+                        setCanal(e.target.value);
+                      }}>
                         <option value="whatsapp">WhatsApp</option>
                         <option value="sms">SMS</option>
                         <option value="email">Email</option>
@@ -2486,7 +2599,10 @@ function Conversaciones({ inbox, cargando, onRecargar }) {
                     rows={3}
                     placeholder="Escribe la respuesta, o pide una sugerencia…"
                     value={mensaje}
-                    onChange={(e) => setMensaje(e.target.value)}
+                    onChange={(e) => {
+                      idEnvio.current = null;
+                      setMensaje(e.target.value);
+                    }}
                   />
 
                   <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
@@ -2503,6 +2619,7 @@ function Conversaciones({ inbox, cargando, onRecargar }) {
                           json?.primary ||
                           json?.message;
                         if (!texto) throw new Error("No se pudo generar una sugerencia.");
+                        idEnvio.current = null;
                         setMensaje(texto);
                         /* Si la IA no está, lo que llega es una plantilla, y
                            se dice: nadie debe mandar una plantilla creyendo
@@ -2520,12 +2637,15 @@ function Conversaciones({ inbox, cargando, onRecargar }) {
                       confirmar={`¿Enviar este mensaje por ${canal} a ${activo.leadName}?`}
                       onRun={async () => {
                         if (!mensaje.trim()) throw new Error("Escribe el mensaje primero.");
+                        if (!idEnvio.current) idEnvio.current = crypto.randomUUID();
                         await enviar("/api/portal/conversations/respond", "POST", {
                           leadId: activo.leadId,
+                          requestId: idEnvio.current,
                           channel: canal,
                           message: mensaje,
                           takeover: true,
                         });
+                        idEnvio.current = null;
                         setMensaje("");
                         await onRecargar();
                       }}

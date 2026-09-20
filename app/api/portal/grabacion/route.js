@@ -1,5 +1,6 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { direccionParaEscuchar } from "@/lib/server/grabaciones";
+import { puede, sinPermiso } from "@/lib/server/permisos";
 import { observeRoute } from "@/lib/server/observability.mjs";
 
 /**
@@ -23,6 +24,7 @@ async function manejarGET(req) {
   if (!ctx.ok) {
     return Response.json({ success: false, message: ctx.message }, { status: 401 });
   }
+  if (!puede(ctx.role, "crm.edit", ctx.permissions)) return sinPermiso();
 
   const id = new URL(req.url).searchParams.get("id");
   if (!id) {

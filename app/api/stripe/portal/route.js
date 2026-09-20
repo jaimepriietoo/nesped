@@ -7,7 +7,7 @@ import {
   resolveClientStripeCustomer,
   stripe,
 } from "@/lib/server/stripe-utils";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 async function manejarPOST(req) {
   try {
@@ -66,7 +66,7 @@ async function manejarPOST(req) {
       url: session.url,
     });
   } catch (error) {
-    console.error("POST /api/stripe/portal error:", error);
+    logErrorSeguro("stripe.billing_portal_failed", error);
     return NextResponse.json(
       { success: false, message: "No se pudo abrir el portal de facturacion" },
       { status: 500 }

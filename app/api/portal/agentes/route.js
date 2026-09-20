@@ -1,8 +1,10 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { puede } from "@/lib/server/permisos";
 import { evaluarAgentes, MODOS } from "@/lib/server/agentes";
-import { requireSameOrigin } from "@/lib/server/security";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
+import { validar } from "@/lib/server/esquemas";
+import { CambiarModoAgente } from "@/lib/server/esquemas-portal";
 
 /** Qué agentes hay, en qué modo están y qué les falta para poder ejecutar. */
 async function manejarGET() {
@@ -27,7 +29,7 @@ async function manejarGET() {
       agentes: evaluarAgentes({ cliente, ajustes }),
     });
   } catch (error) {
-    console.error("GET /api/portal/agentes error:", error);
+    logErrorSeguro("portal.agents_read_failed", error);
     return Response.json({ success: false, message: "No se pudo leer los agentes" }, { status: 500 });
   }
 }
@@ -57,7 +59,18 @@ async function manejarPATCH(req) {
       );
     }
 
-    const { agenteId, modo } = await req.json().catch(() => ({}));
+    const limited = await requireRateLimitAsync(req, {
+      namespace: "portal:agents",
+      limit: 30,
+      keyParts: [ctx.clientId, ctx.userEmail],
+      includeIp: false,
+    });
+    if (limited) return limited;
+    const cuerpo = await leerJsonLimitado(req, { maxBytes: 4 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
+    const leido = validar(CambiarModoAgente, cuerpo.datos);
+    if (leido.respuesta) return leido.respuesta;
+    const { agenteId, modo } = leido.datos;
     if (!MODOS[modo]) {
       return Response.json({ success: false, message: "Modo desconocido" }, { status: 400 });
     }
@@ -101,7 +114,7 @@ async function manejarPATCH(req) {
 
     return Response.json({ success: true });
   } catch (error) {
-    console.error("PATCH /api/portal/agentes error:", error);
+    logErrorSeguro("portal.agent_update_failed", error);
     return Response.json({ success: false, message: "No se pudo cambiar el modo" }, { status: 500 });
   }
 }

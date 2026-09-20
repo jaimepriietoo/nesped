@@ -1,6 +1,6 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { fichaDeContacto } from "@/lib/server/contacto";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * Todo lo que se sabe de un contacto, en una sola llamada.
@@ -41,7 +41,7 @@ async function manejarGET(req) {
 
     return Response.json({ success: true, ...ficha });
   } catch (error) {
-    console.error("GET /api/portal/contacto error:", error);
+    logErrorSeguro("portal.contact_load_failed", error);
     return Response.json(
       { success: false, message: "No se pudo leer la ficha" },
       { status: 500 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Inter } from "next/font/google";
 import { FondoNesped } from "@/components/nucleo/fondo";
@@ -19,7 +19,7 @@ const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600"], display
  */
 function Restablecer() {
   const params = useSearchParams();
-  const token = params.get("token") || "";
+  const [token, setToken] = useState(() => params.get("token") || "");
   const [email, setEmail] = useState(params.get("email") || "");
   const [password, setPassword] = useState("");
   const [repetida, setRepetida] = useState("");
@@ -28,6 +28,17 @@ function Restablecer() {
   const [error, setError] = useState("");
   const [hecho, setHecho] = useState(false);
   const [escribiendo, setEscribiendo] = useState(false);
+
+  useEffect(() => {
+    const fragmento = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const recibido = fragmento.get("token") || params.get("token") || "";
+    if (!recibido) return;
+
+    setToken(recibido);
+    /* Compatibilidad con enlaces antiguos que usaban ?token=: se acepta una
+       vez, pero se quita de la barra y del historial inmediatamente. */
+    window.history.replaceState(window.history.state, "", "/restablecer");
+  }, [params]);
 
   async function pedir(e) {
     e.preventDefault();

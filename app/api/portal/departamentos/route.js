@@ -1,7 +1,7 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { puede, sinPermiso } from "@/lib/server/permisos";
-import { requireSameOrigin } from "@/lib/server/security";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 import { validar } from "@/lib/server/esquemas";
 import { Departamentos } from "@/lib/server/esquemas-portal";
 import { departamentosDeEmpresa, DEPARTAMENTOS_POR_DEFECTO } from "@/lib/server/departamentos";
@@ -19,7 +19,7 @@ async function manejarGET() {
     const { lista, deSerie } = await departamentosDeEmpresa(ctx.clientId, ctx.datos);
     return Response.json({ success: true, data: lista, deSerie, deSerieDisponibles: DEPARTAMENTOS_POR_DEFECTO, puedeEditar: puede(ctx.role, "routing.manage", ctx.permissions) });
   } catch (err) {
-    console.error("[portal/departamentos]", err?.message || err);
+    logErrorSeguro("portal.departments_read_failed", err);
     return Response.json({ success: false, message: "No se pudieron leer los departamentos" }, { status: 500 });
   }
 }
@@ -31,7 +31,14 @@ async function manejarPUT(req) {
   if (!ctx.ok) return Response.json({ success: false, message: "No autorizado" }, { status: 401 });
   if (!puede(ctx.role, "routing.manage", ctx.permissions)) return sinPermiso("Sólo el propietario o un administrador pueden cambiar los departamentos.");
 
-  const leido = validar(Departamentos, await req.json().catch(() => ({})));
+  const limited = await requireRateLimitAsync(req, {
+    namespace: "portal:departments", limit: 20,
+    keyParts: [ctx.clientId, ctx.userEmail], includeIp: false,
+  });
+  if (limited) return limited;
+  const cuerpo = await leerJsonLimitado(req, { maxBytes: 32 * 1024 });
+  if (cuerpo.respuesta) return cuerpo.respuesta;
+  const leido = validar(Departamentos, cuerpo.datos);
   if (leido.respuesta) return leido.respuesta;
   const lista = leido.datos.departamentos;
   if (new Set(lista.map((d) => d.clave)).size !== lista.length) {
@@ -50,7 +57,7 @@ async function manejarPUT(req) {
     const { lista: nueva, deSerie } = await departamentosDeEmpresa(ctx.clientId, ctx.datos);
     return Response.json({ success: true, data: nueva, deSerie });
   } catch (err) {
-    console.error("[portal/departamentos] PUT", err?.message || err);
+    logErrorSeguro("portal.departments_update_failed", err);
     return Response.json({ success: false, message: "No se pudieron guardar los departamentos" }, { status: 500 });
   }
 }

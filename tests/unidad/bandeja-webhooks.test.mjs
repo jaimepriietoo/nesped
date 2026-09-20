@@ -61,3 +61,22 @@ test("cada proveedor reclama su identificador antes de tener efectos", () => {
   assert.match(leer("lib/server/elevenlabs.js"), /p_proveedor: "elevenlabs"/);
   assert.match(leer("app/api/whatsapp/webhook/route.js"), /p_proveedor: "twilio-whatsapp"/);
 });
+
+test("ningún webhook útil entra sin identificador idempotente", () => {
+  const bandeja = leer("lib/server/bandeja-webhooks.js");
+  assert.match(bandeja, /if \(!idExterno\)[\s\S]{0,120}identificador idempotente/);
+
+  const elevenlabs = leer("app/api/voice/elevenlabs/post-call/route.js");
+  assert.match(elevenlabs, /if \(!conversationId\)[\s\S]{0,160}status: 400/);
+
+  const twilio = leer("app/api/whatsapp/webhook/route.js");
+  const post = twilio.slice(twilio.indexOf("async function manejarPOST("));
+  assert.match(post, /if \(!messageSid\)[\s\S]{0,180}status: 400/);
+});
+
+test("Stripe falla cerrado si no puede reclamar el evento", () => {
+  const servicio = leer("lib/server/stripe-webhook-service.js");
+  assert.match(servicio, /if \(error \|\| typeof primeraVez !== "boolean"\)[\s\S]{0,160}throw new Error/);
+  assert.match(servicio, /await reclamarEventoStripe\(event\?\.id, \{ supabase \}\)/);
+  assert.doesNotMatch(servicio, /if \(!error && primeraVez === false\)/);
+});

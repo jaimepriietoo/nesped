@@ -1,5 +1,5 @@
 import { getPortalContext } from "@/lib/portal-auth";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 async function manejarGET() {
   try {
@@ -33,7 +33,7 @@ async function manejarGET() {
       })),
     });
   } catch (error) {
-    console.error(error);
+    logErrorSeguro("calls.load_failed", error);
 
     return Response.json(
       { success: false, message: "Error cargando llamadas", data: [] },

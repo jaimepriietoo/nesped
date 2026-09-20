@@ -5,13 +5,14 @@ import {
   sanitizeNextPath,
   setAuthCookies,
   setTwoFactorChallenge,
-  verifyPassword,
+  verifyPasswordWithoutAccountLeak,
 } from "@/lib/server/auth";
 import { logEvent, observeRoute } from "@/lib/server/observability.mjs";
 import { avisarDeAcceso } from "@/lib/server/aviso-acceso.mjs";
-import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
+import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 import { sendTwoFactorCode } from "@/lib/server/two-factor.mjs";
 import { Login, validar } from "@/lib/server/esquemas";
+import { estadoTotp } from "@/lib/server/totp";
 
 async function handlePost(req) {
   try {
@@ -29,8 +30,10 @@ async function handlePost(req) {
     });
     if (ipRateLimitError) return ipRateLimitError;
 
+    const cuerpo = await leerJsonLimitado(req, { maxBytes: 8 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
     const supabase = getSupabase();
-    const leido = validar(Login, await req.json().catch(() => ({})), { mensaje: "Faltan email o contraseña" });
+    const leido = validar(Login, cuerpo.datos, { mensaje: "Faltan email o contraseña" });
     if (leido.respuesta) return leido.respuesta;
     const { email, password, next: nextPath } = leido.datos;
 
@@ -55,7 +58,9 @@ async function handlePost(req) {
 
     const storedPassword = user?.password || user?.password_hash || "";
 
-    if (!error && user && verifyPassword(password, storedPassword)) {
+    const passwordMatches = verifyPasswordWithoutAccountLeak(password, storedPassword);
+
+    if (!error && user && passwordMatches) {
       authenticatedUser = {
         email,
         client_id: user.client_id,
@@ -101,7 +106,8 @@ async function handlePost(req) {
     // pasado aquí.
     const redirectTo = sanitizeNextPath(nextPath);
 
-    if (requiresTwoFactor(normalizedRole) || requiresTwoFactor(profile.role)) {
+    const totp = await estadoTotp({ email, clientId: authenticatedUser.client_id });
+    if (totp.enabled || requiresTwoFactor(normalizedRole) || requiresTwoFactor(profile.role)) {
       const code = generateTwoFactorCode();
       await setTwoFactorChallenge({
         email,
@@ -111,7 +117,17 @@ async function handlePost(req) {
         nextPath: redirectTo,
         code,
         sessionEpoch: authenticatedUser.sessionEpoch || 0,
+        factorType: totp.enabled ? "totp" : "email",
       });
+
+      if (totp.enabled) {
+        return Response.json({
+          success: true,
+          requiresTwoFactor: true,
+          challengeExpiresIn: 10 * 60,
+          verificationMethod: "totp",
+        });
+      }
 
       // El móvil sólo se usa si el correo falla, para no dejar a nadie fuera
       // por una caída del proveedor de email.
@@ -135,6 +151,7 @@ async function handlePost(req) {
         requiresTwoFactor: true,
         challengeExpiresIn: 10 * 60,
         verificationChannel: delivery.channel || "email",
+        verificationMethod: "delivery",
         debugCode: delivery.debugCode || "",
       });
     }

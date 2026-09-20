@@ -1,7 +1,7 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { puede, sinPermiso } from "@/lib/server/permisos";
-import { requireSameOrigin, requireRateLimitAsync } from "@/lib/server/security";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { leerJsonLimitado, requireSameOrigin, requireRateLimitAsync } from "@/lib/server/security";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 import { validar } from "@/lib/server/esquemas";
 import { ClasificarContacto } from "@/lib/server/esquemas-portal";
 import { clasificarYActuar } from "@/lib/server/clasificacion";
@@ -15,15 +15,17 @@ async function manejarPOST(req) {
   if (!puede(ctx.role, "crm.edit", ctx.permissions)) return sinPermiso();
   const limitado = await requireRateLimitAsync(req, { namespace: "clasificar", limit: 60, keyParts: [ctx.clientId], includeIp: false });
   if (limitado) return limitado;
-  const leido = validar(ClasificarContacto, await req.json().catch(() => ({})));
+  const cuerpo = await leerJsonLimitado(req, { maxBytes: 8 * 1024 });
+  if (cuerpo.respuesta) return cuerpo.respuesta;
+  const leido = validar(ClasificarContacto, cuerpo.datos);
   if (leido.respuesta) return leido.respuesta;
   try {
     const r = await clasificarYActuar({ clientId: ctx.clientId, leadId: leido.datos.lead_id, supabase: ctx.datos });
     const { lead: _lead, ...clasificacion } = r.clasificacion;
     return Response.json({ success: true, clasificacion, automatismos: r.automatismos });
   } catch (err) {
-    console.error("[portal/contactos/clasificar]", err?.message || err);
-    return Response.json({ success: false, message: err?.message || "No se pudo clasificar" }, { status: 500 });
+    logErrorSeguro("portal.contact_classify_failed", err);
+    return Response.json({ success: false, message: "No se pudo clasificar" }, { status: 500 });
   }
 }
 

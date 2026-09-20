@@ -1,15 +1,21 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { puede } from "@/lib/server/permisos";
+import { mismoTelefono, toE164 } from "@/lib/server/phone";
+import { EnviarSms } from "@/lib/server/esquemas-portal";
+import { validar } from "@/lib/server/esquemas";
+import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 import { enviarSms } from "@/lib/server/twilio";
 import { observeRoute } from "@/lib/server/observability.mjs";
 
-function normalizePhone(value) {
-  if (!value) return "";
-  return String(value).replace(/\s+/g, "").trim();
+export function destinoSmsPermitido(solicitado, registrado) {
+  return mismoTelefono(solicitado, registrado) ? toE164(registrado) : "";
 }
 
 async function manejarPOST(req) {
   try {
+    const originError = requireSameOrigin(req);
+    if (originError) return originError;
+
     const ctx = await getPortalContext();
     if (!ctx.ok) {
       return Response.json(
@@ -25,40 +31,49 @@ async function manejarPOST(req) {
       );
     }
 
-    const body = await req.json();
+    const limited = await requireRateLimitAsync(req, {
+      namespace: "followup:sms",
+      limit: 30,
+      windowMs: 15 * 60 * 1000,
+      keyParts: [ctx.clientId, ctx.userEmail],
+      includeIp: false,
+      message: "Demasiados SMS. Espera unos minutos antes de volver a intentarlo.",
+    });
+    if (limited) return limited;
+
+    const cuerpo = await leerJsonLimitado(req, { maxBytes: 8 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
+    const leido = validar(EnviarSms, cuerpo.datos);
+    if (leido.respuesta) return leido.respuesta;
     const {
       leadId,
       to,
       message,
       templateId = null,
-    } = body;
-
-    if (!leadId || !to || !message) {
-      return Response.json(
-        { success: false, message: "Faltan datos obligatorios" },
-        { status: 400 }
-      );
-    }
-
-    const cleanTo = normalizePhone(to);
-    if (!cleanTo) {
-      return Response.json(
-        { success: false, message: "Teléfono no válido" },
-        { status: 400 }
-      );
-    }
+    } = leido.datos;
 
     const { data: lead, error: leadError } = await ctx.supabase
       .from("leads")
-      .select("*")
+      .select("id,telefono,status,score,proxima_accion")
       .eq("id", leadId)
       .eq("client_id", ctx.clientId)
       .single();
 
     if (leadError || !lead) {
       return Response.json(
-        { success: false, message: leadError?.message || "Lead no encontrado" },
+        { success: false, message: "Lead no encontrado" },
         { status: 404 }
+      );
+    }
+
+    /* El destino sale del contacto ya acotado a la empresa, no del cuerpo.
+       Antes se podía mandar el coste y el contenido a cualquier teléfono
+       conservando un leadId válido como coartada. */
+    const cleanTo = destinoSmsPermitido(to, lead.telefono);
+    if (!cleanTo) {
+      return Response.json(
+        { success: false, message: "El teléfono no coincide con el contacto" },
+        { status: 400 }
       );
     }
 

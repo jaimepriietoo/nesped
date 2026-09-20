@@ -6,8 +6,9 @@ import {
 } from "@/lib/server/auth";
 import { consumirCodigo } from "@/lib/server/codigos-recuperacion";
 import { observeRoute } from "@/lib/server/observability.mjs";
-import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
+import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 import { SegundoFactor, validar } from "@/lib/server/esquemas";
+import { verificarYConsumirTotp } from "@/lib/server/totp";
 
 async function handlePost(req) {
   const originError = requireSameOrigin(req);
@@ -19,16 +20,23 @@ async function handlePost(req) {
     keyParts: [challenge.email], includeIp: false,
   });
   if (limited) return limited;
-  const leido = validar(SegundoFactor, await req.json().catch(() => ({})), { mensaje: "Código no válido" });
+  const cuerpo = await leerJsonLimitado(req, { maxBytes: 4 * 1024 });
+  if (cuerpo.respuesta) return cuerpo.respuesta;
+  const leido = validar(SegundoFactor, cuerpo.datos, { mensaje: "Código no válido" });
   if (leido.respuesta) return leido.respuesta;
   const { code } = leido.datos;
   // El contador está en la base de datos; repetir una cookie no lo reinicia.
   const attempt = await tomarIntentoTwoFactor(challenge);
   if (!attempt) return Response.json({ success: false, message: "La verificación ha caducado." }, { status: 400 });
   const recovery = /^[A-Za-z0-9]{5}-?[A-Za-z0-9]{5}$/.test(code);
+  const totp = challenge.factorType === "totp";
   const valid = recovery
     ? await consumirCodigo({ email: challenge.email, codigo: code })
-    : verifyTwoFactorCode(attempt, code);
+    : totp
+      ? await verificarYConsumirTotp({
+          email: challenge.email, clientId: challenge.clientId, codigo: code,
+        })
+      : verifyTwoFactorCode(attempt, code);
   if (!valid) {
     if (attempt.attempts >= 5) await clearTwoFactorChallenge();
     return Response.json({ success: false, message: "Código incorrecto o caducado." }, { status: 401 });
@@ -53,7 +61,8 @@ async function handlePost(req) {
   });
   await supabase.from("audit_logs").insert({
     client_id: challenge.clientId, entity_type: "auth", entity_id: challenge.email,
-    action: recovery ? "2fa_recuperacion_usada" : "2fa_verified", actor: challenge.email,
+    action: recovery ? "2fa_recuperacion_usada" : totp ? "totp_verified" : "2fa_verified",
+    actor: challenge.email,
   });
   void avisarDeAcceso({ email: challenge.email, rol: user.role, clientName: challenge.clientName });
   return Response.json({ success: true, redirectTo: challenge.nextPath || "/portal" });

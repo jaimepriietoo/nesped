@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { citasPorEstado, ultimoEventoDeLead, crearEventoLead } from "@/lib/server/datos";
 import { getInternalApiHeaders } from "@/lib/server/internal-api";
 import { requireInternalRequest } from "@/lib/server/internal-api";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 
@@ -84,7 +84,7 @@ async function manejarPOST(req) {
           reminderType,
         });
       } catch (err) {
-        console.error(err);
+        logErrorSeguro("automation.appointment_reminder_item_failed", err);
         failed.push({
           appointmentId: row.id,
         });
@@ -98,7 +98,7 @@ async function manejarPOST(req) {
       data: processed,
     });
   } catch (err) {
-    console.error(err);
+    logErrorSeguro("automation.appointment_reminders_failed", err);
     return NextResponse.json({
       success: false,
       message: "Error enviando recordatorios de cita",

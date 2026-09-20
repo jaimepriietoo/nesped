@@ -1,9 +1,11 @@
-import { requireSameOrigin } from "@/lib/server/security";
+import { validar } from "@/lib/server/esquemas";
+import { ClienteAdmin } from "@/lib/server/esquemas-operaciones";
+import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 import { createClient } from "@supabase/supabase-js";
 import { safeUpsertClientSettings } from "@/lib/client-settings";
 import { getAdminContext } from "@/lib/server/auth";
 import { esTelefonoValido, toE164 } from "@/lib/server/phone";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 function getSupabase() {
   return createClient(
@@ -24,8 +26,16 @@ async function manejarPOST(req) {
       );
     }
 
+    const limite = await requireRateLimitAsync(req, {
+      namespace: "admin-client-create-legacy", limit: 20, keyParts: [admin.userEmail || "admin"],
+    });
+    if (limite) return limite;
+    const cuerpo = await leerJsonLimitado(req, { maxBytes: 64 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
+    const entrada = validar(ClienteAdmin, cuerpo.datos);
+    if (entrada.respuesta) return entrada.respuesta;
     const supabase = getSupabase();
-    const body = await req.json();
+    const body = entrada.datos;
 
     const {
       id,
@@ -40,13 +50,6 @@ async function manejarPOST(req) {
       secondary_color = "#030303",
       industry = "",
     } = body;
-
-    if (!id || !name) {
-      return Response.json(
-        { success: false, message: "Faltan id o name" },
-        { status: 400 }
-      );
-    }
 
     // Se normaliza a E.164 antes de guardar: si no, "+34983460825" y
     // "34983460825" cuentan como números distintos y el enrutado de
@@ -109,11 +112,12 @@ async function manejarPOST(req) {
     );
 
     if (settingsError) {
-      console.error("Error creando client_settings:", settingsError.message);
+      logErrorSeguro("admin.client_settings_create_failed", settingsError);
     }
 
     return Response.json({ success: true, data });
   } catch (error) {
+    logErrorSeguro("admin.client_create_legacy_failed", error);
     return Response.json(
       { success: false, message: "Error creando cliente" },
       { status: 500 }

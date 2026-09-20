@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 import { getPortalContext } from "@/lib/portal-auth";
 import { puede } from "@/lib/server/permisos";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { validar } from "@/lib/server/esquemas";
+import { AccionSobreLead } from "@/lib/server/esquemas-operaciones";
+import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 async function manejarPOST(req) {
   try {
+    const originError = requireSameOrigin(req);
+    if (originError) return originError;
     const ctx = await getPortalContext();
     if (!ctx.ok) {
       return NextResponse.json(
@@ -20,13 +25,17 @@ async function manejarPOST(req) {
       );
     }
 
-    const { leadId } = await req.json();
-    if (!leadId) {
-      return NextResponse.json(
-        { success: false, message: "Falta leadId" },
-        { status: 400 }
-      );
-    }
+    const limite = await requireRateLimitAsync(req, {
+      namespace: "automation-whatsapp-autoreply",
+      limit: 60,
+      keyParts: [ctx.clientId, ctx.userEmail],
+    });
+    if (limite) return limite;
+    const cuerpo = await leerJsonLimitado(req, { maxBytes: 4 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
+    const entrada = validar(AccionSobreLead, cuerpo.datos);
+    if (entrada.respuesta) return entrada.respuesta;
+    const { leadId } = entrada.datos;
 
     const { data: lead, error } = await ctx.supabase
       .from("leads")
@@ -63,7 +72,7 @@ async function manejarPOST(req) {
       message,
     });
   } catch (err) {
-    console.error(err);
+    logErrorSeguro("automation.whatsapp_autoreply_failed", err);
     return NextResponse.json(
       { success: false, message: "Error IA" },
       { status: 500 }

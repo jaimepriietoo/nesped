@@ -1,5 +1,6 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { puede } from "@/lib/server/permisos";
+import { campoCsvSeguro } from "@/lib/server/csv";
 import { observeRoute } from "@/lib/server/observability.mjs";
 
 /**
@@ -26,16 +27,6 @@ import { observeRoute } from "@/lib/server/observability.mjs";
  * las internas: puntuaciones y banderas de automatismos no significan nada
  * abiertas en un Excel y sólo estorban a quien busca un teléfono.
  */
-
-function campoCsv(valor) {
-  const texto = String(valor ?? "");
-  const seguro = /^[=+\-@\t\r]/.test(texto) ? `'${texto}` : texto;
-
-  if (/[",\n\r]/.test(seguro)) {
-    return `"${seguro.replace(/"/g, '""')}"`;
-  }
-  return seguro;
-}
 
 const COLUMNAS = [
   ["Nombre", (l) => l.nombre],
@@ -84,10 +75,20 @@ async function manejarGET() {
       throw new Error(error.message || "No se pudieron leer los contactos");
     }
 
+    const { error: auditError } = await ctx.datos.from("audit_logs").insert({
+      client_id: ctx.clientId,
+      entity_type: "export",
+      entity_id: ctx.clientId,
+      action: "contacts_exported",
+      actor: ctx.userEmail,
+      changes: { rows: (data || []).length, format: "csv" },
+    });
+    if (auditError) throw new Error("No se pudo registrar la exportación");
+
     const csv = [
-      COLUMNAS.map(([titulo]) => campoCsv(titulo)).join(","),
+      COLUMNAS.map(([titulo]) => campoCsvSeguro(titulo)).join(","),
       ...(data || []).map((lead) =>
-        COLUMNAS.map(([, leer]) => campoCsv(leer(lead))).join(",")
+        COLUMNAS.map(([, leer]) => campoCsvSeguro(leer(lead))).join(",")
       ),
     ].join("\r\n");
 

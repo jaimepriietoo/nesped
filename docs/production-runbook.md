@@ -21,6 +21,7 @@ If any token has ever been pasted in chat, screen-shared, committed, or exposed 
 
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `NESPED_SESSION_SECRET`
+- `NESPED_TOTP_ENCRYPTION_KEY`
 - `INTERNAL_API_TOKEN`
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
@@ -67,10 +68,15 @@ no se puede hacer force push ni borrarla. Vercel despliega producción desde
 `main` al fusionar. Antes de aplicar una migración que quite algo, ver
 `docs/copias-y-recuperacion.md`.
 
-1. Deploy Next app to Vercel (fusionar la PR en `main`)
-2. Deploy `voice-server.js` service to Railway
-3. Confirm public `BASE_URL` still points to the voice service
-4. Confirm Stripe and Twilio webhooks still target the right production URLs
+1. Crear `NESPED_TOTP_ENCRYPTION_KEY` (32 bytes, hexadecimal o base64) en
+   Vercel. Debe ser distinta de sesión, Supabase y tokens internos.
+2. Aplicar las migraciones aditivas de la PR. En esta versión deben existir
+   `auth_totp_factors` y `mensajes_salientes_idempotentes` antes de publicar
+   el código; no contienen datos de clientes ni eliminan columnas.
+3. Deploy Next app to Vercel (fusionar la PR en `main`)
+4. Deploy `voice-server.js` service to Railway
+5. Confirm public `BASE_URL` still points to the voice service
+6. Confirm Stripe and Twilio webhooks still target the right production URLs
 
 ## 5. Smoke test after deploy
 
@@ -92,6 +98,8 @@ npm run smoke -- https://tu-dominio.com
 
 - login and logout
 - owner/admin login with 2FA code delivery
+- alta TOTP, login con TOTP, rechazo del mismo código reutilizado y baja con
+  TOTP o código de recuperación
 - `/portal`
 - contratar plan
 - gestionar facturación

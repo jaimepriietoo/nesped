@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { requireSameOrigin, requireRateLimitAsync } from "@/lib/server/security";
+import { leerJsonLimitado, requireSameOrigin, requireRateLimitAsync } from "@/lib/server/security";
 import { observeRoute } from "@/lib/server/observability.mjs";
 import { validar } from "@/lib/server/esquemas";
 import { restablecerConToken } from "@/lib/server/restablecer";
@@ -14,7 +14,9 @@ async function manejarPOST(req) {
   if (origen) return origen;
   const limitado = await requireRateLimitAsync(req, { namespace: "restablecer:ip", limit: 10, windowMs: 15 * 60 * 1000, message: "Demasiados intentos. Espera unos minutos." });
   if (limitado) return limitado;
-  const leido = validar(Restablecer, await req.json().catch(() => ({})), { mensaje: "Datos no válidos" });
+  const cuerpo = await leerJsonLimitado(req, { maxBytes: 8 * 1024 });
+  if (cuerpo.respuesta) return cuerpo.respuesta;
+  const leido = validar(Restablecer, cuerpo.datos, { mensaje: "Datos no válidos" });
   if (leido.respuesta) return leido.respuesta;
   try {
     await restablecerConToken(leido.datos);

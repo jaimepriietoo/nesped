@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { runVoiceCallsAutomation } from "@/lib/server/automation-service";
 import { requireInternalRequest } from "@/lib/server/internal-api";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 /*
  * Tarea de sistema: sólo se lanza desde dentro, con el token interno.
@@ -23,7 +23,7 @@ async function manejarPOST(req) {
     const result = await runVoiceCallsAutomation();
     return NextResponse.json(result);
   } catch (err) {
-    console.error(err);
+    logErrorSeguro("automation.voice_calls_failed", err);
     return NextResponse.json({
       success: false,
       message: "Error ejecutando llamadas IA",

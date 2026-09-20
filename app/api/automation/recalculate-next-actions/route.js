@@ -1,7 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
-import { getInternalApiHeaders } from "@/lib/server/internal-api";
 import { requireInternalRequest } from "@/lib/server/internal-api";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { saveNextBestAction } from "@/lib/server/next-best-action-service";
+import { leerJsonLimitado } from "@/lib/server/security";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
+import { validar } from "@/lib/server/esquemas";
+import { RecalcularAcciones } from "@/lib/server/esquemas-operaciones";
 
 function getSupabase() {
   return createClient(
@@ -27,8 +30,11 @@ async function manejarPOST(req) {
   if (errorInterno) return errorInterno;
 
   try {
-    const body = await req.json().catch(() => ({}));
-    const onlyClientId = body?.clientId || null;
+    const cuerpo = await leerJsonLimitado(req, { maxBytes: 2 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
+    const leido = validar(RecalcularAcciones, cuerpo.datos);
+    if (leido.respuesta) return leido.respuesta;
+    const onlyClientId = leido.datos.clientId || null;
 
     const supabase = getSupabase();
 
@@ -55,24 +61,15 @@ async function manejarPOST(req) {
 
     for (const lead of leads || []) {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/ai/next-best-action/save`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...getInternalApiHeaders(),
-          },
-          body: JSON.stringify({
-            leadId: lead.id,
-            clientId: lead.client_id,
-            useAI: true,
-          }),
+        await saveNextBestAction({
+          supabase,
+          leadId: lead.id,
+          clientId: lead.client_id,
+          useAI: true,
+          actor: "system",
         });
-
-        const json = await res.json();
-
-        if (json.success) processed += 1;
-        else failed += 1;
-      } catch (err) {
+        processed += 1;
+      } catch {
         failed += 1;
       }
     }
@@ -84,7 +81,7 @@ async function manejarPOST(req) {
       total: (leads || []).length,
     });
   } catch (error) {
-    console.error("POST /api/automation/recalculate-next-actions error:", error);
+    logErrorSeguro("automation.recalculate_next_actions_failed", error);
 
     return Response.json(
       {

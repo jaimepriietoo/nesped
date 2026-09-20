@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { processStripeWebhookEvent } from "@/lib/server/stripe-webhook-service";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
+import { leerTextoLimitado } from "@/lib/server/security";
 
 const stripe = new Stripe(
   process.env.STRIPE_SECRET_KEY || "sk_test_placeholder"
@@ -9,7 +10,9 @@ const stripe = new Stripe(
 
 async function manejarPOST(req) {
   try {
-    const rawBody = await req.text();
+    const cuerpo = await leerTextoLimitado(req, { maxBytes: 1024 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
+    const rawBody = cuerpo.datos;
     const signature = req.headers.get("stripe-signature");
     const secret =
       process.env.STRIPE_SUBSCRIPTION_WEBHOOK_SECRET ||
@@ -17,15 +20,15 @@ async function manejarPOST(req) {
 
     if (!signature) {
       return NextResponse.json(
-        { success: false, message: "Falta Stripe-Signature" },
+        { success: false, message: "Firma inválida" },
         { status: 400 }
       );
     }
 
     if (!secret) {
       return NextResponse.json(
-        { success: false, message: "Falta secret de webhook de Stripe" },
-        { status: 500 }
+        { success: false, message: "Webhook no disponible" },
+        { status: 503 }
       );
     }
 
@@ -33,8 +36,7 @@ async function manejarPOST(req) {
 
     try {
       event = stripe.webhooks.constructEvent(rawBody, signature, secret);
-    } catch (err) {
-      console.error("Firma Stripe inválida:", err.message);
+    } catch {
       return NextResponse.json(
         { success: false, message: "Firma inválida" },
         { status: 400 }
@@ -45,7 +47,7 @@ async function manejarPOST(req) {
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    console.error("Stripe subscription webhook error:", err);
+    logErrorSeguro("stripe.subscription_webhook_failed", err);
     return NextResponse.json(
       { success: false, message: "Error procesando webhook de suscripción" },
       { status: 500 }

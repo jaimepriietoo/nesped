@@ -13,6 +13,7 @@ import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/li
 import { sendTwoFactorCode } from "@/lib/server/two-factor.mjs";
 import { Login, validar } from "@/lib/server/esquemas";
 import { estadoTotp } from "@/lib/server/totp";
+import { anotarPais, paisNuevo } from "@/lib/server/anomalias";
 
 async function handlePost(req) {
   try {
@@ -107,7 +108,15 @@ async function handlePost(req) {
     const redirectTo = sanitizeNextPath(nextPath);
 
     const totp = await estadoTotp({ email, clientId: authenticatedUser.client_id });
-    if (totp.enabled || requiresTwoFactor(normalizedRole) || requiresTwoFactor(profile.role)) {
+    /* Un país desde el que esta cuenta nunca había entrado exige el segundo
+       factor aunque el rol no lo pida. El país lo pone Vercel; fuera de
+       Vercel no hay cabecera y no se exige nada. */
+    const pais = String(req.headers.get("x-vercel-ip-country") || "").toUpperCase();
+    const origen = await paisNuevo({ email, clientId: authenticatedUser.client_id, pais });
+    if (origen.nuevo) {
+      logEvent("warn", "auth.pais_nuevo", { client_id: authenticatedUser.client_id, pais, conocidos: origen.conocidos });
+    }
+    if (totp.enabled || origen.nuevo || requiresTwoFactor(normalizedRole) || requiresTwoFactor(profile.role)) {
       const code = generateTwoFactorCode();
       await setTwoFactorChallenge({
         email,
@@ -118,6 +127,7 @@ async function handlePost(req) {
         code,
         sessionEpoch: authenticatedUser.sessionEpoch || 0,
         factorType: totp.enabled ? "totp" : "email",
+        pais,
       });
 
       if (totp.enabled) {
@@ -163,6 +173,7 @@ async function handlePost(req) {
       clientName,
       sessionEpoch: authenticatedUser.sessionEpoch || 0,
     });
+    void anotarPais({ email, clientId: authenticatedUser.client_id, pais });
 
     /*
      * Aviso de acceso, sin esperar a que salga.
@@ -176,6 +187,7 @@ async function handlePost(req) {
       email,
       rol: normalizedRole,
       clientName,
+      pais,
       ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "",
       agente: req.headers.get("user-agent") || "",
     });

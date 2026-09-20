@@ -23,6 +23,8 @@
     "revisar:secretos": "node scripts/revisar-secretos.mjs",
     "verificar:auditoria": "node --import ./tests/alias.mjs scripts/verificar-auditoria.mjs",
     "cerrar:sobre": "node --import ./tests/alias.mjs scripts/cerrar-sobre.mjs",
+    "vaciar:claro": "node --import ./tests/alias.mjs scripts/vaciar-claro.mjs",
+    "recifrar:datos": "node --import ./tests/alias.mjs scripts/recifrar-datos.mjs",
     "probar:voz": "node scripts/probar-voz.mjs",
     "probar:conversacion": "node scripts/probar-conversacion.mjs",
     "volcar:migraciones": "node scripts/volcar-migraciones.mjs",

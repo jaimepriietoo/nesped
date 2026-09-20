@@ -2,6 +2,7 @@ import { getSupabase } from "@/lib/supabase";
 import { getAdminContext } from "@/lib/server/auth";
 import { direccionParaEscuchar } from "@/lib/server/grabaciones";
 import { observeRoute } from "@/lib/server/observability.mjs";
+import { descifrarFila, modoCifrado } from "@/lib/server/cifrado-datos";
 
 /**
  * Sacar una empresa entera.
@@ -142,7 +143,11 @@ async function manejarGET(req) {
     );
   }
 
-  const filas = data || [];
+  /* La función devuelve las filas tal cual están en la base. Las columnas
+     cifradas se abren aquí: una exportación de datos personales tiene que
+     ser legible para quien la pide, no un montón de sobres. */
+  const modo = modoCifrado();
+  const filas = (data || []).map((fila) => descifrarFila({ tabla, fila, modo }));
 
   return Response.json({
     success: true,

@@ -96,11 +96,22 @@ producción:
 1. Crear un proyecto nuevo de Supabase (o una rama, en Pro).
 2. Restaurar en él el volcado más reciente: `pg_restore --no-owner -d …`.
 3. Apuntar un `.env.local` de prueba a ese proyecto y arrancar `npm run dev`.
-4. Entrar al portal con la cuenta de prueba y abrir Contactos, Llamadas e
-   Inteligencia: tienen que enseñar lo mismo que producción en la fecha del
-   volcado.
-5. Anotar aquí cuánto ha tardado el paso 2 (ése es el RTO real) y la fecha.
-6. Borrar el proyecto de prueba.
+4. Comparar con producción sin mirar pantallas: crear `.env.simulacro`
+   con `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` del proyecto de prueba y
+   ejecutar
+
+   ```bash
+   node scripts/simulacro-restauracion.mjs --restaurado=.env.simulacro --hasta=AAAA-MM-DD
+   ```
+
+   Cuenta las filas de las nueve tablas clave hasta la fecha del volcado en
+   los dos proyectos y comprueba que la cadena de auditoría del restaurado
+   está íntegra. Sale con 1 si algo no cuadra. Después, entrar al portal
+   con la cuenta de prueba y abrir Contactos y Llamadas para verlo con los
+   ojos.
+5. Anotar aquí cuánto ha tardado el paso 2 (ése es el RTO real), la fecha y
+   la salida del script.
+6. Borrar el proyecto de prueba y el fichero `.env.simulacro`.
 
 | Fecha | Volcado | Tiempo de restauración | Quién | Resultado |
 | --- | --- | --- | --- | --- |

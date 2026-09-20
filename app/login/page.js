@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { Inter } from "next/font/google";
 import "@/components/v3/v3.css";
 import { Logo } from "@/components/v3/chrome";
+import { startAuthentication } from "@simplewebauthn/browser";
 
 const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600"], display: "swap" });
 
@@ -27,6 +28,7 @@ function Acceso() {
   const [message, setMessage] = useState("");
   const [debugCode, setDebugCode] = useState("");
   const [verificationMethod, setVerificationMethod] = useState("delivery");
+  const [totpFallback, setTotpFallback] = useState(false);
   /* La tarjeta se retira antes de navegar. */
   const [saliendo, setSaliendo] = useState(false);
   /* Si hay alguien escribiendo en un campo ahora mismo. */
@@ -105,10 +107,13 @@ function Acceso() {
       if (json.requiresTwoFactor) {
         setStep("verify");
         setVerificationMethod(json.verificationMethod || "delivery");
+        setTotpFallback(Boolean(json.totpFallback));
         // El código puede haber salido por SMS si el correo falló: decirlo
         // evita que alguien se quede mirando una bandeja de entrada vacía.
         setMessage(
-          json.verificationMethod === "totp"
+          json.verificationMethod === "passkey"
+            ? "Confirma con tu passkey (huella, cara o PIN del dispositivo)."
+            : json.verificationMethod === "totp"
             ? "Introduce el código de seis dígitos de tu aplicación autenticadora."
             : json.verificationChannel === "sms"
             ? "No hemos podido enviarte el correo, así que te hemos mandado el código por SMS al móvil de la cuenta."
@@ -122,6 +127,28 @@ function Acceso() {
       return;
     } catch {
       setError("Error iniciando sesión");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function usarPasskey() {
+    setLoading(true);
+    setError("");
+    try {
+      const opts = await fetch("/api/login/passkey/options", { method: "POST" }).then((r) => r.json()).catch(() => ({}));
+      if (!opts?.success) throw new Error(opts?.message || "No se pudo preparar la passkey");
+      const respuesta = await startAuthentication({ optionsJSON: opts.opciones });
+      const res = await fetch("/api/login/passkey", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ response: respuesta }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.success) throw new Error(json.message || "La passkey no se pudo verificar");
+      entrar(json.redirectTo || "/portal");
+    } catch (e) {
+      setError(e?.name === "NotAllowedError" ? "Has cancelado la passkey. Prueba otra vez o usa un código." : (e?.message || "No se pudo usar la passkey"));
     } finally {
       setLoading(false);
     }
@@ -198,7 +225,9 @@ function Acceso() {
         <p className="v3-auth-sub">
           {step === "credentials"
             ? "Accede a tus llamadas, tus contactos y tu facturación."
-            : verificationMethod === "totp"
+            : verificationMethod === "passkey"
+              ? "Usa tu passkey. Si no la tienes a mano, vale un código de recuperación."
+              : verificationMethod === "totp"
               ? "Abre tu aplicación autenticadora e introduce el código actual."
               : "Introduce el código que te hemos enviado por correo."}
         </p>
@@ -247,8 +276,17 @@ function Acceso() {
           </form>
         ) : (
           <form className="v3-auth-form" onSubmit={handleVerify}>
+            {verificationMethod === "passkey" ? (
+              <button className="v3-btn v3-btn--white" type="button" onClick={usarPasskey} disabled={loading || !listo}>
+                {loading ? "Esperando a la passkey…" : "Usar passkey"}
+              </button>
+            ) : null}
             <div className="v3-field">
-              <label className="v3-label" htmlFor="v3-code">Código de verificación</label>
+              <label className="v3-label" htmlFor="v3-code">
+                {verificationMethod === "passkey"
+                  ? totpFallback ? "O un código de tu app autenticadora o de recuperación" : "O un código de recuperación"
+                  : "Código de verificación"}
+              </label>
               <input
                 id="v3-code"
                 className="v3-input v3-input--code"
@@ -263,11 +301,11 @@ function Acceso() {
               />
             </div>
 
-            <button className="v3-btn v3-btn--white" type="submit" disabled={loading || !listo}>
+            <button className={`v3-btn ${verificationMethod === "passkey" ? "v3-btn--ghost" : "v3-btn--white"}`} type="submit" disabled={loading || !listo}>
               {loading ? "Verificando…" : "Verificar"}
             </button>
 
-            {verificationMethod !== "totp" ? (
+            {verificationMethod !== "totp" && verificationMethod !== "passkey" ? (
               <button
                 className="v3-btn v3-btn--ghost"
                 type="button"

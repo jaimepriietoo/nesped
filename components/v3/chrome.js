@@ -138,7 +138,7 @@ export function Footer() {
               <span className="v3-foot-title">Contacto</span>
               <a className="v3-foot-link" href="mailto:soporte@nesped.com">Soporte</a>
               <a className="v3-foot-link" href="mailto:privacidad@nesped.com">Privacidad</a>
-              <a className="v3-foot-link" href="mailto:seguridad@nesped.com">Seguridad</a>
+              <a className="v3-foot-link" href="/seguridad">Seguridad</a>
             </div>
           </div>
         </div>

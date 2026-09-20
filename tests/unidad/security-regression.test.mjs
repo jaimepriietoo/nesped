@@ -559,7 +559,7 @@ test("TOTP cifra el secreto, evita reuso y se integra en login y recuperación",
   const verificar = fs.readFileSync(path.join(raiz, "app/api/login/2fa/route.js"), "utf8");
   const reenviar = fs.readFileSync(path.join(raiz, "app/api/login/2fa/resend/route.js"), "utf8");
   assert.match(login, /estadoTotp\(/);
-  assert.match(login, /verificationMethod: "totp"/);
+  assert.match(login, /verificationMethod: passkey \? "passkey" : "totp"/);
   assert.match(verificar, /verificarYConsumirTotp\(/);
   assert.match(reenviar, /challenge\.factorType === "totp"/);
 });

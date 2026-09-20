@@ -21,6 +21,7 @@
     "revisar:admin": "node scripts/revisar-admin.mjs",
     "revisar:seguridad": "node scripts/revisar-seguridad.mjs",
     "revisar:secretos": "node scripts/revisar-secretos.mjs",
+    "verificar:auditoria": "node --import ./tests/alias.mjs scripts/verificar-auditoria.mjs",
     "probar:voz": "node scripts/probar-voz.mjs",
     "probar:conversacion": "node scripts/probar-conversacion.mjs",
     "volcar:migraciones": "node scripts/volcar-migraciones.mjs",
@@ -30,6 +31,8 @@
   "dependencies": {
     "@sentry/nextjs": "^10.50.0",
     "@sentry/node": "^10.50.0",
+    "@simplewebauthn/browser": "^14.0.0",
+    "@simplewebauthn/server": "^14.0.2",
     "@supabase/supabase-js": "^2.99.3",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",

@@ -44,8 +44,13 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Dependencias
-        run: npm ci
+      # Ningún paquete ejecuta código al instalarse. Los tres que lo necesitan
+      # se reconstruyen aparte: la lista es un allowlist que vigila un test.
+      - name: Dependencias (sin scripts de instalación)
+        run: npm ci --ignore-scripts
+
+      - name: Scripts de instalación permitidos
+        run: npm rebuild @sentry/cli unrs-resolver
 
       - name: Secretos en código e historial
         run: npm run revisar:secretos

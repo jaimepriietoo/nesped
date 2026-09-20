@@ -1,7 +1,7 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { evaluarConsumo } from "@/lib/server/cuotas";
 import { cursorDe } from "@/lib/server/paginacion";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 import { estadoDeLaIA } from "@/lib/server/estado-ia";
 
 function predictCloseProbability(lead) {
@@ -296,9 +296,9 @@ async function manejarGET() {
     /* Que la alternativa exista no significa que dé igual usarla: si el
        agregado falla, las cifras dejan de ser exactas y hay que enterarse. */
     if (!cifrasExactas) {
-      console.error(
-        "overview: el resumen agregado falló, cifras aproximadas sobre lo cargado",
-        resumenRes?.error?.message || "sin detalle"
+      logErrorSeguro(
+        "portal.overview_aggregate_failed",
+        resumenRes?.error || new Error("Resumen agregado no disponible"),
       );
     }
 

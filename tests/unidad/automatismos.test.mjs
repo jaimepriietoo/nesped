@@ -101,10 +101,23 @@ test("el horario se respeta y el prompt lleva lo que la empresa decidió", () =>
 function baseReset(filas = {}) {
   const apuntes = [];
   const from = (tabla) => {
-    const b = { _op: "select", _datos: null,
-      select() { return b; }, eq() { return b; }, limit() { return b; }, maybeSingle() { return b; },
+    const b = { _op: "select", _datos: null, _filtros: [],
+      select() { return b; }, eq(c, v) { b._filtros.push(["eq", c, v]); return b; },
+      is(c, v) { b._filtros.push(["is", c, v]); return b; },
+      gt(c, v) { b._filtros.push(["gt", c, v]); return b; },
+      limit() { return b; }, maybeSingle() { return b; },
       insert(d) { b._op = "insert"; b._datos = d; return b; }, update(d) { b._op = "update"; b._datos = d; return b; },
-      then(r) { apuntes.push({ tabla, op: b._op, datos: b._datos }); return Promise.resolve({ data: b._op === "select" ? (filas[tabla] ?? null) : b._datos, error: null }).then(r); },
+      then(r) {
+        apuntes.push({ tabla, op: b._op, datos: b._datos, filtros: b._filtros });
+        let data = b._op === "select" ? (filas[tabla] ?? null) : b._datos;
+        if (tabla === "restablecer_password" && b._op === "update") {
+          const fila = filas[tabla];
+          data = fila && !fila.used_at && new Date(fila.expires_at).getTime() > Date.now()
+            ? { ...fila, ...b._datos }
+            : null;
+        }
+        return Promise.resolve({ data, error: null }).then(r);
+      },
     };
     return b;
   };
@@ -121,6 +134,8 @@ test("pedir el restablecimiento contesta igual exista o no la cuenta, y en prueb
   assert.equal(fila.datos.email, "ana@acme.es");
   assert.match(fila.datos.token_hash, /^[a-f0-9]{64}$/, "a la base sólo va el hash");
   assert.equal(existe.detalle, "correo desactivado");
+  assert.match(existe.enlaceDePrueba, /\/restablecer#token=/);
+  assert.doesNotMatch(existe.enlaceDePrueba, /[?&]token=/);
 });
 
 test("restablecer con un token malo o caducado falla claro; con uno bueno cambia y cierra sesiones", async () => {
@@ -136,8 +151,42 @@ test("restablecer con un token malo o caducado falla claro; con uno bueno cambia
   assert.match(cambio.datos.password_hash, /^scrypt\$/);
   assert.equal(cambio.datos.password, cambio.datos.password_hash);
   assert.equal(revocado, "ana@acme.es");
-  assert.ok(base.apuntes.some((a) => a.tabla === "restablecer_password" && a.op === "update" && a.datos.used_at));
+  const consumo = base.apuntes.find((a) => a.tabla === "restablecer_password" && a.op === "update" && a.datos.used_at);
+  assert.ok(consumo, "el token se gasta antes de cambiar la contraseña");
+  assert.ok(consumo.filtros.some(([op, campo, valor]) => op === "is" && campo === "used_at" && valor === null));
+  assert.ok(consumo.filtros.some(([op, campo]) => op === "gt" && campo === "expires_at"));
   assert.equal(typeof PARA_PRUEBAS.hashDe("a"), "string");
+});
+
+test("un token ya consumido no puede reutilizarse", async () => {
+  const usado = {
+    id: "r2", email: "ana@acme.es", client_id: "acme",
+    expires_at: new Date(Date.now() + 60000).toISOString(),
+    used_at: new Date().toISOString(),
+  };
+  await assert.rejects(
+    () => restablecerConToken({
+      token: "x".repeat(30), password: "Nueva-clave-larga-2026",
+      supabase: baseReset({ restablecer_password: usado }),
+    }),
+    /no es válido o ha caducado/
+  );
+});
+
+test("una contraseña inválida no gasta el token", async () => {
+  const vigente = {
+    id: "r3", email: "ana@acme.es", client_id: "acme",
+    expires_at: new Date(Date.now() + 60000).toISOString(), used_at: null,
+  };
+  const base = baseReset({ restablecer_password: vigente });
+  await assert.rejects(
+    () => restablecerConToken({ token: "x".repeat(30), password: "corta", supabase: base }),
+    /al menos/
+  );
+  assert.equal(
+    base.apuntes.some((a) => a.tabla === "restablecer_password" && a.op === "update"),
+    false
+  );
 });
 
 test("el login enlaza a '¿Has olvidado tu contraseña?' y la ruta de recuperar no revela cuentas", () => {

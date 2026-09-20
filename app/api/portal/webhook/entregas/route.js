@@ -1,9 +1,11 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { puede } from "@/lib/server/permisos";
-import { requireSameOrigin } from "@/lib/server/security";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 import { paginar, cuantasFilas, respuestaPaginada, CursorInvalido } from "@/lib/server/paginacion";
 import { reintentarEntrega } from "@/lib/server/webhooks-salientes";
+import { validar } from "@/lib/server/esquemas";
+import { ReintentarEntregaWebhook } from "@/lib/server/esquemas-portal";
 
 /**
  * Las entregas del webhook saliente de la empresa: qué se mandó, cuándo,
@@ -28,7 +30,7 @@ async function manejarGET(req) {
     return respuestaPaginada(pagina);
   } catch (err) {
     if (err instanceof CursorInvalido) return Response.json({ success: false, message: err.message, data: [] }, { status: 400 });
-    console.error("[portal/webhook/entregas]", err?.message || err);
+    logErrorSeguro("portal.webhook_deliveries_read_failed", err);
     return Response.json({ success: false, message: "No se pudieron cargar las entregas", data: [] }, { status: 500 });
   }
 }
@@ -40,9 +42,18 @@ async function manejarPOST(req) {
   if (!ctx.ok) return Response.json({ success: false, message: "No autorizado" }, { status: 401 });
   if (!puede(ctx.role, "api.test", ctx.permissions)) return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
 
-  const body = await req.json().catch(() => ({}));
-  const id = String(body?.entrega || "").trim();
-  if (!id) return Response.json({ success: false, message: "Falta la entrega" }, { status: 400 });
+  const limited = await requireRateLimitAsync(req, {
+    namespace: "portal:webhook-retry",
+    limit: 10,
+    keyParts: [ctx.clientId, ctx.userEmail],
+    includeIp: false,
+  });
+  if (limited) return limited;
+  const cuerpo = await leerJsonLimitado(req, { maxBytes: 4 * 1024 });
+  if (cuerpo.respuesta) return cuerpo.respuesta;
+  const leido = validar(ReintentarEntregaWebhook, cuerpo.datos);
+  if (leido.respuesta) return leido.respuesta;
+  const id = leido.datos.entrega;
   try {
     const resultado = await reintentarEntrega(id, ctx.clientId);
     return Response.json({ success: true, ...resultado });

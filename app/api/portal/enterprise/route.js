@@ -1,5 +1,6 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { buildEnterpriseWorkspace } from "@/lib/portal-product";
+import { puede, sinPermiso } from "@/lib/server/permisos";
 import {
   getSessionSecurityProfile,
   getTwoFactorSecurityProfile,
@@ -8,7 +9,7 @@ import {
   buildBaseUrl,
   buildPortalServices,
 } from "@/lib/server/portal-phase-three";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 async function manejarGET(req) {
   try {
@@ -19,6 +20,7 @@ async function manejarGET(req) {
         { status: 401 }
       );
     }
+    if (!puede(ctx.role, "settings.manage", ctx.permissions)) return sinPermiso();
 
     const [clientRes, settingsRes, portalUsersRes, authUsersRes, auditRes] =
       await Promise.all([
@@ -41,7 +43,7 @@ async function manejarGET(req) {
           .order("created_at", { ascending: true }),
         ctx.supabase
           .from("users")
-          .select("email,role,created_at,password,password_hash")
+          .select("email,role,created_at")
           .eq("client_id", ctx.clientId),
         ctx.supabase
           .from("audit_logs")
@@ -106,8 +108,9 @@ async function manejarGET(req) {
         },
         domainStatus,
       }),
-    });
+    }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
+    logErrorSeguro("portal.enterprise_failed", error);
     return Response.json(
       {
         success: false,

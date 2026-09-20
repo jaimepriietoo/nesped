@@ -1,17 +1,20 @@
 import { headers } from "next/headers";
 import { stripe } from "@/lib/server/stripe-utils";
 import { guardarEvento } from "@/lib/server/bandeja-webhooks";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
+import { leerTextoLimitado } from "@/lib/server/security";
  
 async function manejarPOST(req) {
-  const body = await req.text();
+  const cuerpo = await leerTextoLimitado(req, { maxBytes: 1024 * 1024 });
+  if (cuerpo.respuesta) return cuerpo.respuesta;
+  const body = cuerpo.datos;
   const sig = (await headers()).get("stripe-signature") || "";
  
   let event;
   try {
     event = stripe.webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-  } catch (err) {
-    return Response.json({ error: `Webhook error: ${err.message}` }, { status: 400 });
+  } catch {
+    return Response.json({ error: "Firma de webhook inválida" }, { status: 400 });
   }
  
   /* Se guarda y se procesa en la misma petición: activar el plan de quien
@@ -30,11 +33,9 @@ async function manejarPOST(req) {
     });
     return Response.json({ received: true, procesado: Boolean(guardado.procesado), evento: guardado.id });
   } catch (err) {
-    console.error("Webhook processing error:", err);
+    logErrorSeguro("stripe.webhook_store_failed", err);
     return Response.json({ error: "No se pudo guardar el evento" }, { status: 500 });
   }
 }
  
-export const config = { api: { bodyParser: false } };
-
 export const POST = observeRoute("api.stripe.webhook.post", manejarPOST);

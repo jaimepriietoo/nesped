@@ -9,11 +9,13 @@ import {
   getDefaultPlaybookWorkspace,
   parsePlaybookWorkspace,
 } from "@/lib/portal-product";
-import { requireSameOrigin } from "@/lib/server/security";
+import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 import { buildConversationAssistPayload } from "@/lib/server/portal-phase-four";
 import { observeRoute } from "@/lib/server/observability.mjs";
 import { iaDisponible } from "@/lib/server/estado-ia";
 import { configIA, promptDeEmpresa } from "@/lib/server/ia-config";
+import { validar } from "@/lib/server/esquemas";
+import { SugerenciaConversacion } from "@/lib/server/esquemas-portal";
 
 const openai = process.env.OPENAI_API_KEY
   ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 20000, maxRetries: 0 })
@@ -104,17 +106,19 @@ async function manejarPOST(req) {
       );
     }
 
-    const body = await req.json();
-    const leadId = String(body?.leadId || "").trim();
-    const channel = String(body?.channel || "whatsapp").trim().toLowerCase();
-    const goal = String(body?.goal || "followup").trim().toLowerCase();
+    const limitado = await requireRateLimitAsync(req, {
+      namespace: "conversations:suggest", limit: 30, windowMs: 60 * 60 * 1000,
+      keyParts: [ctx.clientId], includeIp: false,
+    });
+    if (limitado) return limitado;
 
-    if (!leadId) {
-      return Response.json(
-        { success: false, message: "Falta leadId" },
-        { status: 400 }
-      );
-    }
+    const cuerpo = await leerJsonLimitado(req, { maxBytes: 8 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
+    const leido = validar(SugerenciaConversacion, cuerpo.datos);
+    if (leido.respuesta) return leido.respuesta;
+    const leadId = leido.datos.leadId;
+    const channel = leido.datos.channel.toLowerCase();
+    const goal = leido.datos.goal.toLowerCase();
 
     const [{ data: client, error: clientError }, { data: lead, error: leadError }] =
       await Promise.all([

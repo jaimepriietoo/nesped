@@ -1,7 +1,7 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { puede, sinPermiso } from "@/lib/server/permisos";
-import { requireSameOrigin, requireRateLimitAsync } from "@/lib/server/security";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { leerJsonLimitado, requireSameOrigin, requireRateLimitAsync } from "@/lib/server/security";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 import { validar } from "@/lib/server/esquemas";
 import { Previsualizar } from "@/lib/server/esquemas-portal";
 import { configIA, previsualizar } from "@/lib/server/ia-config";
@@ -20,7 +20,9 @@ async function manejarPOST(req) {
   if (!puede(ctx.role, "ai.configure", ctx.permissions)) return sinPermiso();
   const limitado = await requireRateLimitAsync(req, { namespace: "ia:previsualizar", limit: 30, keyParts: [ctx.clientId], includeIp: false });
   if (limitado) return limitado;
-  const leido = validar(Previsualizar, await req.json().catch(() => ({})));
+  const cuerpo = await leerJsonLimitado(req, { maxBytes: 16 * 1024 });
+  if (cuerpo.respuesta) return cuerpo.respuesta;
+  const leido = validar(Previsualizar, cuerpo.datos);
   if (leido.respuesta) return leido.respuesta;
   try {
     const [guardada, { lista: departamentos }, { data: empresa }] = await Promise.all([
@@ -38,8 +40,8 @@ async function manejarPOST(req) {
     });
     return Response.json({ success: true, ...r });
   } catch (err) {
-    console.error("[portal/ia/previsualizar]", err?.message || err);
-    return Response.json({ success: false, message: err?.message || "No se pudo previsualizar" }, { status: 500 });
+    logErrorSeguro("portal.ia_preview_failed", err);
+    return Response.json({ success: false, message: "No se pudo previsualizar" }, { status: 500 });
   }
 }
 

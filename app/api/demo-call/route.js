@@ -1,12 +1,13 @@
 import { getSupabase } from "@/lib/supabase";
 import { ensureDemoWorkspace, isDemoClientId } from "@/lib/clients";
 import { logEvent, observeRoute } from "@/lib/server/observability.mjs";
-import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
+import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 import { conCortacircuitos, noEsDelProveedor } from "@/lib/server/cortacircuitos";
 import { exigirLlamadasPermitidas, respuestaSiPausado } from "@/lib/server/interruptores";
 import { getPortalContext } from "@/lib/portal-auth";
 import { puede } from "@/lib/server/permisos";
 import { toE164 } from "@/lib/server/phone";
+import { LlamadaDemo, validar } from "@/lib/server/esquemas";
 
 function normalizePhone(value = "") {
   return toE164(value);
@@ -120,7 +121,11 @@ async function handlePost(req) {
     });
     if (ipRateLimitError) return ipRateLimitError;
 
-    const body = await req.json();
+    const cuerpo = await leerJsonLimitado(req, { maxBytes: 8 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
+    const leido = validar(LlamadaDemo, cuerpo.datos, { mensaje: "Datos de llamada no válidos" });
+    if (leido.respuesta) return leido.respuesta;
+    const body = leido.datos;
     const telefono = normalizePhone(body.telefono);
     const ctx = await getPortalContext();
     if (ctx.ok && !puede(ctx.role, "voice.demo", ctx.permissions)) {

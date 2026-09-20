@@ -1,14 +1,23 @@
 import { saveNextBestAction } from "@/lib/server/next-best-action-service";
 import { requireInternalRequest } from "@/lib/server/internal-api";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { leerJsonLimitado } from "@/lib/server/security";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
+import { validar } from "@/lib/server/esquemas";
+import { AccionRecomendadaInterna } from "@/lib/server/esquemas-operaciones";
 
 async function manejarPOST(req) {
   const unauthorized = requireInternalRequest(req);
   if (unauthorized) return unauthorized;
 
   try {
-    const body = await req.json();
-    const { leadId, clientId, brandName, useAI = true, actor = "system" } = body;
+    const cuerpo = await leerJsonLimitado(req, { maxBytes: 8 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
+    const leido = validar(AccionRecomendadaInterna, cuerpo.datos);
+    if (leido.respuesta) return leido.respuesta;
+    const { leadId, clientId, brandName, useAI, actor } = leido.datos;
+    if (!clientId) {
+      return Response.json({ success: false, message: "Falta clientId" }, { status: 400 });
+    }
 
     const result = await saveNextBestAction({
       leadId,
@@ -24,7 +33,7 @@ async function manejarPOST(req) {
       recommendation: result.recommendation,
     });
   } catch (error) {
-    console.error("POST /api/ai/next-step/next-best-action/save error:", error);
+    logErrorSeguro("ai.next_step_save_failed", error);
 
     return Response.json(
       {

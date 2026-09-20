@@ -1,7 +1,7 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { puede, sinPermiso } from "@/lib/server/permisos";
-import { requireSameOrigin } from "@/lib/server/security";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 import { validar } from "@/lib/server/esquemas";
 import { ConfigIA } from "@/lib/server/esquemas-portal";
 import { configIA, guardarConfigIA, promptDeEmpresa, TONOS, AUTONOMIA, POR_DEFECTO } from "@/lib/server/ia-config";
@@ -31,7 +31,7 @@ async function manejarGET() {
       puedeEditar: puede(ctx.role, "ai.configure", ctx.permissions),
     });
   } catch (err) {
-    console.error("[portal/ia]", err?.message || err);
+    logErrorSeguro("portal.ai_config_read_failed", err);
     return Response.json({ success: false, message: "No se pudo leer la configuración de la IA" }, { status: 500 });
   }
 }
@@ -42,14 +42,21 @@ async function manejarPUT(req) {
   const ctx = await getPortalContext();
   if (!ctx.ok) return Response.json({ success: false, message: "No autorizado" }, { status: 401 });
   if (!puede(ctx.role, "ai.configure", ctx.permissions)) return sinPermiso("Sólo el propietario o un administrador pueden configurar la IA.");
-  const leido = validar(ConfigIA, await req.json().catch(() => ({})));
+  const limited = await requireRateLimitAsync(req, {
+    namespace: "portal:ai-config", limit: 20,
+    keyParts: [ctx.clientId, ctx.userEmail], includeIp: false,
+  });
+  if (limited) return limited;
+  const cuerpo = await leerJsonLimitado(req, { maxBytes: 32 * 1024 });
+  if (cuerpo.respuesta) return cuerpo.respuesta;
+  const leido = validar(ConfigIA, cuerpo.datos);
   if (leido.respuesta) return leido.respuesta;
   try {
     const config = await guardarConfigIA(ctx.clientId, leido.datos, ctx.datos);
     await ctx.datos.from("audit_logs").insert({ client_id: ctx.clientId, entity_type: "ia_config", entity_id: ctx.clientId, action: "ia_config_actualizada", actor: ctx.userEmail, changes: { tono: config.tono, autonomia: config.autonomia } });
     return Response.json({ success: true, data: config });
   } catch (err) {
-    console.error("[portal/ia] PUT", err?.message || err);
+    logErrorSeguro("portal.ai_config_update_failed", err);
     return Response.json({ success: false, message: "No se pudo guardar" }, { status: 500 });
   }
 }

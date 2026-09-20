@@ -1,12 +1,10 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { puede } from "@/lib/server/permisos";
-import { requireSameOrigin, requireRateLimitAsync } from "@/lib/server/security";
+import { leerJsonLimitado, requireSameOrigin, requireRateLimitAsync } from "@/lib/server/security";
 import { resolveTxt } from "node:dns/promises";
 import { observeRoute } from "@/lib/server/observability.mjs";
-
-function isValidDomain(value = "") {
-  return /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(String(value || "").trim());
-}
+import { validar } from "@/lib/server/esquemas";
+import { ConectarDominio } from "@/lib/server/esquemas-portal";
 
 async function manejarPOST(req) {
   try {
@@ -28,15 +26,11 @@ async function manejarPOST(req) {
       );
     }
 
-    const body = await req.json();
-    const domain = String(body?.domain || "").trim().toLowerCase();
-
-    if (!domain || !isValidDomain(domain)) {
-      return Response.json(
-        { success: false, message: "Dominio inválido" },
-        { status: 400 }
-      );
-    }
+    const cuerpo = await leerJsonLimitado(req, { maxBytes: 4 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
+    const leido = validar(ConectarDominio, cuerpo.datos);
+    if (leido.respuesta) return leido.respuesta;
+    const { domain } = leido.datos;
 
     if (/(^|\.)(nesped\.com|vercel\.app)$/.test(domain)) {
       return Response.json({ success: false, message: "Ese dominio está reservado." }, { status: 400 });
@@ -49,10 +43,6 @@ async function manejarPOST(req) {
       return Response.json({ success: false, message: "Verifica primero la propiedad del dominio con este registro DNS TXT.",
         verification: { name: `_nesped.${domain}`, value: verification } }, { status: 409 });
     }
-    const { data: existing, error: existingError } = await ctx.supabase.from("clients")
-      .select("id").eq("custom_domain", domain).neq("id", ctx.clientId).maybeSingle();
-    if (existingError || existing) return Response.json({ success: false, message: "Dominio no disponible." }, { status: 409 });
-
     let addJson = null;
     let inspectJson = null;
 
@@ -87,13 +77,20 @@ async function manejarPOST(req) {
       if (!inspectRes.ok || inspectJson?.verified !== true) throw new Error("Dominio pendiente de verificación");
     }
 
-    const { error } = await ctx.supabase
+    /* La unicidad la garantiza el índice de Postgres. Consultar primero otras
+       empresas filtrando por dominio era una lectura transversal y además
+       dejaba una carrera entre comprobar y guardar. */
+    const { error } = await ctx.datos
       .from("clients")
       .update({
         custom_domain: domain,
         updated_at: new Date().toISOString(),
       })
       .eq("id", ctx.clientId);
+
+    if (error?.code === "23505") {
+      return Response.json({ success: false, message: "Dominio no disponible." }, { status: 409 });
+    }
 
     if (error) {
       throw new Error(error.message);

@@ -13,12 +13,13 @@ import {
   verificarWebhookTwilio,
 } from "@/lib/server/twilio";
 import { toE164 } from "@/lib/server/phone";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 import { MensajeTwilio, validar } from "@/lib/server/esquemas";
 import { iaDisponible } from "@/lib/server/estado-ia";
 import { configIA, promptDeEmpresa } from "@/lib/server/ia-config";
 import { departamentosDeEmpresa } from "@/lib/server/departamentos";
 import { pedirClasificacion } from "@/lib/server/clasificacion";
+import { leerTextoLimitado } from "@/lib/server/security";
 
 let openai = null;
 const supabase = getSupabase();
@@ -187,7 +188,7 @@ async function saveLeadEventForClient({
     description: String(message || ""),
     meta: { ...(meta || {}), phone: normalizePhone(phone) },
   });
-  if (error) console.error("Error guardando evento:", error.message);
+  if (error) logErrorSeguro("whatsapp.event_store_failed", error);
 }
 
 async function findLeadByPhone(phone, clientId) {
@@ -215,7 +216,7 @@ async function patchLead(leadId, changes) {
     await updateLeadDirect(leadId, changes);
     return { success: true };
   } catch (err) {
-    console.error("Error actualizando lead:", err);
+    logErrorSeguro("whatsapp.lead_update_failed", err);
     return { success: false };
   }
 }
@@ -516,7 +517,7 @@ async function sendWhatsapp(to, message) {
     await sendDirectWhatsAppMessage(normalizePhone(to), message);
     return { success: true };
   } catch (err) {
-    console.error("Error enviando WhatsApp:", err);
+    logErrorSeguro("whatsapp.send_failed", err);
     return { success: false };
   }
 }
@@ -881,7 +882,9 @@ async function manejarPOST(req) {
        un `event_type` que mirar como en Telnyx. Lo que sí hay son avisos de
        estado de mensajes que hemos enviado nosotros, y esos llegan por la
        misma puerta con `Body` vacío. */
-    const rawPayload = await req.text();
+    const cuerpo = await leerTextoLimitado(req, { maxBytes: 64 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
+    const rawPayload = cuerpo.datos;
     const campos = Object.fromEntries(new URLSearchParams(rawPayload));
     /* Se comprueba la forma, pero se sigue con los campos tal cual llegaron:
        la firma de Twilio se calcula sobre ellos sin tocar. */
@@ -902,6 +905,14 @@ async function manejarPOST(req) {
       return NextResponse.json({ success: true, ignored: true });
     }
 
+    const messageSid = String(campos.MessageSid || campos.SmsSid || "").trim();
+    if (!messageSid) {
+      return NextResponse.json(
+        { success: false, message: "Falta el identificador del mensaje" },
+        { status: 400 }
+      );
+    }
+
     /* Aquí acaba lo que hace la petición. Lo demás —buscar el contacto, leer
        el historial, preguntar a OpenAI, contestar— lo hace la cola. Twilio
        recibe su 2xx en milisegundos, y un proveedor lento en medio ya no es
@@ -909,13 +920,13 @@ async function manejarPOST(req) {
     const guardado = await guardarEvento({
       proveedor: "twilio-whatsapp",
       tipo: "mensaje",
-      eventoId: String(campos.MessageSid || campos.SmsSid || "") || null,
+      eventoId: messageSid,
       payload: campos,
     });
 
     return NextResponse.json({ success: true, encolado: guardado.encolado, evento: guardado.id });
   } catch (err) {
-    console.error("Webhook WhatsApp error:", err);
+    logErrorSeguro("whatsapp.webhook_failed", err);
     return NextResponse.json({
       success: false,
       message: "Error procesando mensaje",

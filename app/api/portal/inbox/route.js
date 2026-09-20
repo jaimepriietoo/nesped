@@ -13,7 +13,7 @@ async function manejarGET() {
     }
 
     const [leadsRes, callsRes] = await Promise.all([
-      ctx.supabase
+      ctx.datos
         .from("leads")
         .select(
           "id,nombre,email,telefono,status,owner,score,interes,predicted_close_probability,next_action,next_action_priority,valor_estimado,necesidad,created_at,updated_at"
@@ -21,7 +21,7 @@ async function manejarGET() {
         .eq("client_id", ctx.clientId)
         .order("updated_at", { ascending: false })
         .limit(400),
-      ctx.supabase
+      ctx.datos
         .from("calls")
         .select(
           "id,call_sid,from_number,to_number,status,summary,summary_long,transcript,duration_seconds,lead_captured,created_at"
@@ -45,7 +45,7 @@ async function manejarGET() {
 
     let reminders = [];
     if (leadIds.length > 0) {
-      const { data, error } = await ctx.supabase
+      const { data, error } = await ctx.datos
         .from("lead_reminders")
         .select("id,lead_id,title,assigned_to,remind_at,created_at")
         .in("lead_id", leadIds)
@@ -72,7 +72,7 @@ async function manejarGET() {
     let events = [];
 
     if (leadIds.length > 0) {
-      const { data, error } = await ctx.supabase
+      const { data, error } = await ctx.datos
         .from("lead_events")
         .select("*")
         .in("lead_id", leadIds)

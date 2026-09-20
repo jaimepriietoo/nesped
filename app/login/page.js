@@ -26,6 +26,7 @@ function Acceso() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [debugCode, setDebugCode] = useState("");
+  const [verificationMethod, setVerificationMethod] = useState("delivery");
   /* La tarjeta se retira antes de navegar. */
   const [saliendo, setSaliendo] = useState(false);
   /* Si hay alguien escribiendo en un campo ahora mismo. */
@@ -103,10 +104,13 @@ function Acceso() {
 
       if (json.requiresTwoFactor) {
         setStep("verify");
+        setVerificationMethod(json.verificationMethod || "delivery");
         // El código puede haber salido por SMS si el correo falló: decirlo
         // evita que alguien se quede mirando una bandeja de entrada vacía.
         setMessage(
-          json.verificationChannel === "sms"
+          json.verificationMethod === "totp"
+            ? "Introduce el código de seis dígitos de tu aplicación autenticadora."
+            : json.verificationChannel === "sms"
             ? "No hemos podido enviarte el correo, así que te hemos mandado el código por SMS al móvil de la cuenta."
             : `Te hemos enviado un código de verificación a ${email}.`
         );
@@ -194,7 +198,9 @@ function Acceso() {
         <p className="v3-auth-sub">
           {step === "credentials"
             ? "Accede a tus llamadas, tus contactos y tu facturación."
-            : "Introduce el código que te hemos enviado por correo."}
+            : verificationMethod === "totp"
+              ? "Abre tu aplicación autenticadora e introduce el código actual."
+              : "Introduce el código que te hemos enviado por correo."}
         </p>
 
         {step === "credentials" ? (
@@ -261,14 +267,16 @@ function Acceso() {
               {loading ? "Verificando…" : "Verificar"}
             </button>
 
-            <button
-              className="v3-btn v3-btn--ghost"
-              type="button"
-              onClick={resendCode}
-              disabled={resending}
-            >
-              {resending ? "Reenviando…" : "Reenviar código"}
-            </button>
+            {verificationMethod !== "totp" ? (
+              <button
+                className="v3-btn v3-btn--ghost"
+                type="button"
+                onClick={resendCode}
+                disabled={resending}
+              >
+                {resending ? "Reenviando…" : "Reenviar código"}
+              </button>
+            ) : null}
           </form>
         )}
 

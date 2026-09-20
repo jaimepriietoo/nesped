@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { runOnboardingAutomation } from "@/lib/server/automation-service";
 import { requireInternalRequest } from "@/lib/server/internal-api";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 /*
  * Tarea de sistema: sólo se lanza desde dentro, con el token interno.
@@ -23,7 +23,7 @@ async function manejarPOST(req) {
     const result = await runOnboardingAutomation();
     return NextResponse.json(result);
   } catch (err) {
-    console.error(err);
+    logErrorSeguro("automation.onboarding_failed", err);
     return NextResponse.json({
       success: false,
       message: "Error ejecutando onboarding automático",

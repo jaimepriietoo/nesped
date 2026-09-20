@@ -1,14 +1,20 @@
 import { executeNextBestAction } from "@/lib/server/next-best-action-service";
 import { requireInternalRequest } from "@/lib/server/internal-api";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { leerJsonLimitado } from "@/lib/server/security";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
+import { validar } from "@/lib/server/esquemas";
+import { EjecutarAccionRecomendada } from "@/lib/server/esquemas-operaciones";
 
 async function manejarPOST(req) {
   const unauthorized = requireInternalRequest(req);
   if (unauthorized) return unauthorized;
 
   try {
-    const body = await req.json();
-    const { leadId, clientId, actor = "system" } = body;
+    const cuerpo = await leerJsonLimitado(req, { maxBytes: 4 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
+    const leido = validar(EjecutarAccionRecomendada, cuerpo.datos);
+    if (leido.respuesta) return leido.respuesta;
+    const { leadId, clientId, actor } = leido.datos;
 
     const result = await executeNextBestAction({
       leadId,
@@ -20,7 +26,7 @@ async function manejarPOST(req) {
       status: result.success ? 200 : 400,
     });
   } catch (error) {
-    console.error("POST /api/automation/run-nba/execute-next-action error:", error);
+    logErrorSeguro("automation.execute_next_action_failed", error);
 
     return Response.json(
       {

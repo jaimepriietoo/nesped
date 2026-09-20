@@ -1,6 +1,6 @@
 import { getSupabase } from "@/lib/supabase";
 import { getAdminContext } from "@/lib/server/auth";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 const supabase = getSupabase();
 
@@ -32,7 +32,7 @@ async function manejarGET() {
       data: data || [],
     });
   } catch (error) {
-    console.error(error);
+    logErrorSeguro("admin.calls_load_failed", error);
 
     return Response.json(
       { success: false, message: "Error cargando llamadas", data: [] },

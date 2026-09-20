@@ -1,7 +1,9 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { puede } from "@/lib/server/permisos";
-import { requireSameOrigin } from "@/lib/server/security";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { validar } from "@/lib/server/esquemas";
+import { ActualizarLead } from "@/lib/server/esquemas-operaciones";
+import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 import { emitirWebhook, EVENTOS } from "@/lib/server/webhooks-salientes";
  
 async function manejarPATCH(req) {
@@ -16,9 +18,16 @@ async function manejarPATCH(req) {
     if (!ctx.ok) return Response.json({ success: false, message: ctx.message }, { status: 401 });
     if (!puede(ctx.role, "crm.edit", ctx.permissions)) return Response.json({ success: false, message: "Sin permisos" }, { status: 403 });
  
-    const body = await req.json();
+    const limite = await requireRateLimitAsync(req, {
+      namespace: "lead-update", limit: 120, keyParts: [ctx.clientId, ctx.userEmail],
+    });
+    if (limite) return limite;
+    const cuerpo = await leerJsonLimitado(req, { maxBytes: 32 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
+    const entrada = validar(ActualizarLead, cuerpo.datos);
+    if (entrada.respuesta) return entrada.respuesta;
+    const body = entrada.datos;
     const { leadId } = body;
-    if (!leadId) return Response.json({ success: false, message: "Falta leadId" }, { status: 400 });
 
     /* Sólo estos campos se pueden tocar desde la ficha.
    
@@ -53,14 +62,15 @@ async function manejarPATCH(req) {
     if (error) throw new Error(error.message);
  
     // Audit log
-    await ctx.supabase.from("audit_logs").insert({
+    const { error: auditError } = await ctx.supabase.from("audit_logs").insert({
       client_id: ctx.clientId,
       entity_type: "lead",
       entity_id: leadId,
       action: "lead_updated",
       actor: ctx.currentUser?.full_name || ctx.userEmail,
-      changes: updates,
+      changes: { fields: Object.keys(updates).sort() },
     });
+    if (auditError) throw new Error("No se pudo registrar la auditoría");
  
     void emitirWebhook({
       clientId: ctx.clientId,
@@ -70,6 +80,7 @@ async function manejarPATCH(req) {
 
     return Response.json({ success: true, data: lead });
   } catch (err) {
+    logErrorSeguro("leads.update_failed", err);
     return Response.json({ success: false, message: "No se pudo completar la operación" }, { status: 500 });
   }
 }

@@ -1,6 +1,6 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { puede, sinPermiso } from "@/lib/server/permisos";
-import { requireSameOrigin } from "@/lib/server/security";
+import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 import { observeRoute } from "@/lib/server/observability.mjs";
 import { validar } from "@/lib/server/esquemas";
 import { Destinatario, DestinatarioParcial, BorrarDestinatario } from "@/lib/server/esquemas-portal";
@@ -30,7 +30,18 @@ async function conPermiso(req) {
   const ctx = await getPortalContext();
   if (!ctx.ok) return { respuesta: SIN_SESION() };
   if (!puede(ctx.role, "routing.manage", ctx.permissions)) return { respuesta: sinPermiso("Sólo el propietario o un administrador pueden cambiar quién recibe los contactos.") };
+  const limited = await requireRateLimitAsync(req, {
+    namespace: "portal:recipients", limit: 30,
+    keyParts: [ctx.clientId, ctx.userEmail], includeIp: false,
+  });
+  if (limited) return { respuesta: limited };
   return { ctx };
+}
+
+async function leerEntrada(req, esquema) {
+  const cuerpo = await leerJsonLimitado(req, { maxBytes: 16 * 1024 });
+  if (cuerpo.respuesta) return cuerpo;
+  return validar(esquema, cuerpo.datos);
 }
 
 async function auditar(ctx, action, changes) {
@@ -40,31 +51,38 @@ async function auditar(ctx, action, changes) {
 async function manejarPOST(req) {
   const { ctx, respuesta } = await conPermiso(req);
   if (respuesta) return respuesta;
-  const leido = validar(Destinatario, await req.json().catch(() => ({})));
+  const leido = await leerEntrada(req, Destinatario);
   if (leido.respuesta) return leido.respuesta;
   const { data, error } = await ctx.datos.from("destinatarios").insert({ ...leido.datos, client_id: ctx.clientId }).select("*").single();
   if (error) return Response.json({ success: false, message: "No se pudo crear el destinatario" }, { status: 500 });
-  await auditar(ctx, "destinatario_creado", { id: data.id, email: data.email, departamentos: data.departamentos });
+  await auditar(ctx, "destinatario_creado", {
+    id: data.id,
+    departamentos: data.departamentos,
+  });
   return Response.json({ success: true, data });
 }
 
 async function manejarPATCH(req) {
   const { ctx, respuesta } = await conPermiso(req);
   if (respuesta) return respuesta;
-  const leido = validar(DestinatarioParcial, await req.json().catch(() => ({})));
+  const leido = await leerEntrada(req, DestinatarioParcial);
   if (leido.respuesta) return leido.respuesta;
   const { id, ...cambios } = leido.datos;
   const { data, error } = await ctx.datos.from("destinatarios").update({ ...cambios, updated_at: new Date().toISOString() }).eq("id", id).select("*").maybeSingle();
   if (error) return Response.json({ success: false, message: "No se pudo guardar" }, { status: 500 });
   if (!data) return Response.json({ success: false, message: "No existe" }, { status: 404 });
-  await auditar(ctx, "destinatario_actualizado", { id, ...cambios });
+  await auditar(ctx, "destinatario_actualizado", {
+    id,
+    fields: Object.keys(cambios).sort(),
+    departamentos: cambios.departamentos,
+  });
   return Response.json({ success: true, data });
 }
 
 async function manejarDELETE(req) {
   const { ctx, respuesta } = await conPermiso(req);
   if (respuesta) return respuesta;
-  const leido = validar(BorrarDestinatario, await req.json().catch(() => ({})));
+  const leido = await leerEntrada(req, BorrarDestinatario);
   if (leido.respuesta) return leido.respuesta;
   const { error } = await ctx.datos.from("destinatarios").delete().eq("id", leido.datos.id);
   if (error) return Response.json({ success: false, message: "No se pudo borrar" }, { status: 500 });

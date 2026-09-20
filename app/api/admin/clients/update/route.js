@@ -1,8 +1,10 @@
-import { requireSameOrigin } from "@/lib/server/security";
+import { validar } from "@/lib/server/esquemas";
+import { ActualizarClienteAdmin } from "@/lib/server/esquemas-operaciones";
+import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 import { createClient } from "@supabase/supabase-js";
 import { getAdminContext } from "@/lib/server/auth";
 import { esTelefonoValido, toE164 } from "@/lib/server/phone";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 function getSupabase() {
   return createClient(
@@ -23,8 +25,16 @@ async function manejarPATCH(req) {
       );
     }
 
+    const limite = await requireRateLimitAsync(req, {
+      namespace: "admin-client-update-legacy", limit: 40, keyParts: [admin.userEmail || "admin"],
+    });
+    if (limite) return limite;
+    const cuerpo = await leerJsonLimitado(req, { maxBytes: 64 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
+    const entrada = validar(ActualizarClienteAdmin, cuerpo.datos);
+    if (entrada.respuesta) return entrada.respuesta;
     const supabase = getSupabase();
-    const body = await req.json();
+    const body = entrada.datos;
 
     const {
       id,
@@ -41,13 +51,6 @@ async function manejarPATCH(req) {
       is_active,
     } = body;
 
-    if (!id) {
-      return Response.json(
-        { success: false, message: "Falta id" },
-        { status: 400 }
-      );
-    }
-
     // Mismo motivo que en la creación: normalizar antes de guardar es lo
     // único que hace que el enrutado por número funcione de forma fiable.
     const twilio_number =
@@ -62,21 +65,23 @@ async function manejarPATCH(req) {
       );
     }
 
+    const cambios = Object.fromEntries(Object.entries({
+      name,
+      prompt,
+      webhook,
+      twilio_number,
+      original_number,
+      owner_email,
+      brand_name,
+      primary_color,
+      secondary_color,
+      industry,
+      is_active,
+    }).filter(([, valor]) => valor !== undefined));
+
     const { data, error } = await supabase
       .from("clients")
-      .update({
-        name,
-        prompt,
-        webhook,
-        twilio_number,
-        original_number,
-        owner_email,
-        brand_name,
-        primary_color,
-        secondary_color,
-        industry,
-        is_active,
-      })
+      .update(cambios)
       .eq("id", id)
       .select()
       .single();
@@ -97,8 +102,19 @@ async function manejarPATCH(req) {
       );
     }
 
+    const { error: auditError } = await supabase.from("audit_logs").insert({
+      client_id: id,
+      entity_type: "client",
+      entity_id: id,
+      action: "admin_client_updated",
+      actor: admin.userEmail || "admin",
+      changes: { fields: Object.keys(cambios).sort() },
+    });
+    if (auditError) throw new Error("No se pudo registrar la auditoría");
+
     return Response.json({ success: true, data });
   } catch (error) {
+    logErrorSeguro("admin.client_update_legacy_failed", error);
     return Response.json(
       { success: false, message: "Error actualizando cliente" },
       { status: 500 }

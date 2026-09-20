@@ -1,7 +1,9 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { puede } from "@/lib/server/permisos";
-import { requireSameOrigin } from "@/lib/server/security";
+import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 import { observeRoute } from "@/lib/server/observability.mjs";
+import { validar } from "@/lib/server/esquemas";
+import { BrandingPortal } from "@/lib/server/esquemas-portal";
 
 function withValue(value, transform = (item) => item) {
   return value === undefined ? undefined : transform(value);
@@ -22,7 +24,18 @@ async function manejarPATCH(req) {
     if (!ctx.ok) return Response.json({ success: false, message: ctx.message }, { status: 401 });
     if (!puede(ctx.role, "brand.manage", ctx.permissions)) return Response.json({ success: false, message: "Sin permisos de admin" }, { status: 403 });
  
-    const body = await req.json();
+    const limited = await requireRateLimitAsync(req, {
+      namespace: "portal:branding",
+      limit: 30,
+      keyParts: [ctx.clientId, ctx.userEmail],
+      includeIp: false,
+    });
+    if (limited) return limited;
+    const cuerpo = await leerJsonLimitado(req, { maxBytes: 16 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
+    const leido = validar(BrandingPortal, cuerpo.datos);
+    if (leido.respuesta) return leido.respuesta;
+    const body = leido.datos;
     const payload = cleanObject({
       brand_name: withValue(body.brand_name, (value) => String(value || "").trim()),
       brand_logo_url: withValue(body.brand_logo_url, (value) => String(value || "").trim()),
@@ -43,6 +56,14 @@ async function manejarPATCH(req) {
       .eq("id", ctx.clientId);
  
     if (error) throw new Error(error.message);
+    const { error: auditError } = await ctx.datos.from("audit_logs").insert({
+      entity_type: "branding",
+      entity_id: ctx.clientId,
+      action: "branding_updated",
+      actor: ctx.userEmail,
+      changes: { fields: Object.keys(body).sort() },
+    });
+    if (auditError) throw new Error("No se pudo auditar el cambio de marca");
     return Response.json({ success: true, message: "Branding actualizado." });
   } catch (err) {
     return Response.json({ success: false, message: "No se pudo completar la operación" }, { status: 500 });

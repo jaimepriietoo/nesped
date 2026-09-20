@@ -2,7 +2,9 @@ import { requireInternalRequest } from "@/lib/server/internal-api";
 import { buildElevenLabsContext } from "@/lib/server/elevenlabs";
 import { configIA, promptDeEmpresa, dentroDeHorario } from "@/lib/server/ia-config";
 import { departamentosDeEmpresa } from "@/lib/server/departamentos";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
+import { ContextoElevenLabs, validar } from "@/lib/server/esquemas";
+import { leerJsonLimitado } from "@/lib/server/security";
 
 /**
  * Lo que ElevenLabs pide ANTES de descolgar.
@@ -27,7 +29,11 @@ async function manejarPOST(req) {
   const authError = requireInternalRequest(req);
   if (authError) return authError;
 
-  const body = await req.json().catch(() => ({}));
+  const cuerpo = await leerJsonLimitado(req, { maxBytes: 32 * 1024 });
+  if (cuerpo.respuesta) return cuerpo.respuesta;
+  const leido = validar(ContextoElevenLabs, cuerpo.datos, { mensaje: "Contexto no válido" });
+  if (leido.respuesta) return leido.respuesta;
+  const body = leido.datos;
   const callerId = body?.caller_id || body?.callerId || "";
   const calledNumber = body?.called_number || body?.calledNumber || "";
   const conversationId = body?.conversation_id || body?.conversationId || "";
@@ -69,7 +75,7 @@ async function manejarPOST(req) {
       ...ctx,
     });
   } catch (error) {
-    console.error("[elevenlabs/context]", error?.message || error);
+    logErrorSeguro("elevenlabs.context_failed", error);
     return Response.json({
       type: "conversation_initiation_client_data",
       dynamic_variables: {
@@ -77,7 +83,7 @@ async function manejarPOST(req) {
         resumen_contacto: "", objetivo_llamada: "", en_horario: "sí", mensaje_fuera_horario: "", contexto_empresa: "",
       },
       success: false,
-      message: error?.message || "No se pudo cargar el contexto para ElevenLabs",
+      message: "No se pudo cargar el contexto para ElevenLabs",
     });
   }
 }

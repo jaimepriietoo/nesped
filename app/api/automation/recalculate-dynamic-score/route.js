@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { eventosDeLead } from "@/lib/server/datos";
 import { requireInternalRequest } from "@/lib/server/internal-api";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 
@@ -195,7 +195,7 @@ async function manejarPOST(req) {
           predicted_close_probability: dynamic.predicted_close_probability,
         });
       } catch (err) {
-        console.error(err);
+        logErrorSeguro("automation.dynamic_score_item_failed", err);
         failed.push({
           leadId: lead?.id || null,
         });
@@ -209,7 +209,7 @@ async function manejarPOST(req) {
       data: processed,
     });
   } catch (err) {
-    console.error(err);
+    logErrorSeguro("automation.dynamic_score_failed", err);
     return NextResponse.json({
       success: false,
       message: "Error recalculando scoring dinámico",

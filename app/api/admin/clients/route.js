@@ -1,10 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
 import { getInternalApiHeaders } from "@/lib/server/internal-api";
 import crypto from "crypto";
-import { requireSameOrigin } from "@/lib/server/security";
+import { validar } from "@/lib/server/esquemas";
+import { ClienteAdmin } from "@/lib/server/esquemas-operaciones";
+import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 import { safeUpsertClientSettings } from "@/lib/client-settings";
 import { getAdminContext, hashPassword } from "@/lib/server/auth";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 function getSupabase() {
   return createClient(
@@ -86,7 +88,7 @@ async function manejarGET() {
       data: (data || []).map(mapClient),
     });
   } catch (error) {
-    console.error("GET /api/admin/clients error:", error);
+    logErrorSeguro("admin.clients_read_failed", error);
 
     return Response.json(
       {
@@ -114,8 +116,16 @@ async function manejarPOST(req) {
       );
     }
 
+    const limite = await requireRateLimitAsync(req, {
+      namespace: "admin-client-create", limit: 20, keyParts: [admin.userEmail || "admin"],
+    });
+    if (limite) return limite;
+    const cuerpo = await leerJsonLimitado(req, { maxBytes: 64 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
+    const entrada = validar(ClienteAdmin, cuerpo.datos);
+    if (entrada.respuesta) return entrada.respuesta;
     const supabase = getSupabase();
-    const body = await req.json();
+    const body = entrada.datos;
 
     const id = body.id?.trim();
     const name = body.name?.trim();
@@ -136,16 +146,6 @@ async function manejarPOST(req) {
     const secondaryColor = body.secondary_color || "#030303";
     const industry = body.industry || "";
     const isActive = body.is_active !== false;
-
-    if (!id || !name) {
-      return Response.json(
-        {
-          success: false,
-          message: "Faltan id o name",
-        },
-        { status: 400 }
-      );
-    }
 
     const { data: existingClient } = await supabase
       .from("clients")
@@ -219,7 +219,7 @@ async function manejarPOST(req) {
     );
 
     if (settingsError) {
-      console.error("Error creando client_settings:", settingsError.message);
+      logErrorSeguro("admin.client_settings_create_failed", settingsError);
     }
 
     let initialPassword = "";
@@ -250,10 +250,17 @@ async function manejarPOST(req) {
             }
           );
         } catch (emailErr) {
-          console.error("Error enviando onboarding email:", emailErr);
+          logErrorSeguro("admin.client_onboarding_email_failed", emailErr);
         }
       }
     }
+
+    const { error: auditError } = await supabase.from("audit_logs").insert({
+      client_id: id, entity_type: "client", entity_id: id,
+      action: "admin_client_created", actor: admin.userEmail || "admin",
+      changes: { fields: Object.keys(insertPayload).filter((campo) => campo !== "created_at").sort() },
+    });
+    if (auditError) throw new Error("No se pudo registrar la auditoría");
 
     return Response.json({
       success: true,
@@ -263,7 +270,7 @@ async function manejarPOST(req) {
       ok: true,
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    console.error("POST /api/admin/clients error:", error);
+    logErrorSeguro("admin.client_create_failed", error);
 
     return Response.json(
       {
@@ -290,8 +297,16 @@ async function manejarPATCH(req) {
       );
     }
 
+    const limite = await requireRateLimitAsync(req, {
+      namespace: "admin-client-update", limit: 40, keyParts: [admin.userEmail || "admin"],
+    });
+    if (limite) return limite;
+    const cuerpo = await leerJsonLimitado(req, { maxBytes: 64 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
+    const entrada = validar(ClienteAdmin, cuerpo.datos);
+    if (entrada.respuesta) return entrada.respuesta;
     const supabase = getSupabase();
-    const body = await req.json();
+    const body = entrada.datos;
 
     const id = body.id?.trim();
     const name = body.name?.trim();
@@ -310,16 +325,6 @@ async function manejarPATCH(req) {
     const secondaryColor = body.secondary_color || "#030303";
     const industry = body.industry || "";
     const isActive = body.is_active !== false;
-
-    if (!id) {
-      return Response.json(
-        {
-          success: false,
-          message: "Falta id del cliente",
-        },
-        { status: 400 }
-      );
-    }
 
     const updatePayload = {
       name,
@@ -370,8 +375,15 @@ async function manejarPATCH(req) {
     );
 
     if (settingsError) {
-      console.error("Error actualizando client_settings:", settingsError.message);
+      logErrorSeguro("admin.client_settings_update_failed", settingsError);
     }
+
+    const { error: auditError } = await supabase.from("audit_logs").insert({
+      client_id: id, entity_type: "client", entity_id: id,
+      action: "admin_client_updated", actor: admin.userEmail || "admin",
+      changes: { fields: Object.keys(updatePayload).sort() },
+    });
+    if (auditError) throw new Error("No se pudo registrar la auditoría");
 
     return Response.json({
       success: true,
@@ -379,7 +391,7 @@ async function manejarPATCH(req) {
       ok: true,
     });
   } catch (error) {
-    console.error("PATCH /api/admin/clients error:", error);
+    logErrorSeguro("admin.client_update_failed", error);
 
     return Response.json(
       {

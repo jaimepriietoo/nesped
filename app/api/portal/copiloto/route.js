@@ -3,10 +3,13 @@ import { conRegistroIA } from "@/lib/server/ia";
 import { respuestaSiPausado } from "@/lib/server/interruptores";
 import { getPortalContext } from "@/lib/portal-auth";
 import { evaluarInteligencia } from "@/lib/server/inteligencia";
-import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
+import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 import { limpiarItems, limpiarTextoAjeno } from "@/lib/server/texto-ajeno";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 import { iaDisponible } from "@/lib/server/estado-ia";
+import { puede, sinPermiso } from "@/lib/server/permisos";
+import { validar } from "@/lib/server/esquemas";
+import { PreguntaCopiloto } from "@/lib/server/esquemas-portal";
 
 /**
  * Preguntarle a Nesped.
@@ -91,6 +94,7 @@ async function manejarPOST(req) {
         { status: 401 }
       );
     }
+    if (!puede(ctx.role, "ai.use", ctx.permissions)) return sinPermiso();
 
     /* Cada pregunta cuesta una llamada al modelo, así que se limita por
        cuenta y no sólo por IP: una pestaña abierta en bucle vaciaría el
@@ -103,12 +107,11 @@ async function manejarPOST(req) {
     });
     if (limiteError) return limiteError;
 
-    const { pregunta = "" } = await req.json().catch(() => ({}));
-    const texto = String(pregunta).trim().slice(0, 500);
-
-    if (!texto) {
-      return Response.json({ success: false, message: "Escribe una pregunta." }, { status: 400 });
-    }
+    const cuerpo = await leerJsonLimitado(req, { maxBytes: 8 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
+    const leido = validar(PreguntaCopiloto, cuerpo.datos);
+    if (leido.respuesta) return leido.respuesta;
+    const texto = leido.datos.pregunta;
 
     const estado = await evaluarInteligencia({
       supabase: ctx.supabase,
@@ -175,7 +178,7 @@ async function manejarPOST(req) {
   } catch (error) {
     const pausado = respuestaSiPausado(error);
     if (pausado) return pausado;
-    console.error("POST /api/portal/copiloto error:", error);
+    logErrorSeguro("portal.copiloto_failed", error);
     return Response.json(
       { success: false, message: "No he podido responder ahora mismo." },
       { status: 500 }

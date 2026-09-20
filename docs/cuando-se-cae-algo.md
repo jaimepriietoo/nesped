@@ -127,7 +127,10 @@ cargos inesperados; una clave en un sitio público.
 3. Si es la de sesión (`NESPED_SESSION_SECRET`): rotarla **cierra todas las
    sesiones**; además subir `session_epoch` de los usuarios afectados
    (`revocar_sesiones_usuario`).
-4. Revisar `audit_logs` desde la fecha sospechada.
+4. Si es `NESPED_TOTP_ENCRYPTION_KEY`, rotarla vuelve ilegibles los factores
+   TOTP existentes: desactivarlos y pedir a cada usuario que los vuelva a
+   enrolar. No reutilizar la clave anterior para “recuperarlos”.
+5. Revisar `audit_logs` desde la fecha sospechada.
 **Recuperación.** Quitar la pausa cuando todas las claves sean nuevas.
 **Comunicación.** Si hubo acceso a datos personales, es un incidente RGPD:
 72 horas para notificar a la AEPD. Guardar la línea temporal.

@@ -21,6 +21,9 @@ concurrency:
   group: verificar-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   verificar:
     runs-on: ubuntu-latest
@@ -31,15 +34,24 @@ jobs:
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
           cache: npm
 
       - name: Dependencias
         run: npm ci
+
+      - name: Secretos en código e historial
+        run: npm run revisar:secretos
+
+      - name: Dependencias vulnerables
+        run: npm audit --audit-level=high
 
       - name: Lint
         run: npx eslint app components lib tests scripts
@@ -58,7 +70,7 @@ jobs:
 
       - name: Informe de Playwright si algo falla
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: playwright-report
           path: playwright-report/

@@ -104,3 +104,19 @@ test("credenciales incorrectas devuelven al formulario con el motivo", async ({ 
   await expect(page.getByText(/Credenciales incorrectas/i)).toBeVisible();
   await expect(page.locator("#v3-email")).toBeVisible();
 });
+
+test("una cuenta con TOTP pide la aplicación y no ofrece reenviar", async ({ page }) => {
+  await page.route("**/api/login", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ success: true, requiresTwoFactor: true, verificationMethod: "totp" }),
+    })
+  );
+
+  await page.goto("/login");
+  await rellenarAcceso(page);
+
+  await expect(page.getByText(/aplicación autenticadora/i).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /Reenviar código/i })).toHaveCount(0);
+});

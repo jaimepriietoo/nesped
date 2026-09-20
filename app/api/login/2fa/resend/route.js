@@ -33,6 +33,12 @@ async function handlePost(req) {
       { status: 400 }
     );
   }
+  if (challenge.factorType === "totp") {
+    return Response.json(
+      { success: false, message: "Usa el código de tu aplicación autenticadora" },
+      { status: 400 },
+    );
+  }
 
   const code = generateTwoFactorCode();
   const accountLimit = await requireRateLimitAsync(req, {
@@ -50,6 +56,7 @@ async function handlePost(req) {
     deliveryChannel: "email",
     attempts: 0,
     sessionEpoch: Number(challenge.sessionEpoch || 0),
+    factorType: "email",
   });
 
   // Mismo respaldo que en el primer envío: si el correo no sale, SMS.

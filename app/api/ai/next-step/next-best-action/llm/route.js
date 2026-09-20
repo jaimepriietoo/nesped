@@ -1,7 +1,10 @@
 import { createAdminSupabase, generateNextBestActionLlmRecommendation } from "@/lib/server/next-best-action-service";
 import { getNextBestActionRules } from "@/lib/next-best-action";
 import { requireInternalRequest } from "@/lib/server/internal-api";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { leerJsonLimitado } from "@/lib/server/security";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
+import { validar } from "@/lib/server/esquemas";
+import { AccionRecomendadaInterna } from "@/lib/server/esquemas-operaciones";
 
 function predictCloseProbability(lead) {
   const score = Number(lead?.score || 0);
@@ -24,8 +27,11 @@ async function manejarPOST(req) {
   if (unauthorized) return unauthorized;
 
   try {
-    const body = await req.json();
-    const { leadId, clientId, brandName = "nuestro equipo" } = body;
+    const cuerpo = await leerJsonLimitado(req, { maxBytes: 8 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
+    const leido = validar(AccionRecomendadaInterna, cuerpo.datos);
+    if (leido.respuesta) return leido.respuesta;
+    const { leadId, clientId, brandName } = leido.datos;
 
     if (!leadId || !clientId) {
       return Response.json(
@@ -66,7 +72,7 @@ async function manejarPOST(req) {
       data,
     });
   } catch (error) {
-    console.error("POST /api/ai/next-step/next-best-action/llm error:", error);
+    logErrorSeguro("ai.next_step_llm_failed", error);
 
     return Response.json(
       {

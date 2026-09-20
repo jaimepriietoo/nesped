@@ -1,7 +1,7 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { codigosDisponibles, generarCodigos } from "@/lib/server/codigos-recuperacion";
 import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 /**
  * Códigos de recuperación de la propia cuenta.
@@ -24,7 +24,7 @@ async function manejarGET() {
       disponibles: await codigosDisponibles(ctx.userEmail),
     });
   } catch (error) {
-    console.error("GET /api/portal/codigos-recuperacion error:", error);
+    logErrorSeguro("portal.recovery_codes_read_failed", error);
     return Response.json({ success: false, message: "No se pudo consultar" }, { status: 500 });
   }
 }
@@ -72,7 +72,7 @@ async function manejarPOST(req) {
 
     return Response.json({ success: true, codigos });
   } catch (error) {
-    console.error("POST /api/portal/codigos-recuperacion error:", error);
+    logErrorSeguro("portal.recovery_codes_generate_failed", error);
     return Response.json(
       { success: false, message: "No se pudieron generar los códigos" },
       { status: 500 }

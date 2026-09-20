@@ -1,4 +1,6 @@
-import { requireSameOrigin } from "@/lib/server/security";
+import { validar } from "@/lib/server/esquemas";
+import { GuardarPlaybook } from "@/lib/server/esquemas-operaciones";
+import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 import { getPortalContext } from "@/lib/portal-auth";
 import { puede } from "@/lib/server/permisos";
 import { playbooksPorSector } from "@/lib/server/datos";
@@ -8,7 +10,7 @@ import {
   parsePlaybookWorkspace,
   serializePlaybookWorkspace,
 } from "@/lib/portal-product";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 async function findIndustryPlaybook(industry = "") {
   const normalized = String(industry || "").trim().toLowerCase();
@@ -84,6 +86,7 @@ async function manejarGET() {
       },
     });
   } catch (error) {
+    logErrorSeguro("playbooks.read_failed", error);
     return Response.json(
       {
         success: false,
@@ -113,8 +116,15 @@ async function manejarPATCH(req) {
       );
     }
 
-    const body = await req.json();
-    const workspace = body?.workspace || {};
+    const limite = await requireRateLimitAsync(req, {
+      namespace: "playbooks-update", limit: 20, keyParts: [ctx.clientId, ctx.userEmail],
+    });
+    if (limite) return limite;
+    const cuerpo = await leerJsonLimitado(req, { maxBytes: 96 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
+    const entrada = validar(GuardarPlaybook, cuerpo.datos);
+    if (entrada.respuesta) return entrada.respuesta;
+    const workspace = entrada.datos.workspace;
     const prompt = serializePlaybookWorkspace(workspace);
 
     const { error } = await ctx.supabase
@@ -140,6 +150,7 @@ async function manejarPATCH(req) {
       },
     });
   } catch (error) {
+    logErrorSeguro("playbooks.write_failed", error);
     return Response.json(
       {
         success: false,

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPortalContext } from "@/lib/portal-auth";
 import { getPaidLeadRows, groupPaidLeadRows } from "@/lib/server/billing-analytics";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 async function manejarGET() {
   try {
@@ -55,7 +55,7 @@ async function manejarGET() {
       },
     });
   } catch (error) {
-    console.error(error);
+    logErrorSeguro("analytics.billing_failed", error);
     return NextResponse.json(
       {
         success: false,

@@ -4,8 +4,9 @@ import crypto from "node:crypto";
 import { validarPassword } from "@/lib/server/passwords";
 import { hashPassword, generateTwoFactorCode, setTwoFactorChallenge } from "@/lib/server/auth";
 import { sendTwoFactorCode } from "@/lib/server/two-factor.mjs";
-import { requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
+import { RegistroPublico, validar } from "@/lib/server/esquemas";
 
 /**
  * Alta de cuenta ANTES de pagar.
@@ -32,12 +33,6 @@ import { observeRoute } from "@/lib/server/observability.mjs";
 /* Enterprise no está: se habla antes de contratarlo. Dar a un programa
    permiso para escribir a clientes en nombre de una empresa no se activa
    desde una pantalla de pago sin conocer el caso. */
-const PLANES_PUBLICOS = new Set(["growth", "intelligence"]);
-
-function normalizarEmail(valor = "") {
-  return String(valor || "").trim().toLowerCase();
-}
-
 function aIdentificador(valor = "") {
   return String(valor || "")
     .normalize("NFD")
@@ -63,21 +58,11 @@ async function manejarPOST(req) {
     });
     if (limiteError) return limiteError;
 
-    const cuerpo = await req.json().catch(() => ({}));
-    const email = normalizarEmail(cuerpo.email);
-    const password = String(cuerpo.password || "");
-    const empresa = String(cuerpo.empresa || "").trim();
-    const plan = String(cuerpo.plan || "growth").toLowerCase();
-
-    if (email.length > 254 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
-      return NextResponse.json({ ok: false, message: "Escribe un correo válido." }, { status: 400 });
-    }
-    if (!empresa || empresa.length > 200) {
-      return NextResponse.json({ ok: false, message: "Falta el nombre de tu empresa." }, { status: 400 });
-    }
-    if (!PLANES_PUBLICOS.has(plan)) {
-      return NextResponse.json({ ok: false, message: "Ese plan no se contrata por aquí." }, { status: 400 });
-    }
+    const cuerpo = await leerJsonLimitado(req, { maxBytes: 8 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
+    const leido = validar(RegistroPublico, cuerpo.datos, { mensaje: "Datos de alta no válidos" });
+    if (leido.respuesta) return leido.respuesta;
+    const { email, password, empresa, plan } = leido.datos;
 
     const revision = validarPassword(password, { email });
     if (!revision.ok) {
@@ -106,7 +91,7 @@ async function manejarPOST(req) {
       siguiente: "/login?verificar=1",
     });
   } catch (error) {
-    console.error("POST /api/registro error:", error);
+    logErrorSeguro("auth.registro_failed", error);
     return NextResponse.json(
       { ok: false, message: "No se pudo crear la cuenta. Inténtalo de nuevo." },
       { status: 500 }

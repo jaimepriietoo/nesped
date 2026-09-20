@@ -1,5 +1,5 @@
 import { getPortalContext } from "@/lib/portal-auth";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 import { paginar, cuantasFilas, respuestaPaginada, CursorInvalido } from "@/lib/server/paginacion";
 
 /**
@@ -25,7 +25,7 @@ async function manejarGET(req) {
     return respuestaPaginada(pagina);
   } catch (err) {
     if (err instanceof CursorInvalido) return Response.json({ success: false, message: err.message, data: [] }, { status: 400 });
-    console.error("[portal/eventos]", err?.message || err);
+    logErrorSeguro("portal.events_load_failed", err);
     return Response.json({ success: false, message: "No se pudieron cargar los eventos", data: [] }, { status: 500 });
   }
 }

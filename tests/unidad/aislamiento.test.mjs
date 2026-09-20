@@ -115,6 +115,48 @@ test("ninguna ruta lee datos de empresa sin filtrar por empresa", () => {
   );
 });
 
+/**
+ * La prueba anterior detecta olvidos por fichero. Esta segunda red mira cada
+ * cadena construida con el cliente sin envolver: que otra consulta del mismo
+ * fichero sí filtre no puede ocultar una consulta insegura distinta.
+ */
+test("cada consulta cruda del portal lleva su propio filtro de empresa", () => {
+  const culpables = [];
+  const tablas = new Set([...TABLAS_POR_EMPRESA, "clients"]);
+
+  for (const fichero of ficherosDeRuta().filter((ruta) => ruta.includes(`${path.sep}api${path.sep}portal${path.sep}`))) {
+    const codigo = fs.readFileSync(fichero, "utf8");
+    const patron = /ctx\.supabase\s*\.from\(\s*["'`]([a-z_]+)["'`]\s*\)/g;
+    const coincidencias = [...codigo.matchAll(patron)];
+
+    for (let indice = 0; indice < coincidencias.length; indice += 1) {
+      const coincidencia = coincidencias[indice];
+      const tabla = coincidencia[1];
+      if (!tablas.has(tabla)) continue;
+
+      const siguiente = coincidencias[indice + 1]?.index ?? codigo.length;
+      const puntoYComa = codigo.indexOf(";", coincidencia.index);
+      const final = Math.min(puntoYComa === -1 ? codigo.length : puntoYComa, siguiente);
+      const consulta = codigo.slice(coincidencia.index, final);
+      const filtro = tabla === "clients"
+        ? /\.eq\(\s*["'`]id["'`]\s*,\s*ctx\.clientId\s*\)/
+        : /\.eq\(\s*["'`]client_id["'`]\s*,\s*ctx\.clientId\s*\)|client_id\s*:\s*ctx\.clientId/;
+
+      if (!filtro.test(consulta)) {
+        culpables.push(
+          `${path.relative(RAIZ, fichero)}:${codigo.slice(0, coincidencia.index).split("\n").length} → ${tabla}`
+        );
+      }
+    }
+  }
+
+  assert.deepEqual(
+    culpables,
+    [],
+    "Estas consultas usan ctx.supabase sin acotarse en su propia cadena:\n  " + culpables.join("\n  ")
+  );
+});
+
 test("toda excepción lleva su motivo escrito", () => {
   for (const [ruta, motivo] of Object.entries(CRUZAN_EMPRESAS)) {
     assert.ok(

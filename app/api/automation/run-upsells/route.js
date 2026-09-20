@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { eventosPorTipo, ultimoUpsell, crearUpsell } from "@/lib/server/datos";
 import { getInternalApiHeaders } from "@/lib/server/internal-api";
 import { requireInternalRequest } from "@/lib/server/internal-api";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 
@@ -102,7 +102,7 @@ async function manejarPOST(req) {
           toTier,
         });
       } catch (err) {
-        console.error(err);
+        logErrorSeguro("automation.upsell_item_failed", err);
         failed.push({
           phone: payment.phone || null,
         });
@@ -116,7 +116,7 @@ async function manejarPOST(req) {
       data: processed,
     });
   } catch (err) {
-    console.error(err);
+    logErrorSeguro("automation.upsells_failed", err);
     return NextResponse.json({
       success: false,
       message: "Error ejecutando upsells",

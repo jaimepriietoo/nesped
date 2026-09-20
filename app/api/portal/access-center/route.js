@@ -1,7 +1,8 @@
 import { getPortalContext } from "@/lib/portal-auth";
 import { filasDePermisos } from "@/lib/server/datos";
+import { puede, sinPermiso } from "@/lib/server/permisos";
 import { buildAccessCenterData } from "@/lib/server/portal-phase-three";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 async function manejarGET() {
   try {
@@ -12,6 +13,7 @@ async function manejarGET() {
         { status: 401 }
       );
     }
+    if (!puede(ctx.role, "users.manage", ctx.permissions)) return sinPermiso();
 
     const [portalUsersRes, authUsersRes, auditRes] = await Promise.all([
       ctx.supabase
@@ -42,17 +44,26 @@ async function manejarGET() {
     }
 
     const permissionRows = filasDePermisos(portalUsersRes.data || []);
+    /* Ningún constructor ni respuesta recibe hashes. Esta ruta sólo necesita
+       saber si existe una credencial para pintar el estado de la cuenta. */
+    const authUsers = (authUsersRes.data || []).map((user) => ({
+      email: user.email,
+      role: user.role,
+      created_at: user.created_at,
+      hasPassword: Boolean(user.password || user.password_hash),
+    }));
 
     return Response.json({
       success: true,
       data: buildAccessCenterData({
         portalUsers: portalUsersRes.data || [],
-        authUsers: authUsersRes.data || [],
+        authUsers,
         auditLogs: auditRes.data || [],
         permissionRows,
       }),
-    });
+    }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
+    logErrorSeguro("portal.access_center_failed", error);
     return Response.json(
       {
         success: false,

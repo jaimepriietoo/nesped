@@ -1,9 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 import { getAdminContext, hashPassword } from "@/lib/server/auth";
-import { requireSameOrigin } from "@/lib/server/security";
+import { validar } from "@/lib/server/esquemas";
+import { CrearUsuarioAdmin } from "@/lib/server/esquemas-operaciones";
+import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
 import { validarPassword } from "@/lib/server/passwords";
 import { getInternalApiHeaders } from "@/lib/server/internal-api";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 function getSupabase() {
   return createClient(
@@ -49,7 +51,7 @@ async function manejarGET() {
       data: data || [],
     });
   } catch (error) {
-    console.error("GET /api/admin/users error:", error);
+    logErrorSeguro("admin.users_read_failed", error);
 
     return Response.json(
       {
@@ -77,27 +79,27 @@ async function manejarPOST(req) {
       );
     }
 
+    const limite = await requireRateLimitAsync(req, {
+      namespace: "admin-user-create", limit: 30, keyParts: [admin.userEmail || "admin"],
+    });
+    if (limite) return limite;
+    const cuerpo = await leerJsonLimitado(req, { maxBytes: 8 * 1024 });
+    if (cuerpo.respuesta) return cuerpo.respuesta;
+    const entrada = validar(CrearUsuarioAdmin, cuerpo.datos);
+    if (entrada.respuesta) return entrada.respuesta;
     const supabase = getSupabase();
-    const body = await req.json();
+    const body = entrada.datos;
 
     const email = body.email?.trim()?.toLowerCase();
     const password = body.password;
     const role = body.role?.trim() || "client";
     const clientId = body.clientId?.trim();
 
-    if (!email || !password || !clientId) {
-      return Response.json(
-        {
-          success: false,
-          message: "Faltan email, password o clientId",
-        },
-        { status: 400 }
-      );
-    }
-
     const passwordCheck = validarPassword(password, { email });
     if (!passwordCheck.ok) return Response.json({ success: false, message: passwordCheck.message }, { status: 400 });
-    if (!["client","admin","super_admin"].includes(role)) return Response.json({ success: false, message: "Rol no válido" }, { status: 400 });
+    if (["admin", "super_admin"].includes(role) && admin.role !== "super_admin") {
+      return Response.json({ success: false, message: "Sólo un superadministrador puede crear administradores" }, { status: 403 });
+    }
 
     const { data: existingUser } = await supabase
       .from("users")
@@ -158,7 +160,7 @@ async function manejarPOST(req) {
         body: JSON.stringify({ email, clientName: clientExists.name }),
       });
     } catch (emailErr) {
-      console.error("Error enviando onboarding email:", emailErr);
+      logErrorSeguro("admin.user_onboarding_email_failed", emailErr);
     }
 
     return Response.json({
@@ -166,7 +168,7 @@ async function manejarPOST(req) {
       data,
     });
   } catch (error) {
-    console.error("POST /api/admin/users error:", error);
+    logErrorSeguro("admin.user_create_failed", error);
 
     return Response.json(
       {

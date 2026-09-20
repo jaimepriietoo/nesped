@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPortalContext } from "@/lib/portal-auth";
 import { getClientProductPerformance } from "@/lib/server/portal-phase-two";
-import { observeRoute } from "@/lib/server/observability.mjs";
+import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 
 async function manejarGET() {
   try {
@@ -24,7 +24,7 @@ async function manejarGET() {
       summary: snapshot.summary,
     });
   } catch (err) {
-    console.error(err);
+    logErrorSeguro("analytics.product_performance_failed", err);
     return NextResponse.json({
       success: false,
       message: "Error obteniendo rendimiento de productos",

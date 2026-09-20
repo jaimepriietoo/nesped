@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { requireSameOrigin, requireRateLimitAsync } from "@/lib/server/security";
+import { leerJsonLimitado, requireSameOrigin, requireRateLimitAsync } from "@/lib/server/security";
 import { observeRoute } from "@/lib/server/observability.mjs";
 import { validar } from "@/lib/server/esquemas";
 import { pedirRestablecimiento } from "@/lib/server/restablecer";
@@ -17,7 +17,9 @@ async function manejarPOST(req) {
   if (origen) return origen;
   const porIp = await requireRateLimitAsync(req, { namespace: "recuperar:ip", limit: 10, windowMs: 15 * 60 * 1000, message: "Demasiados intentos. Espera unos minutos." });
   if (porIp) return porIp;
-  const leido = validar(Recuperar, await req.json().catch(() => ({})), { mensaje: "Correo no válido" });
+  const cuerpo = await leerJsonLimitado(req, { maxBytes: 4 * 1024 });
+  if (cuerpo.respuesta) return cuerpo.respuesta;
+  const leido = validar(Recuperar, cuerpo.datos, { mensaje: "Correo no válido" });
   if (leido.respuesta) return leido.respuesta;
   const { email } = leido.datos;
   const porCorreo = await requireRateLimitAsync(req, { namespace: "recuperar:email", limit: 3, windowMs: 60 * 60 * 1000, keyParts: [email], includeIp: false, message: "Ya se ha pedido varias veces. Mira tu correo o espera una hora." });

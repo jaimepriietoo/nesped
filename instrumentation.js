@@ -9,6 +9,11 @@ export async function register() {
 
   if (runtime !== "edge") {
     registerProcessHandlers("next-app");
+    /* Los secretos que van en sobre KMS se abren aquí, antes de atender la
+       primera petición. Si falla, la app no arranca: mejor caída que un
+       secreto a medias. Edge no puede hablar con KMS; lo suyo va en claro. */
+    const { abrirSobresDeEntorno } = await import("@/lib/server/kms");
+    await abrirSobresDeEntorno();
   }
 
   logEvent("info", "app.instrumentation.ready", {

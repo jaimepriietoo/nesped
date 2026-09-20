@@ -2008,6 +2008,77 @@ function CodigosRecuperacion() {
   );
 }
 
+function SesionesActivas() {
+  const [sesiones, setSesiones] = useState(null);
+  const [error, setError] = useState("");
+
+  async function cargar() {
+    try {
+      const res = await fetch("/api/portal/sesiones", { cache: "no-store" });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) throw new Error(json?.message || "No se pudieron leer las sesiones");
+      setSesiones(json.sesiones || []);
+    } catch (e) {
+      setError(e?.message || "No se pudieron leer las sesiones");
+    }
+  }
+
+  useEffect(() => { cargar(); }, []);
+
+  async function cerrar(id) {
+    setError("");
+    const res = await fetch("/api/portal/sesiones", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.success) {
+      setError(json?.message || "No se pudo cerrar la sesión");
+      return;
+    }
+    if (json.actual) {
+      window.location.replace("/login?next=/portal");
+      return;
+    }
+    await cargar();
+  }
+
+  const cuando = (iso) => {
+    const ms = Date.now() - Date.parse(iso);
+    if (!Number.isFinite(ms)) return "";
+    if (ms < 90_000) return "ahora";
+    if (ms < 3_600_000) return `hace ${Math.round(ms / 60_000)} min`;
+    if (ms < 86_400_000) return `hace ${Math.round(ms / 3_600_000)} h`;
+    return `hace ${Math.round(ms / 86_400_000)} días`;
+  };
+
+  return (
+    <div className="pv3-card" style={{ marginTop: 12 }}>
+      <p className="pv3-p" style={{ marginBottom: 10 }}>
+        Sesiones abiertas con tu cuenta. Si ves alguna que no reconoces, ciérrala.
+      </p>
+      {sesiones === null && !error ? <p className="pv3-p">Cargando…</p> : null}
+      {(sesiones || []).map((s) => (
+        <div key={s.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "8px 0", borderTop: "1px solid var(--line, #eee)" }}>
+          <div>
+            <div style={{ fontWeight: 500 }}>
+              {s.navegador || "Navegador"}{s.actual ? " · esta sesión" : ""}
+            </div>
+            <div className="pv3-p" style={{ fontSize: 12, opacity: 0.75 }}>
+              {s.ip_prefijo ? `${s.ip_prefijo} · ` : ""}activa {cuando(s.last_seen_at)} · abierta {cuando(s.created_at)}
+            </div>
+          </div>
+          <Accion variante="light" onRun={() => cerrar(s.id)}>Cerrar</Accion>
+        </div>
+      ))}
+      {error ? (
+        <p className="pv3-p" style={{ marginTop: 10, fontSize: 13, color: "var(--bad)" }}>{error}</p>
+      ) : null}
+    </div>
+  );
+}
+
 function SegundoFactorTotp() {
   const [estado, setEstado] = useState(null);
   const [alta, setAlta] = useState(null);
@@ -2345,6 +2416,7 @@ function Ajustes({ datos, onRecargar }) {
           Cerrar todas las sesiones
         </Accion>
       </div>
+      <SesionesActivas />
 
       <h2 className="pv3-h2">Facturación</h2>
       <div className="pv3-card">

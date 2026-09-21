@@ -95,3 +95,25 @@ El portal lo enseña arriba (píldora "IA apagada · motivo") y en Tu IA.
 `departamento`, `departamento_motivo`, `departamento_confianza`,
 `clasificado_en`, `senales`; en `client_settings`: `ia_config` (JSON) y
 `daily_report_email` (existía en el código y no en la base: el alta fallaba).
+
+## Lo que la IA debe saber ahora, y Ruperta
+
+**Conocimiento.** En Tu IA → "Lo que la IA debe saber ahora" se escriben
+avisos cortos con fecha de fin opcional ("Valdestillas sin servicio hasta
+las 18:00"). Entran en el prompt de la voz, del WhatsApp y del copiloto
+mientras estén vigentes, y desaparecen solos al caducar. Tabla
+`conocimiento`; quien configura la IA (owner, admin) añade y retira.
+
+**Ruperta** es el nombre con el que la IA acepta instrucciones por
+teléfono. Sólo si se cumplen las dos cosas: quien llama lo hace desde el
+teléfono de un owner o admin (el que tiene en Equipo) **y** dice el PIN
+configurado en Tu IA. El agente pide el PIN, repite la instrucción para
+confirmar y llama a la herramienta `anotar_instruccion`; el servidor vuelve
+a comprobar número y PIN (lo que diga el modelo no cuenta), guarda el aviso
+con origen `voz`, lo audita y avisa por correo a los owners. Un PIN
+incorrecto queda en la auditoría. Sin PIN configurado, nadie puede dictar
+nada. La herramienta se da de alta en ElevenLabs con
+`node scripts/configurar-ruperta.mjs` (idempotente).
+
+Cualquiera que diga "Ruperta" sin estar autorizado oye que no se puede
+hacer desde esa llamada, y la conversación sigue con normalidad.

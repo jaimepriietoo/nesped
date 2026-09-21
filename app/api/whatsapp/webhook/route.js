@@ -17,6 +17,7 @@ import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 import { MensajeTwilio, validar } from "@/lib/server/esquemas";
 import { iaDisponible } from "@/lib/server/estado-ia";
 import { configIA, promptDeEmpresa } from "@/lib/server/ia-config";
+import { bloqueDeConocimiento, conocimientoVigente } from "@/lib/server/conocimiento";
 import { departamentosDeEmpresa } from "@/lib/server/departamentos";
 import { pedirClasificacion } from "@/lib/server/clasificacion";
 import { leerTextoLimitado } from "@/lib/server/security";
@@ -746,14 +747,16 @@ export async function procesarMensajeEntrante(campos) {
       return respuesta({ success: true, iaDesactivada: true, motivo: ia.motivo, clientId: clientContext.id });
     }
 
-    const [configEmpresa, { lista: departamentosEmpresa }] = await Promise.all([
+    const [configEmpresa, { lista: departamentosEmpresa }, conocimiento] = await Promise.all([
       configIA(clientContext.id),
       departamentosDeEmpresa(clientContext.id),
+      conocimientoVigente(clientContext.id).catch(() => []),
     ]);
     const promptEmpresa = promptDeEmpresa(configEmpresa, {
       empresa: clientContext.brand_name || clientContext.name || "",
       sector: clientContext.industry || "",
       departamentos: departamentosEmpresa,
+      conocimiento: bloqueDeConocimiento(conocimiento),
     });
 
 const historyText = history

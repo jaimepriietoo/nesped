@@ -2,6 +2,7 @@ import { requireInternalRequest } from "@/lib/server/internal-api";
 import { buildElevenLabsContext } from "@/lib/server/elevenlabs";
 import { configIA, promptDeEmpresa, dentroDeHorario } from "@/lib/server/ia-config";
 import { departamentosDeEmpresa } from "@/lib/server/departamentos";
+import { bloqueDeConocimiento, bloqueRuperta, conocimientoVigente, estadoRuperta } from "@/lib/server/conocimiento";
 import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 import { ContextoElevenLabs, validar } from "@/lib/server/esquemas";
 import { leerJsonLimitado } from "@/lib/server/security";
@@ -48,9 +49,11 @@ async function manejarPOST(req) {
       conversationId,
     });
 
-    const [config, { lista: departamentos }] = await Promise.all([
+    const [config, { lista: departamentos }, conocimiento, ruperta] = await Promise.all([
       configIA(ctx.clientId),
       departamentosDeEmpresa(ctx.clientId),
+      conocimientoVigente(ctx.clientId).catch(() => []),
+      estadoRuperta({ clientId: ctx.clientId, callerId }).catch(() => ({ permitido: false })),
     ]);
     const enHorario = dentroDeHorario(config);
     const contexto = promptDeEmpresa(config, { empresa: ctx.brandName, sector: ctx.industry, departamentos });
@@ -71,7 +74,11 @@ async function manejarPOST(req) {
       objetivo_llamada: ctx.callObjective || "",
       en_horario: enHorario ? "sí" : "no",
       mensaje_fuera_horario: config.mensaje_fuera_horario || "",
-      contexto_empresa: [ctx.companyPrompt, contexto, REPREGUNTAR].filter(Boolean).join("\n\n").slice(0, 6000),
+      contexto_empresa: [ctx.companyPrompt, contexto, bloqueDeConocimiento(conocimiento), REPREGUNTAR, bloqueRuperta(ruperta)]
+        .filter(Boolean).join("\n\n").slice(0, 8000),
+      /* El agente los reenvía tal cual a anotar_instruccion; el servidor no se fía de ellos. */
+      ruperta_permitido: ruperta.permitido ? "sí" : "no",
+      caller_id: callerId,
     };
 
     return Response.json({

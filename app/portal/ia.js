@@ -149,6 +149,98 @@ const SUGERENCIAS = {
 
 /* ── 1. Configuración de la IA ───────────────────────────────────────── */
 
+
+/**
+ * Lo que la IA debe saber ahora, y el PIN del modo Ruperta.
+ *
+ * Avisos cortos con fecha de caducidad opcional. Entran en el prompt de la
+ * voz, del WhatsApp y del copiloto mientras estén vigentes. Ruperta es el
+ * nombre con el que un owner o admin, llamando desde su propio teléfono y
+ * diciendo el PIN, puede dictar uno de estos avisos por teléfono.
+ */
+function LoQueDebeSaber() {
+  const [datos, setDatos] = useState(null);
+  const [texto, setTexto] = useState("");
+  const [hasta, setHasta] = useState("");
+  const [pin, setPin] = useState("");
+  const [ocupado, setOcupado] = useState(false);
+  const [error, setError] = useState("");
+
+  async function cargar() {
+    try { const j = await pedir("/api/portal/conocimiento"); if (j) setDatos(j); } catch (e) { setError(e.message); }
+  }
+  useEffect(() => { cargar(); }, []);
+
+  async function accion(body) {
+    setOcupado(true); setError("");
+    try { await pedir("/api/portal/conocimiento", { method: "POST", body: JSON.stringify(body) }); await cargar(); }
+    catch (e) { setError(e.message); }
+    finally { setOcupado(false); }
+  }
+
+  const puedeEditar = Boolean(datos?.puedeEditar);
+  const lista = datos?.conocimiento || [];
+  const ruperta = datos?.ruperta;
+  const fecha = (iso) => new Date(iso).toLocaleString("es-ES", { timeZone: "Europe/Madrid", dateStyle: "short", timeStyle: "short" });
+
+  return (
+    <>
+      <Seccion n={8} titulo="Lo que la IA debe saber ahora" sub="Avisos y datos del momento: una avería en un pueblo, una oferta que acaba el viernes, un técnico de baja. La IA los tiene en cuenta al atender llamadas, WhatsApp y al proponerte respuestas. Ponles fecha de fin y desaparecen solos.">
+        {lista.length ? (
+          <ul style={{ listStyle: "none", padding: 0, margin: "0 0 12px", display: "grid", gap: 8 }}>
+            {lista.map((c) => (
+              <li key={c.id} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "10px 12px", border: "1px solid var(--line, #e5e5e5)", borderRadius: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <div>{c.texto}</div>
+                  <div className="pv3-small" style={{ opacity: 0.7, marginTop: 4 }}>
+                    {c.origen === "voz" ? `Dictado por teléfono (${ruperta?.nombre || "Ruperta"})` : "Escrito en el portal"} · {c.autor || "—"} · {fecha(c.created_at)}{c.vigente_hasta ? ` · hasta ${fecha(c.vigente_hasta)}` : ""}
+                  </div>
+                </div>
+                {puedeEditar && <button type="button" className="pv3-btn" disabled={ocupado} onClick={() => accion({ action: "remove", id: c.id })}>Retirar</button>}
+              </li>
+            ))}
+          </ul>
+        ) : <p className="pv3-p" style={{ marginBottom: 12 }}>Ahora mismo la IA no tiene ningún aviso especial.</p>}
+        {puedeEditar && (
+          <div style={{ display: "grid", gap: 8 }}>
+            <textarea className="pv3-input ia-textarea" rows={2} maxLength={2000} value={texto} onChange={(e) => setTexto(e.target.value)}
+              placeholder="Ejemplo: El servicio en Valdestillas está caído por una avería en la central; previsión de arreglo a las 18:00. Si llaman de allí, decirlo y pedir disculpas." />
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <label className="pv3-small">Vigente hasta (opcional) <input className="pv3-input" type="datetime-local" value={hasta} onChange={(e) => setHasta(e.target.value)} /></label>
+              <button type="button" className="pv3-btn" data-v="light" disabled={ocupado || !texto.trim()}
+                onClick={async () => { await accion({ action: "add", texto, vigente_hasta: hasta ? new Date(hasta).toISOString() : "" }); setTexto(""); setHasta(""); }}>
+                Añadir
+              </button>
+            </div>
+          </div>
+        )}
+      </Seccion>
+
+      <Seccion n={9} titulo={`Dictárselo por teléfono: "${ruperta?.nombre || "Ruperta"}"`} sub="Llama al número de la empresa desde tu propio teléfono, di el nombre, el PIN y la instrucción. La IA la repite, la anota y desde ese momento la tiene en cuenta. Te llega un correo con lo anotado.">
+        <p className="pv3-p" style={{ marginBottom: 8 }}>
+          Sólo funciona desde el teléfono de un propietario o administrador (el que tenga puesto en Equipo) <strong>y</strong> con el PIN. Sin PIN configurado, nadie puede dictar nada.
+        </p>
+        {ruperta?.telefonos?.length ? (
+          <p className="pv3-small" style={{ marginBottom: 8 }}>Teléfonos autorizados: {ruperta.telefonos.map((t) => `${t.telefono} (${t.email})`).join(", ")}</p>
+        ) : (
+          <p className="pv3-small" style={{ marginBottom: 8, color: "var(--bad)" }}>Ningún propietario o administrador tiene teléfono en Equipo: añádelo para poder usarlo.</p>
+        )}
+        {puedeEditar && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <input className="pv3-input" inputMode="numeric" placeholder={ruperta?.pinConfigurado ? "Nuevo PIN (4-6 cifras)" : "PIN (4-6 cifras)"} value={pin} maxLength={6} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} style={{ width: 200 }} />
+            <button type="button" className="pv3-btn" data-v="light" disabled={ocupado || !/^\d{4,6}$/.test(pin)} onClick={async () => { await accion({ action: "pin", pin }); setPin(""); }}>
+              {ruperta?.pinConfigurado ? "Cambiar PIN" : "Activar con este PIN"}
+            </button>
+            {ruperta?.pinConfigurado && <button type="button" className="pv3-btn" disabled={ocupado} onClick={() => accion({ action: "pin_off" })}>Desactivar</button>}
+            <span className="pv3-small">{ruperta?.pinConfigurado ? "Activado." : "Desactivado."}</span>
+          </div>
+        )}
+      </Seccion>
+      {error ? <p className="pv3-p" style={{ marginTop: 10, fontSize: 13, color: "var(--bad)" }}>{error}</p> : null}
+    </>
+  );
+}
+
 export function ConfiguracionIA() {
   const [datos, setDatos] = useState(null);
   const [cfg, setCfg] = useState(null);
@@ -507,6 +599,8 @@ export function DepartamentosYAvisos() {
           </div>
         )}
       </Seccion>
+
+      <LoQueDebeSaber />
 
       {error && <p className="pv3-p" style={{ color: "var(--bad)", marginTop: 12 }}>{error}</p>}
     </div>

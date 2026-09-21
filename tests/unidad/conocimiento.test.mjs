@@ -56,3 +56,10 @@ test("el conocimiento entra en la voz, en WhatsApp y en el copiloto; la voz reci
   assert.match(portal, /validar\(GestionConocimiento, cuerpo\.datos\)/);
   assert.match(portal, /requireRateLimitAsync\(req/);
 });
+
+test("la pantalla de conocimiento y Ruperta está en Tu IA, no en otra", () => {
+  const ia = leer("app/portal/ia.js");
+  const tuIA = ia.slice(ia.indexOf("export function ConfiguracionIA"), ia.indexOf("export function DepartamentosYAvisos"));
+  assert.match(tuIA, /<LoQueDebeSaber \/>/);
+  assert.equal((ia.match(/<LoQueDebeSaber \/>/g) || []).length, 1);
+});

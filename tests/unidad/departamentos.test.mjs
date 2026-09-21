@@ -1,8 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DEPARTAMENTOS_POR_DEFECTO, clasificarPorPalabras, textoDelLead, clasificarLead } from "@/lib/server/departamentos";
-import { seleccionarDestinatarios, correoDeLead, notificarLead, correoDesactivado } from "@/lib/server/destinatarios";
+import { seleccionarDestinatarios, correoDeLead, correoDeLlamada, notificarLead, correoDesactivado } from "@/lib/server/destinatarios";
+import fs from "node:fs";
+import path from "node:path";
 import { estadoDeLaIA } from "@/lib/server/estado-ia";
+
+const RAIZ = path.resolve(import.meta.dirname, "../..");
 
 /**
  * Clasificar por departamento y avisar a quien toca.
@@ -16,25 +20,29 @@ import { estadoDeLaIA } from "@/lib/server/estado-ia";
 
 const DEPS = DEPARTAMENTOS_POR_DEFECTO;
 
-test("los departamentos de serie son los once del encargo y acaban en 'otro'", () => {
-  assert.equal(DEPS.length, 11);
-  assert.deepEqual(DEPS.map((d) => d.clave), ["ventas", "soporte", "administracion", "facturacion", "direccion", "instalaciones", "atencion", "marketing", "rrhh", "tecnico", "otro"]);
+test("los departamentos de serie son tres, con sus áreas dentro", () => {
+  assert.deepEqual(DEPS.map((d) => d.clave), ["ventas", "soporte", "administracion"]);
+  assert.deepEqual(DEPS.find((d) => d.clave === "soporte").areas, ["Instalaciones"]);
+  assert.deepEqual(DEPS.find((d) => d.clave === "administracion").areas, ["Facturación", "Dirección"]);
   for (const d of DEPS) assert.ok(d.descripcion, `${d.clave} necesita descripción: es lo que lee la IA`);
+  assert.ok(!DEPS.some((d) => d.clave === "otro"), "lo que no encaja queda sin clasificar, no en 'otro'");
 });
 
-test("por palabras clave: acierta lo evidente, 'otro' si nada encaja, y saca señales", () => {
+test("por palabras clave: acierta lo evidente, null si nada encaja, y saca señales", () => {
   const r = clasificarPorPalabras("Hola, quería un presupuesto para instalar fibra, es urgente", DEPS);
   assert.equal(r.fuente, "palabras");
-  assert.ok(["ventas", "instalaciones"].includes(r.departamento));
+  assert.ok(["ventas", "soporte"].includes(r.departamento));
   assert.equal(r.senales.urgente, true);
   assert.equal(r.senales.oportunidad, true);
   assert.match(r.motivo, /Palabras clave/);
 
   const f = clasificarPorPalabras("Me han cobrado dos veces la factura de agosto", DEPS);
-  assert.equal(f.departamento, "facturacion");
+  assert.equal(f.departamento, "administracion", "facturación es un área de administración");
+  const i = clasificarPorPalabras("Cuándo viene el técnico a hacer la instalación", DEPS);
+  assert.equal(i.departamento, "soporte", "instalaciones es un área de soporte");
 
   const nada = clasificarPorPalabras("zzz", DEPS);
-  assert.equal(nada.departamento, "otro");
+  assert.equal(nada.departamento, null);
   assert.ok(nada.confianza < 0.5);
 });
 
@@ -47,7 +55,7 @@ function baseFalsa(filas = {}) {
   const apuntes = [];
   const from = (tabla) => {
     const b = { _op: "select", _datos: null,
-      select() { return b; }, eq() { return b; }, gte() { return b; }, order() { return b; }, limit() { return b; }, in() { return b; },
+      select() { return b; }, eq() { return b; }, gte() { return b; }, order() { return b; }, limit() { return b; }, in() { return b; }, filter() { return b; },
       insert(d) { b._op = "insert"; b._datos = d; return b; }, update(d) { b._op = "update"; b._datos = d; return b; },
       maybeSingle() { return b; }, single() { return b; },
       then(r) { apuntes.push({ tabla, op: b._op, datos: b._datos }); const data = b._op === "select" ? (filas[tabla] ?? null) : b._datos; return Promise.resolve({ data, error: null }).then(r); },
@@ -123,7 +131,7 @@ test("en pruebas no sale ningún correo: queda apuntado como omitido", async () 
 
 test("cada llamada entera va a quien recibe copia de todo, sin repetir a quien acaba de recibir el aviso del contacto", async () => {
   const { correoDeLlamada, notificarLlamada } = await import("@/lib/server/destinatarios");
-  const { asunto, html } = correoDeLlamada({ empresa: "Fibergreen", llamada: { created_at: "2026-09-19T10:00:00Z", from_number: "+34600", duration_seconds: 42, status: "completed", summary: "Pide fibra", transcript: "Agente: hola\nUsuario: quiero fibra" }, lead: { nombre: "Luis", departamento: "ventas", tags: ["urgente"] }, destinatario: { nombre: "Central" }, urlPortal: "https://x/portal" });
+  const { asunto, html } = correoDeLlamada({ empresa: "Fibergreen", llamada: { created_at: "2026-09-19T10:00:00Z", from_number: "+34600", duration_seconds: 42, status: "completed", summary: "Pide fibra", transcript: "Agente: hola\nUsuario: quiero fibra" }, lead: { nombre: "Luis de la ficha", departamento: "ventas", tags: ["urgente"] }, dicho: { nombre: "Luis", notas: "urgente" }, destinatario: { nombre: "Central" }, urlPortal: "https://x/portal" });
   assert.match(asunto, /^Llamada en Fibergreen: Luis · 42 s$/);
   assert.match(html, /Transcripción/);
   assert.match(html, /quiero fibra/);
@@ -150,4 +158,32 @@ test("cada llamada entera va a quien recibe copia de todo, sin repetir a quien a
   const r2 = await notificarLlamada({ clientId: "acme", callSid: "conv_1", supabase: base2 });
   assert.equal(r2.omitidos, 1, "en pruebas no sale correo: queda apuntado como omitido");
   assert.ok(base2.apuntes.some((a) => a.tabla === "notificaciones_lead" && a.op === "insert" && a.datos.motivo === "llamada:conv_1"));
+});
+
+test("el correo de la llamada lleva sólo lo dicho en esa llamada, no la ficha", () => {
+  const llamada = { created_at: "2026-09-21T10:00:00Z", from_number: "+34600111222", duration_seconds: 61, status: "done", summary: "Pide cita de instalación." };
+  const lead = { nombre: "Ana de la ficha", telefono: "+34600111222", email: "ana@x.com", ciudad: "Valladolid", necesidad: "lo de hace un mes", notes: "notas viejas", departamento: "soporte", departamento_motivo: "Instalaciones: pide cita." };
+  const dicho = { nombre: "Ana", ciudad: "Valdestillas", necesidad: "instalar fibra en la casa nueva" };
+  const { asunto, html } = correoDeLlamada({ empresa: "Fibergreen", llamada, lead, dicho, destinatario: { nombre: "Jaime" }, urlPortal: "" });
+  assert.match(asunto, /Ana · 61 s/);
+  assert.match(html, /Valdestillas/);
+  assert.match(html, /instalar fibra en la casa nueva/);
+  assert.match(html, /Derivado a/);
+  assert.doesNotMatch(html, /Ana de la ficha|ana@x\.com|lo de hace un mes|notas viejas|Valladolid/, "nada de la ficha");
+  /* Sin datos de esta llamada, el correo sigue saliendo, sólo con la llamada. */
+  const vacio = correoDeLlamada({ empresa: "Fibergreen", llamada, lead, destinatario: {}, urlPortal: "" });
+  assert.match(vacio.asunto, /\+34600111222/);
+  assert.doesNotMatch(vacio.html, /Ana de la ficha/);
+});
+
+test("el agente empieza cada llamada de cero: no recibe la ficha y se le dice que repregunte", () => {
+  const ruta = fs.readFileSync(path.join(RAIZ, "app/api/voice/elevenlabs/context/route.js"), "utf8");
+  assert.match(ruta, /lead_nombre: "",\s*lead_necesidad: "",\s*resumen_contacto: ""/);
+  assert.match(ruta, /leadName: "",\s*leadNeed: "",\s*leadSummary: ""/);
+  assert.match(ruta, /CADA LLAMADA EMPIEZA DE CERO/);
+  assert.match(ruta, /lead_id: ctx\.leadId/, "el enlace con la ficha se conserva");
+  const eleven = fs.readFileSync(path.join(RAIZ, "lib/server/elevenlabs.js"), "utf8");
+  assert.match(eleven, /type: "datos_de_llamada"/);
+  const dest = fs.readFileSync(path.join(RAIZ, "lib/server/destinatarios.js"), "utf8");
+  assert.match(dest, /eq\("type", "datos_de_llamada"\)/);
 });

@@ -25,6 +25,8 @@ import { leerJsonLimitado } from "@/lib/server/security";
  * con la empresa en blanco: mejor una llamada atendida a secas que un
  * agente que no descuelga porque el CRM no contestó.
  */
+const REPREGUNTAR = "CADA LLAMADA EMPIEZA DE CERO: aunque la persona ya sea un contacto conocido, vuelve a preguntar nombre, localidad y qué necesita, y no des por sabido nada de llamadas anteriores.";
+
 async function manejarPOST(req) {
   const authError = requireInternalRequest(req);
   if (authError) return authError;
@@ -58,13 +60,17 @@ async function manejarPOST(req) {
       client_id: ctx.clientId,
       sector: ctx.industry || "",
       lead_id: ctx.leadId || "",
-      lead_nombre: ctx.leadName || "",
-      lead_necesidad: ctx.leadNeed || "",
-      resumen_contacto: ctx.leadSummary || "",
+      /* La ficha del contacto no se le cuenta al agente: la empresa pidió
+         que cada llamada empiece de cero (mismas preguntas aunque la persona
+         llamara ayer) y que lo que se guarde y se avise sea lo de esta vez.
+         El lead_id sí, para enlazar la llamada con su ficha. */
+      lead_nombre: "",
+      lead_necesidad: "",
+      resumen_contacto: "",
       objetivo_llamada: ctx.callObjective || "",
       en_horario: enHorario ? "sí" : "no",
       mensaje_fuera_horario: config.mensaje_fuera_horario || "",
-      contexto_empresa: [ctx.companyPrompt, contexto].filter(Boolean).join("\n\n").slice(0, 6000),
+      contexto_empresa: [ctx.companyPrompt, contexto, REPREGUNTAR].filter(Boolean).join("\n\n").slice(0, 6000),
     };
 
     return Response.json({
@@ -73,6 +79,9 @@ async function manejarPOST(req) {
       /* Compatibilidad con quien leía la forma antigua. */
       success: true,
       ...ctx,
+      leadName: "",
+      leadNeed: "",
+      leadSummary: "",
     });
   } catch (error) {
     logErrorSeguro("elevenlabs.context_failed", error);

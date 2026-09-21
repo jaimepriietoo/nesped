@@ -44,10 +44,11 @@ async function manejarPUT(req) {
   if (new Set(lista.map((d) => d.clave)).size !== lista.length) {
     return Response.json({ success: false, message: "Hay dos departamentos con la misma clave" }, { status: 400 });
   }
-  if (!lista.some((d) => d.clave === "otro")) lista.push({ clave: "otro", nombre: "Otro", descripcion: "Nada de lo anterior.", palabras_clave: [], orden: 999, activo: true });
+  /* Ya no se añade un "otro" a la fuerza: lo que no encaja queda sin
+     clasificar y lo decide una persona. */
 
   try {
-    const filas = lista.map((d, i) => ({ client_id: ctx.clientId, clave: d.clave, nombre: d.nombre, descripcion: d.descripcion, palabras_clave: d.palabras_clave, orden: d.orden || i, activo: d.activo, updated_at: new Date().toISOString() }));
+    const filas = lista.map((d, i) => ({ client_id: ctx.clientId, clave: d.clave, nombre: d.nombre, descripcion: d.descripcion, palabras_clave: d.palabras_clave, areas: d.areas || [], orden: d.orden || i, activo: d.activo, updated_at: new Date().toISOString() }));
     const { error } = await ctx.datos.from("departamentos").upsert(filas, { onConflict: "client_id,clave" });
     if (error) throw new Error(error.message);
     const claves = lista.map((d) => d.clave);

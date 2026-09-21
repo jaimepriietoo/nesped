@@ -1,8 +1,9 @@
 # Cifrado de datos personales en la base (diseño, punto 1.2)
 
-Estado: **diseño, sin código.** Escrito el 20-09-2026 después de cerrar el
-aislamiento por empresa (RLS real) y la auditoría encadenada. Es el cambio
-más invasivo del plan de seguridad y merece su propia ventana.
+Estado: **implementado el 21-09-2026** (`lib/server/cifrado-datos.js`,
+migración `20260921010000_columnas_cifradas`). Las fases se activan con la
+variable `NESPED_CIFRADO_DATOS`; ver "Cómo se despliega" al final. El
+diseño original se conserva abajo.
 
 ## Qué se protege y de qué
 
@@ -84,3 +85,46 @@ hasta la fase 4 el claro sigue ahí.
 
 Dos o tres días de trabajo con pruebas, y una semana de convivencia entre
 fases 3 y 4. No es un cambio de una tarde.
+
+
+## Cómo se despliega (lo que hay hecho)
+
+La variable `NESPED_CIFRADO_DATOS` en Vercel decide la fase. Cambiarla es
+redesplegar; no hace falta tocar código ni base.
+
+| Valor | Escribe | Lee | Busca por |
+| --- | --- | --- | --- |
+| `apagado` (por defecto) | claro | claro | claro |
+| `doble` | claro + sobre + hash | claro | claro |
+| `cifrado` | claro + sobre + hash | sobre (claro si aún no hay) | hash |
+| `solo` | sobre + hash, claro a null | sobre | hash |
+
+Necesita `NESPED_DATA_ENCRYPTION_KEY` (32 bytes, `node -e
+"console.log(require('crypto').randomBytes(32).toString('hex'))"`), que
+puede y debe ir en sobre KMS.
+
+Pasos:
+
+1. Poner la clave y `NESPED_CIFRADO_DATOS=doble` en **Preview**, redesplegar
+   una preview y recorrer el portal. Luego lo mismo en Production. El
+   mantenimiento diario rellena los sobres de las filas antiguas por lotes
+   (`rellenarCifrado`); se ve en su resultado (`cifrado.cifradas`,
+   `cifrado.quedaTrabajo`).
+2. Cuando `quedaTrabajo` sea `false` dos días seguidos: `cifrado`. Una
+   semana mirando logs (`cifrado.no_se_pudo_descifrar` no debe aparecer).
+3. `solo`. A partir de aquí las escrituras dejan el claro a null.
+4. `npm run vaciar:claro` (cuenta) y `npm run vaciar:claro -- --de-verdad`
+   (vacía). Desde entonces la base no tiene datos personales en claro en
+   esas columnas.
+5. Rotación: nueva clave en `.env.local`, la vieja en
+   `NESPED_DATA_ENCRYPTION_KEY_ANTERIOR`, `npm run recifrar:datos`, y al
+   acabar la nueva a Vercel.
+
+Lo que queda en claro a propósito: `leads.nombre` (búsqueda libre de
+contactos) y `calls.to_number` (es el número de la empresa, no del
+cliente). Las relaciones anidadas en un `select("*, calls(*)")` no se
+descifran: las rutas del portal no las usan con columnas cifradas.
+
+Rollback en cualquier fase anterior a la 4: bajar la variable un escalón.
+En la 4 ya no hay claro que leer: el rollback es `cifrado`, que lee el
+sobre, y funciona igual.

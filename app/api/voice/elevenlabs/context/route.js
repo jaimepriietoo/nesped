@@ -25,7 +25,7 @@ import { leerJsonLimitado } from "@/lib/server/security";
  * con la empresa en blanco: mejor una llamada atendida a secas que un
  * agente que no descuelga porque el CRM no contestó.
  */
-const REPREGUNTAR = "CADA LLAMADA EMPIEZA DE CERO: aunque la persona ya sea un contacto conocido, vuelve a preguntar nombre, localidad y qué necesita, y no des por sabido nada de llamadas anteriores.";
+const REPREGUNTAR = "CADA LLAMADA EMPIEZA DE CERO, SALVO EL NOMBRE: si conoces el nombre de quien llama, salúdale por su nombre y confirma que es esa persona. Todo lo demás —localidad, qué necesita, cualquier dato— vuelve a preguntarlo aunque haya llamado antes, y no des por sabido nada de llamadas anteriores.";
 
 async function manejarPOST(req) {
   const authError = requireInternalRequest(req);
@@ -60,11 +60,12 @@ async function manejarPOST(req) {
       client_id: ctx.clientId,
       sector: ctx.industry || "",
       lead_id: ctx.leadId || "",
-      /* La ficha del contacto no se le cuenta al agente: la empresa pidió
+      /* De la ficha sólo se le cuenta al agente el nombre: la empresa pidió
          que cada llamada empiece de cero (mismas preguntas aunque la persona
-         llamara ayer) y que lo que se guarde y se avise sea lo de esta vez.
-         El lead_id sí, para enlazar la llamada con su ficha. */
-      lead_nombre: "",
+         llamara ayer) y que lo que se guarde y se avise sea lo de esta vez,
+         pero que a quien ya conoce le salude por su nombre. El lead_id sí,
+         para enlazar la llamada con su ficha. */
+      lead_nombre: ctx.leadName || "",
       lead_necesidad: "",
       resumen_contacto: "",
       objetivo_llamada: ctx.callObjective || "",
@@ -79,7 +80,6 @@ async function manejarPOST(req) {
       /* Compatibilidad con quien leía la forma antigua. */
       success: true,
       ...ctx,
-      leadName: "",
       leadNeed: "",
       leadSummary: "",
     });

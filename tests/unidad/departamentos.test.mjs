@@ -176,11 +176,13 @@ test("el correo de la llamada lleva sólo lo dicho en esa llamada, no la ficha",
   assert.doesNotMatch(vacio.html, /Ana de la ficha/);
 });
 
-test("el agente empieza cada llamada de cero: no recibe la ficha y se le dice que repregunte", () => {
+test("el agente empieza cada llamada de cero salvo el nombre: recibe el nombre, no el resto, y se le dice que repregunte", () => {
   const ruta = fs.readFileSync(path.join(RAIZ, "app/api/voice/elevenlabs/context/route.js"), "utf8");
-  assert.match(ruta, /lead_nombre: "",\s*lead_necesidad: "",\s*resumen_contacto: ""/);
-  assert.match(ruta, /leadName: "",\s*leadNeed: "",\s*leadSummary: ""/);
-  assert.match(ruta, /CADA LLAMADA EMPIEZA DE CERO/);
+  assert.match(ruta, /lead_nombre: ctx\.leadName \|\| "",\s*lead_necesidad: "",\s*resumen_contacto: ""/);
+  assert.match(ruta, /leadNeed: "",\s*leadSummary: ""/);
+  assert.doesNotMatch(ruta, /leadName: ""/);
+  assert.match(ruta, /CADA LLAMADA EMPIEZA DE CERO, SALVO EL NOMBRE/);
+  assert.match(ruta, /salúdale por su nombre/);
   assert.match(ruta, /lead_id: ctx\.leadId/, "el enlace con la ficha se conserva");
   const eleven = fs.readFileSync(path.join(RAIZ, "lib/server/elevenlabs.js"), "utf8");
   assert.match(eleven, /type: "datos_de_llamada"/);

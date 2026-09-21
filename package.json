@@ -22,6 +22,7 @@
     "revisar:seguridad": "node scripts/revisar-seguridad.mjs",
     "revisar:secretos": "node scripts/revisar-secretos.mjs",
     "verificar:auditoria": "node --import ./tests/alias.mjs scripts/verificar-auditoria.mjs",
+    "cerrar:sobre": "node --import ./tests/alias.mjs scripts/cerrar-sobre.mjs",
     "probar:voz": "node scripts/probar-voz.mjs",
     "probar:conversacion": "node scripts/probar-conversacion.mjs",
     "volcar:migraciones": "node scripts/volcar-migraciones.mjs",
@@ -29,6 +30,7 @@
     "conectar:numero": "node scripts/conectar-numero.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-kms": "^3.1136.0",
     "@sentry/nextjs": "^10.75.0",
     "@sentry/node": "^10.50.0",
     "@simplewebauthn/browser": "^14.0.0",

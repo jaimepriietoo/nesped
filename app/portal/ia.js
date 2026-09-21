@@ -254,7 +254,7 @@ export function ConfiguracionIA() {
             </div>
           ))}
           {puedeEditar && (cfg.reglas_derivacion || []).length < 20 && (
-            <button type="button" className="pv3-btn" onClick={() => set("reglas_derivacion", [...(cfg.reglas_derivacion || []), { si: "", departamento: deps[0]?.clave || "otro" }])}>+ Añadir regla</button>
+            <button type="button" className="pv3-btn" onClick={() => set("reglas_derivacion", [...(cfg.reglas_derivacion || []), { si: "", departamento: deps[0]?.clave || "" }])}>+ Añadir regla</button>
           )}
         </div>
       </Seccion>
@@ -369,7 +369,7 @@ export function DepartamentosYAvisos() {
   async function guardarDeps() {
     setOcupado(true); setError("");
     try {
-      const j = await pedir("/api/portal/departamentos", { method: "PUT", body: JSON.stringify({ departamentos: deps.map(({ clave, nombre, descripcion, palabras_clave, activo }, i) => ({ clave, nombre, descripcion: descripcion || "", palabras_clave: palabras_clave || [], orden: i, activo: activo !== false })) }) });
+      const j = await pedir("/api/portal/departamentos", { method: "PUT", body: JSON.stringify({ departamentos: deps.map(({ clave, nombre, descripcion, palabras_clave, areas, activo }, i) => ({ clave, nombre, descripcion: descripcion || "", palabras_clave: palabras_clave || [], areas: areas || [], orden: i, activo: activo !== false })) }) });
       if (j) { setDeps(j.data); setDeSerie(j.deSerie); }
     } catch (e) { setError(e.message); } finally { setOcupado(false); }
   }
@@ -407,12 +407,15 @@ export function DepartamentosYAvisos() {
                 <input className="pv3-input ia-dep-nombre" value={d.nombre} maxLength={60} disabled={!puedeEditar} onChange={(e) => setDeps(deps.map((x, k) => (k === i ? { ...x, nombre: e.target.value } : x)))} />
                 <code className="pv3-small">{d.clave}</code>
                 <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-                  <Interruptor on={d.activo !== false} disabled={!puedeEditar || d.clave === "otro"} etiqueta="Activo" onChange={(v) => setDeps(deps.map((x, k) => (k === i ? { ...x, activo: v } : x)))} />
-                  {puedeEditar && d.clave !== "otro" && <button type="button" className="pv3-btn" onClick={() => setDeps(deps.filter((_, k) => k !== i))}>Quitar</button>}
+                  <Interruptor on={d.activo !== false} disabled={!puedeEditar} etiqueta="Activo" onChange={(v) => setDeps(deps.map((x, k) => (k === i ? { ...x, activo: v } : x)))} />
+                  {puedeEditar && <button type="button" className="pv3-btn" onClick={() => setDeps(deps.filter((_, k) => k !== i))}>Quitar</button>}
                 </div>
               </div>
               <input className="pv3-input" style={{ marginTop: 8 }} placeholder="Qué va aquí, en una frase (lo lee la IA)" value={d.descripcion || ""} maxLength={400} disabled={!puedeEditar}
                 onChange={(e) => setDeps(deps.map((x, k) => (k === i ? { ...x, descripcion: e.target.value } : x)))} />
+              <div style={{ marginTop: 8 }}>
+                <Frases valor={d.areas || []} onChange={(v) => setDeps(deps.map((x, k) => (k === i ? { ...x, areas: v } : x)))} placeholder="Área dentro del departamento (p. ej. Instalaciones)" max={10} disabled={!puedeEditar} />
+              </div>
               <div style={{ marginTop: 8 }}>
                 <Frases valor={d.palabras_clave || []} onChange={(v) => setDeps(deps.map((x, k) => (k === i ? { ...x, palabras_clave: v } : x)))} placeholder="Palabra clave (respaldo sin IA)" max={30} disabled={!puedeEditar} />
               </div>
@@ -426,7 +429,7 @@ export function DepartamentosYAvisos() {
               if (!nombre) return;
               const clave = nombre.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || `dep-${deps.length}`;
               if (claves.includes(clave)) { setError("Ya hay un departamento con ese nombre."); return; }
-              setDeps([...deps.filter((d) => d.clave !== "otro"), { clave, nombre, descripcion: "", palabras_clave: [], activo: true }, ...deps.filter((d) => d.clave === "otro")]);
+              setDeps([...deps, { clave, nombre, descripcion: "", palabras_clave: [], areas: [], activo: true }]);
             }}>+ Añadir departamento</button>
             <button type="button" className="pv3-btn" data-v="light" onClick={guardarDeps} disabled={ocupado}>{ocupado ? "Guardando…" : "Guardar departamentos"}</button>
           </div>

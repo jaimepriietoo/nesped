@@ -25,6 +25,8 @@ import { leerJsonLimitado } from "@/lib/server/security";
  * con la empresa en blanco: mejor una llamada atendida a secas que un
  * agente que no descuelga porque el CRM no contestó.
  */
+const REPREGUNTAR = "CADA LLAMADA EMPIEZA DE CERO, SALVO EL NOMBRE: si conoces el nombre de quien llama, salúdale por su nombre y confirma que es esa persona. Todo lo demás —localidad, qué necesita, cualquier dato— vuelve a preguntarlo aunque haya llamado antes, y no des por sabido nada de llamadas anteriores.";
+
 async function manejarPOST(req) {
   const authError = requireInternalRequest(req);
   if (authError) return authError;
@@ -58,13 +60,18 @@ async function manejarPOST(req) {
       client_id: ctx.clientId,
       sector: ctx.industry || "",
       lead_id: ctx.leadId || "",
+      /* De la ficha sólo se le cuenta al agente el nombre: la empresa pidió
+         que cada llamada empiece de cero (mismas preguntas aunque la persona
+         llamara ayer) y que lo que se guarde y se avise sea lo de esta vez,
+         pero que a quien ya conoce le salude por su nombre. El lead_id sí,
+         para enlazar la llamada con su ficha. */
       lead_nombre: ctx.leadName || "",
-      lead_necesidad: ctx.leadNeed || "",
-      resumen_contacto: ctx.leadSummary || "",
+      lead_necesidad: "",
+      resumen_contacto: "",
       objetivo_llamada: ctx.callObjective || "",
       en_horario: enHorario ? "sí" : "no",
       mensaje_fuera_horario: config.mensaje_fuera_horario || "",
-      contexto_empresa: [ctx.companyPrompt, contexto].filter(Boolean).join("\n\n").slice(0, 6000),
+      contexto_empresa: [ctx.companyPrompt, contexto, REPREGUNTAR].filter(Boolean).join("\n\n").slice(0, 6000),
     };
 
     return Response.json({
@@ -73,6 +80,8 @@ async function manejarPOST(req) {
       /* Compatibilidad con quien leía la forma antigua. */
       success: true,
       ...ctx,
+      leadNeed: "",
+      leadSummary: "",
     });
   } catch (error) {
     logErrorSeguro("elevenlabs.context_failed", error);

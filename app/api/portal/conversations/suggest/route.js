@@ -13,6 +13,7 @@ import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/li
 import { buildConversationAssistPayload } from "@/lib/server/portal-phase-four";
 import { observeRoute } from "@/lib/server/observability.mjs";
 import { iaDisponible } from "@/lib/server/estado-ia";
+import { bloqueDeConocimiento, conocimientoVigente } from "@/lib/server/conocimiento";
 import { configIA, promptDeEmpresa } from "@/lib/server/ia-config";
 import { validar } from "@/lib/server/esquemas";
 import { SugerenciaConversacion } from "@/lib/server/esquemas-portal";
@@ -27,8 +28,14 @@ async function tryAiSuggestion({ client, lead, payload, channel, goal }) {
      una sugerencia de la IA. */
   const ia = await iaDisponible(client?.id);
   if (!openai || !ia.ok) return { ...payload, iaActiva: false, motivoSinIA: ia.motivo || "No hay clave de OpenAI configurada." };
-  const configEmpresa = await configIA(client?.id);
-  const promptEmpresa = promptDeEmpresa(configEmpresa, { empresa: client?.brand_name || client?.name || "", sector: client?.industry || "" });
+  const [configEmpresa, conocimiento] = await Promise.all([
+    configIA(client?.id),
+    conocimientoVigente(client?.id).catch(() => []),
+  ]);
+  const promptEmpresa = promptDeEmpresa(configEmpresa, {
+    empresa: client?.brand_name || client?.name || "", sector: client?.industry || "",
+    conocimiento: bloqueDeConocimiento(conocimiento),
+  });
 
   const prompt = `
 ${promptEmpresa}

@@ -34,9 +34,12 @@ const firmaJwt = (token, secreto) => {
   return c && b ? crypto.createHmac("sha256", secreto).update(`${c}.${b}`).digest("base64url") : null;
 };
 if (nombre === "SUPABASE_JWT_SECRET") {
-  const testigo = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  /* El testigo tiene que ser un JWT (eyJ…): la publishable sb_… no sirve. */
+  const esJwt = (t) => /^eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(String(t || ""));
+  const testigo = [process.env.SUPABASE_SERVICE_ROLE_KEY, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY].find(esJwt) || "";
   const firma = testigo.split(".")[2];
-  if (testigo && firma && firmaJwt(testigo, valor) !== firma) {
+  if (!testigo) { console.error("No hay ninguna clave JWT (eyJ…) en .env.local con la que comprobar el secreto; no se cierra a ciegas."); process.exit(1); }
+  if (firmaJwt(testigo, valor) !== firma) {
     console.error("Ese valor NO es el JWT secret de este proyecto: la clave anon de .env.local no está firmada con él.");
     console.error("Cópialo de Supabase → Project Settings → JWT Keys → Legacy JWT Secret → Reveal.");
     process.exit(1);

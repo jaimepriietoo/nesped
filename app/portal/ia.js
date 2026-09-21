@@ -423,6 +423,8 @@ export function ConfiguracionIA() {
         )}
       </Seccion>
 
+      <LoQueDebeSaber />
+
       {error && <p className="pv3-p" style={{ color: "var(--bad)", marginTop: 12 }}>{error}</p>}
 
       {puedeEditar && (
@@ -599,8 +601,6 @@ export function DepartamentosYAvisos() {
           </div>
         )}
       </Seccion>
-
-      <LoQueDebeSaber />
 
       {error && <p className="pv3-p" style={{ color: "var(--bad)", marginTop: 12 }}>{error}</p>}
     </div>

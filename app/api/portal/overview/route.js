@@ -1,4 +1,5 @@
 import { getPortalContext } from "@/lib/portal-auth";
+import { ajustesSegurosParaNavegador } from "@/lib/client-settings";
 import { evaluarConsumo } from "@/lib/server/cuotas";
 import { cursorDe } from "@/lib/server/paginacion";
 import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
@@ -449,7 +450,7 @@ async function manejarGET() {
       },
 
       settings: {
-        ...settings,
+        ...ajustesSegurosParaNavegador(settings),
         realtime_refresh_seconds: settings?.realtime_refresh_seconds || 15,
         default_deal_value: settings?.default_deal_value || 250,
         monthly_target_leads: settings?.monthly_target_leads || 25,

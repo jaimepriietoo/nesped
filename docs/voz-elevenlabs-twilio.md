@@ -135,13 +135,23 @@ Body recomendado:
   "calledNumber": "{{called_number}}",
   "conversationId": "{{system__conversation_id}}",
   "name": "<LLM Prompt>",
+  "phone": "<LLM Prompt>",
+  "email": "<LLM Prompt>",
   "city": "<LLM Prompt>",
+  "address": "<LLM Prompt>",
   "need": "<LLM Prompt>",
   "preference": "<LLM Prompt>",
   "summary": "<LLM Prompt>",
   "notes": "<LLM Prompt>"
 }
 ```
+
+Cada llamada es un expediente independiente. Aunque `leadId` enlace la
+llamada con una ficha existente, la herramienta sólo debe mandar datos
+obtenidos o confirmados en la conversación actual. La única excepción es
+`name`: puede usar el nombre conocido para saludar e identificar la ficha.
+Nunca se rellenan `phone`, `email`, `city`, `address`, `need`, `preference`,
+`summary` ni `notes` desde una llamada anterior.
 
 Respuesta util:
 
@@ -230,12 +240,15 @@ Parametros:
 - `callerId` -> Dynamic variable -> `caller_id`
 - `calledNumber` -> Dynamic variable -> `called_number`
 - `conversationId` -> Dynamic variable -> `system__conversation_id`
-- `name` -> LLM Prompt -> nombre completo del caller
-- `city` -> LLM Prompt -> ciudad o zona del caller
-- `need` -> LLM Prompt -> necesidad o interes principal
-- `preference` -> LLM Prompt -> preferencia relevante
-- `summary` -> LLM Prompt -> resumen breve y util para el CRM
-- `notes` -> LLM Prompt -> notas operativas cortas
+- `name` -> LLM Prompt -> nombre dado ahora o nombre conocido; es el único dato histórico permitido
+- `phone` -> LLM Prompt -> teléfono que la persona ha dado o confirmado en esta llamada
+- `email` -> LLM Prompt -> correo que la persona ha dado o confirmado en esta llamada
+- `city` -> LLM Prompt -> localidad o zona dada o confirmada en esta llamada
+- `address` -> LLM Prompt -> dirección del servicio dada o confirmada en esta llamada, si hace falta
+- `need` -> LLM Prompt -> necesidad expresada en esta llamada
+- `preference` -> LLM Prompt -> preferencia expresada en esta llamada
+- `summary` -> LLM Prompt -> resumen únicamente de esta llamada
+- `notes` -> LLM Prompt -> notas operativas únicamente de esta llamada
 
 Assignments recomendados:
 
@@ -245,7 +258,10 @@ Assignments recomendados:
 - `lead_status <- response.leadStatus`
 - `lead_summary <- response.leadSummary`
 
-Haz que el agente llame a esta tool en cuanto tenga datos suficientes para no perder el lead.
+Haz que el agente llame a esta tool después de volver a preguntar los datos
+necesarios, y de nuevo antes de despedirse si después apareció información
+nueva. Varias llamadas a la herramienta dentro de la misma conversación se
+unen por `conversationId`; otra conversación nunca reutiliza esos valores.
 
 ## Webhook final de ElevenLabs
 

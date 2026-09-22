@@ -73,6 +73,8 @@ const OFICIOS = {
       nuevo: Boolean(t.datos?.nuevo),
       textoExtra: Array.isArray(t.datos?.texto_extra) ? t.datos.texto_extra : [],
       disparo: t.datos?.disparo || null,
+      callSid: t.datos?.call_sid || "",
+      aislarLlamada: Boolean(t.datos?.aislar_llamada),
     }),
   automatismos_barrido: () => barridoDeAutomatismos(),
   notificar_llamada: (t) => notificarLlamada({ clientId: t.client_id, callSid: t.datos?.callSid }),

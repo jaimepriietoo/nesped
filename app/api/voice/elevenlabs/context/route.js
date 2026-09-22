@@ -26,7 +26,7 @@ import { leerJsonLimitado } from "@/lib/server/security";
  * con la empresa en blanco: mejor una llamada atendida a secas que un
  * agente que no descuelga porque el CRM no contestó.
  */
-const REPREGUNTAR = "CADA LLAMADA EMPIEZA DE CERO, SALVO EL NOMBRE: si conoces el nombre de quien llama, salúdale por su nombre y confirma que es esa persona. Todo lo demás —localidad, qué necesita, cualquier dato— vuelve a preguntarlo aunque haya llamado antes, y no des por sabido nada de llamadas anteriores.";
+const REPREGUNTAR = "CADA LLAMADA ES UN EXPEDIENTE NUEVO, SALVO EL NOMBRE. Esta regla prevalece sobre cualquier instrucción general que diga que uses lo que ya sabes del contacto. De su ficha anterior sólo puedes usar el nombre: salúdale por su nombre y confirma que es esa persona. No menciones ni uses ninguna otra respuesta anterior. Vuelve a preguntar adrede teléfono de contacto (el identificador de llamada no cuenta como confirmado), correo, localidad, dirección del servicio cuando corresponda, qué necesita, preferencias y cualquier otro dato necesario, aunque conste en su ficha o haya llamado hace poco. Al guardar, resumir, clasificar o preparar el correo usa exclusivamente lo dicho o confirmado en esta conversación.";
 
 async function manejarPOST(req) {
   const authError = requireInternalRequest(req);
@@ -71,7 +71,7 @@ async function manejarPOST(req) {
       lead_nombre: ctx.leadName || "",
       lead_necesidad: "",
       resumen_contacto: "",
-      objetivo_llamada: ctx.callObjective || "",
+      objetivo_llamada: `Atiende esta llamada como ${ctx.brandName || ctx.companyName || "la empresa"}. Recoge de nuevo todos los datos necesarios y resuelve únicamente lo planteado en esta conversación.`,
       en_horario: enHorario ? "sí" : "no",
       mensaje_fuera_horario: config.mensaje_fuera_horario || "",
       contexto_empresa: [ctx.companyPrompt, contexto, bloqueDeConocimiento(conocimiento), REPREGUNTAR, bloqueRuperta(ruperta)]
@@ -88,7 +88,10 @@ async function manejarPOST(req) {
       success: true,
       ...ctx,
       leadNeed: "",
+      leadStatus: "",
+      leadOwner: "",
       leadSummary: "",
+      callObjective: "",
     });
   } catch (error) {
     logErrorSeguro("elevenlabs.context_failed", error);

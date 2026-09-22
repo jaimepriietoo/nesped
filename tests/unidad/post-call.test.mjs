@@ -85,6 +85,7 @@ test("la llamada se guarda por (client_id, call_sid): inserta si no está, actua
   assert.equal(escrituras[0].op, "insert", "no estaba: se inserta");
   assert.equal(escrituras[0].datos.call_sid, "conv_123");
   assert.equal(escrituras[0].datos.client_id, "demo");
+  assert.equal(escrituras[0].datos.lead_id, null, "una llamada desconocida no se enlaza a otra ficha");
   /* upsert con onConflict sobre el índice parcial fallaba SIEMPRE en
      PostgREST ("no unique or exclusion constraint"): ninguna llamada real se
      guardó hasta que se quitó. Que no vuelva. */
@@ -95,6 +96,29 @@ test("la llamada se guarda por (client_id, call_sid): inserta si no está, actua
   const escrituras2 = ya.apuntes.filter((a) => a.tabla === "calls" && a.op !== "select");
   assert.equal(escrituras2.length, 1);
   assert.equal(escrituras2[0].op, "update", "ya estaba: se actualiza");
+});
+
+test("una llamada repetida queda enlazada a su contacto conocido sin copiar su información al correo", async () => {
+  const bd = baseFalsa({
+    filas: {
+      clients: EMPRESA,
+      leads: [{
+        id: "lead-conocido",
+        client_id: "demo",
+        telefono: "+34600111222",
+        nombre: "Ana",
+        necesidad: "dato histórico que no debe reutilizarse",
+        created_at: "2026-09-01T10:00:00.000Z",
+      }],
+    },
+    reclamar: true,
+  });
+
+  await persistElevenLabsCall({ supabase: bd, payload: PAYLOAD });
+
+  const escritura = bd.apuntes.find((a) => a.tabla === "calls" && a.op === "insert");
+  assert.equal(escritura.datos.lead_id, "lead-conocido", "la llamada conserva el vínculo interno con la ficha");
+  assert.equal(escritura.datos.detected_intent, "consulta", "no hereda la necesidad de una llamada anterior");
 });
 
 test("la segunda entrega del mismo webhook no vuelve a anotar consumo ni eventos", async () => {

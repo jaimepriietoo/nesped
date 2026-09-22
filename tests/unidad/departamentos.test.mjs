@@ -1,7 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DEPARTAMENTOS_POR_DEFECTO, clasificarPorPalabras, textoDelLead, clasificarLead } from "@/lib/server/departamentos";
-import { seleccionarDestinatarios, correoDeLead, correoDeLlamada, notificarLead, correoDesactivado } from "@/lib/server/destinatarios";
+import {
+  combinarDatosDeLlamada,
+  seleccionarDestinatarios,
+  correoDeLead,
+  correoDeLlamada,
+  notificarLead,
+  correoDesactivado,
+} from "@/lib/server/destinatarios";
 import fs from "node:fs";
 import path from "node:path";
 import { estadoDeLaIA } from "@/lib/server/estado-ia";
@@ -82,6 +89,20 @@ test("sin clave de OpenAI la IA está apagada con motivo, y clasificar cae a pal
     assert.equal(guardado.datos.departamento, "soporte");
     assert.match(guardado.datos.departamento_motivo, /por palabras clave/, "queda escrito que no fue la IA");
     assert.equal(guardado.datos.senales.fuente, "palabras");
+
+    const aislada = baseFalsa({
+      leads: { id: "l2", client_id: "acme", necesidad: "factura antigua y cobro duplicado", resumen: "administración" },
+      departamentos: [],
+      clients: { brand_name: "Acme" },
+    });
+    const soloEstaLlamada = await clasificarLead({
+      clientId: "acme",
+      leadId: "l2",
+      textoExtra: ["Quiero presupuesto para contratar fibra"],
+      soloTextoExtra: true,
+      supabase: aislada,
+    });
+    assert.equal(soloEstaLlamada.departamento, "ventas", "la llamada nueva no hereda la factura antigua");
   } finally {
     if (original !== undefined) process.env.OPENAI_API_KEY = original;
   }
@@ -129,9 +150,9 @@ test("en pruebas no sale ningún correo: queda apuntado como omitido", async () 
   assert.ok(apuntadas.every((a) => a.datos.estado === "omitido"));
 });
 
-test("cada llamada entera va a quien recibe copia de todo, sin repetir a quien acaba de recibir el aviso del contacto", async () => {
+test("cada llamada entera va a quien recibe copia de todo, sin repetir la misma conversación", async () => {
   const { correoDeLlamada, notificarLlamada } = await import("@/lib/server/destinatarios");
-  const { asunto, html } = correoDeLlamada({ empresa: "Fibergreen", llamada: { created_at: "2026-09-19T10:00:00Z", from_number: "+34600", duration_seconds: 42, status: "completed", summary: "Pide fibra", transcript: "Agente: hola\nUsuario: quiero fibra" }, lead: { nombre: "Luis de la ficha", departamento: "ventas", tags: ["urgente"] }, dicho: { nombre: "Luis", notas: "urgente" }, destinatario: { nombre: "Central" }, urlPortal: "https://x/portal" });
+  const { asunto, html } = correoDeLlamada({ empresa: "Fibergreen", llamada: { created_at: "2026-09-19T10:00:00Z", from_number: "+34600", duration_seconds: 42, status: "completed", summary: "Pide fibra", transcript: "Agente: hola\nUsuario: quiero fibra" }, nombreConocido: "Luis antiguo", clasificacion: { departamento: "ventas", nombreDepartamento: "Ventas", motivo: "Pide fibra ahora" }, dicho: { nombre: "Luis", notas: "urgente" }, destinatario: { nombre: "Central", recibe_todo: true }, urlPortal: "https://x/portal" });
   assert.match(asunto, /^Llamada en Fibergreen: Luis · 42 s$/);
   assert.match(html, /Transcripción/);
   assert.match(html, /quiero fibra/);
@@ -148,7 +169,7 @@ test("cada llamada entera va a quien recibe copia de todo, sin repetir a quien a
   });
   const r = await notificarLlamada({ clientId: "acme", callSid: "conv_1", supabase: base });
   assert.equal(r.enviados, 0);
-  assert.equal(r.omitidos, 1, "ya recibió el aviso del contacto hace nada: no se repite");
+  assert.equal(r.omitidos, 1, "ya recibió el aviso de esta conversación: no se repite");
 
   const base2 = baseFalsa({
     calls: { id: "c1", call_sid: "conv_1", client_id: "acme", lead_id: null, from_number: "", duration_seconds: 10 },
@@ -164,28 +185,44 @@ test("el correo de la llamada lleva sólo lo dicho en esa llamada, no la ficha",
   const llamada = { created_at: "2026-09-21T10:00:00Z", from_number: "+34600111222", duration_seconds: 61, status: "done", summary: "Pide cita de instalación." };
   const lead = { nombre: "Ana de la ficha", telefono: "+34600111222", email: "ana@x.com", ciudad: "Valladolid", necesidad: "lo de hace un mes", notes: "notas viejas", departamento: "soporte", departamento_motivo: "Instalaciones: pide cita." };
   const dicho = { nombre: "Ana", ciudad: "Valdestillas", necesidad: "instalar fibra en la casa nueva" };
-  const { asunto, html } = correoDeLlamada({ empresa: "Fibergreen", llamada, lead, dicho, destinatario: { nombre: "Jaime" }, urlPortal: "" });
+  const { asunto, html } = correoDeLlamada({ empresa: "Fibergreen", llamada, lead, nombreConocido: lead.nombre, clasificacion: { departamento: "ventas", nombreDepartamento: "Ventas", motivo: "Por lo dicho ahora" }, dicho, destinatario: { nombre: "Jaime" }, urlPortal: "" });
   assert.match(asunto, /Ana · 61 s/);
   assert.match(html, /Valdestillas/);
   assert.match(html, /instalar fibra en la casa nueva/);
   assert.match(html, /Derivado a/);
   assert.doesNotMatch(html, /Ana de la ficha|ana@x\.com|lo de hace un mes|notas viejas|Valladolid/, "nada de la ficha");
   /* Sin datos de esta llamada, el correo sigue saliendo, sólo con la llamada. */
-  const vacio = correoDeLlamada({ empresa: "Fibergreen", llamada, lead, destinatario: {}, urlPortal: "" });
-  assert.match(vacio.asunto, /\+34600111222/);
-  assert.doesNotMatch(vacio.html, /Ana de la ficha/);
+  const vacio = correoDeLlamada({ empresa: "Fibergreen", llamada, lead, nombreConocido: lead.nombre, destinatario: {}, urlPortal: "" });
+  assert.match(vacio.asunto, /Ana de la ficha/, "el único dato antiguo permitido es el nombre");
+  assert.doesNotMatch(vacio.html, /ana@x\.com|lo de hace un mes|notas viejas|Valladolid/);
+});
+
+test("los datos parciales de una conversación se unen sin aceptar campos de otra ficha", () => {
+  assert.deepEqual(combinarDatosDeLlamada([
+    { meta: { conversation_id: "c1", nombre: "Ana", email: "viejo@ejemplo.invalid", campo_inventado: "no" } },
+    { meta: { conversation_id: "c1", email: "nuevo@ejemplo.invalid", necesidad: "alta nueva" } },
+  ]), { nombre: "Ana", email: "nuevo@ejemplo.invalid", necesidad: "alta nueva" });
 });
 
 test("el agente empieza cada llamada de cero salvo el nombre: recibe el nombre, no el resto, y se le dice que repregunte", () => {
   const ruta = fs.readFileSync(path.join(RAIZ, "app/api/voice/elevenlabs/context/route.js"), "utf8");
   assert.match(ruta, /lead_nombre: ctx\.leadName \|\| "",\s*lead_necesidad: "",\s*resumen_contacto: ""/);
-  assert.match(ruta, /leadNeed: "",\s*leadSummary: ""/);
+  assert.match(ruta, /leadStatus: "",\s*leadOwner: "",\s*leadSummary: "",\s*callObjective: ""/);
   assert.doesNotMatch(ruta, /leadName: ""/);
-  assert.match(ruta, /CADA LLAMADA EMPIEZA DE CERO, SALVO EL NOMBRE/);
+  assert.match(ruta, /CADA LLAMADA ES UN EXPEDIENTE NUEVO, SALVO EL NOMBRE/);
+  assert.match(ruta, /Esta regla prevalece sobre cualquier instrucción general/);
+  assert.match(ruta, /el identificador de llamada no cuenta como confirmado/);
   assert.match(ruta, /salúdale por su nombre/);
+  assert.doesNotMatch(ruta, /ctx\.callObjective/);
   assert.match(ruta, /lead_id: ctx\.leadId/, "el enlace con la ficha se conserva");
   const eleven = fs.readFileSync(path.join(RAIZ, "lib/server/elevenlabs.js"), "utf8");
   assert.match(eleven, /type: "datos_de_llamada"/);
+  assert.match(eleven, /aislarLlamada: true/);
   const dest = fs.readFileSync(path.join(RAIZ, "lib/server/destinatarios.js"), "utf8");
   assert.match(dest, /eq\("type", "datos_de_llamada"\)/);
+  assert.doesNotMatch(dest, /hace15|15 \* 60e3/, "otra llamada cercana no se considera duplicada");
+  assert.ok(
+    dest.includes('.eq("motivo", `llamada:${callSid}`)'),
+    "sólo se deduplica el correo de la misma conversación",
+  );
 });

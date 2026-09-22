@@ -212,9 +212,9 @@ async function findLeadByPhone(phone, clientId) {
   );
 }
 
-async function patchLead(leadId, changes) {
+async function patchLead(leadId, changes, clientId) {
   try {
-    await updateLeadDirect(leadId, changes);
+    await updateLeadDirect(leadId, changes, clientId);
     return { success: true };
   } catch (err) {
     logErrorSeguro("whatsapp.lead_update_failed", err);
@@ -865,7 +865,7 @@ await sendWhatsapp(phone, finalReply);
     `Producto recomendado: ${productTier}`,
     `Motivo: ${analysis.reason || "-"}`,
   ].join(" ").trim(),
-});
+  }, clientContext.id);
 }
 
     /* Departamento y automatismos, por la cola, con el mensaje como texto. */

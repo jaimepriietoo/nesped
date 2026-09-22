@@ -83,3 +83,87 @@ test("sólo un uuid de verdad pasa como uuid", async () => {
   assert.equal(PARA_PRUEBAS.esUuid(null), false);
   assert.equal(PARA_PRUEBAS.esUuid(42), false);
 });
+
+function clienteCapturador() {
+  const operaciones = [];
+  const respuesta = { data: null, error: null };
+  const consulta = {
+    select(columnas) {
+      operaciones.push(["select", columnas]);
+      return this;
+    },
+    update(cambios) {
+      operaciones.push(["update", cambios]);
+      return this;
+    },
+    eq(columna, valor) {
+      operaciones.push(["eq", columna, valor]);
+      return this;
+    },
+    or(filtro) {
+      operaciones.push(["or", filtro]);
+      return this;
+    },
+    order(columna, opciones) {
+      operaciones.push(["order", columna, opciones]);
+      return this;
+    },
+    limit(cantidad) {
+      operaciones.push(["limit", cantidad]);
+      return this;
+    },
+    async maybeSingle() {
+      operaciones.push(["maybeSingle"]);
+      return respuesta;
+    },
+    then(resolver, rechazar) {
+      return Promise.resolve(respuesta).then(resolver, rechazar);
+    },
+  };
+
+  return {
+    operaciones,
+    from(tabla) {
+      operaciones.push(["from", tabla]);
+      return consulta;
+    },
+  };
+}
+
+test("leer y actualizar una llamada exige y aplica el client_id", async () => {
+  const { ultimaLlamadaDeLead, actualizarLlamada } = await import("../../lib/server/datos.js");
+  const { conContexto, fijarClienteDeDatos } = await import("../../lib/server/contexto.mjs");
+  const leadId = "5d3c2a1e-0000-4000-8000-000000000001";
+
+  await assert.rejects(
+    () => ultimaLlamadaDeLead({ lead_id: leadId, phone: "+34600111222" }),
+    /falta la empresa/,
+  );
+  await assert.rejects(
+    () => actualizarLlamada("call-1", { status: "completed" }),
+    /falta la empresa/,
+  );
+
+  const cliente = clienteCapturador();
+  await conContexto({}, async () => {
+    fijarClienteDeDatos(cliente);
+    await ultimaLlamadaDeLead({
+      client_id: "empresa-a",
+      lead_id: leadId,
+      phone: "+34600111222",
+    });
+    await actualizarLlamada("call-1", { status: "completed" }, "empresa-a");
+  });
+
+  const filtrosEmpresa = cliente.operaciones.filter(
+    ([operacion, columna, valor]) =>
+      operacion === "eq" && columna === "client_id" && valor === "empresa-a",
+  );
+  assert.equal(filtrosEmpresa.length, 2, "lectura y escritura deben quedar acotadas a la empresa");
+  assert.ok(
+    cliente.operaciones.some(
+      ([operacion, columna, valor]) => operacion === "eq" && columna === "id" && valor === "call-1",
+    ),
+    "la actualización también conserva el filtro por id de llamada",
+  );
+});

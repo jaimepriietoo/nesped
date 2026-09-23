@@ -31,8 +31,8 @@ function baseFalsa({ filas = {}, reclamar = true } = {}) {
   const apuntes = [];
   const constructor = (tabla) => {
     const b = {
-      _tabla: tabla, _op: "select", _datos: null,
-      select() { return b; }, eq() { return b; }, or() { return b; }, in() { return b; },
+      _tabla: tabla, _op: "select", _datos: null, _eq: {},
+      select() { return b; }, eq(c, v) { b._eq[c] = v; return b; }, or() { return b; }, in() { return b; },
       order() { return b; }, limit() { return b; }, gte() { return b; }, lte() { return b; },
       not() { return b; }, is() { return b; },
       insert(d) { b._op = "insert"; b._datos = d; return b; },
@@ -40,7 +40,7 @@ function baseFalsa({ filas = {}, reclamar = true } = {}) {
       upsert(d, o) { b._op = "upsert"; b._datos = d; b._opciones = o; return b; },
       maybeSingle() { return b; }, single() { return b; },
       then(resolver) {
-        apuntes.push({ tabla, op: b._op, datos: b._datos, opciones: b._opciones });
+        apuntes.push({ tabla, op: b._op, datos: b._datos, opciones: b._opciones, eq: b._eq });
         const data = b._op === "select" ? (filas[tabla] ?? null) : (b._datos ?? null);
         return Promise.resolve({ data, error: null }).then(resolver);
       },
@@ -96,6 +96,9 @@ test("la llamada se guarda por (client_id, call_sid): inserta si no está, actua
   const escrituras2 = ya.apuntes.filter((a) => a.tabla === "calls" && a.op !== "select");
   assert.equal(escrituras2.length, 1);
   assert.equal(escrituras2[0].op, "update", "ya estaba: se actualiza");
+  /* Con el cifrado activo, el envoltorio sólo sabe la empresa por el filtro:
+     sin él, `cifrado` rechaza el update y `doble` deja el sobre viejo. */
+  assert.deepEqual(escrituras2[0].eq, { id: "c-1", client_id: "demo" }, "el update filtra también por empresa");
 });
 
 test("una llamada repetida queda enlazada a su contacto conocido sin copiar su información al correo", async () => {

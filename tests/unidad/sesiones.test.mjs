@@ -46,7 +46,26 @@ test("otro navegador nunca vale; otra red sólo se tolera fuera de owner y admin
   assert.equal(huellaCoincide({ token: casa, actual: oficina, role: "owner" }), false, "owner cambia de red");
   assert.equal(huellaCoincide({ token: casa, actual: oficina, role: "admin" }), false);
   assert.equal(huellaCoincide({ token: undefined, actual: casa, role: "agent" }), false, "token antiguo sin huella");
-  assert.ok(rolEstricto("Owner") && rolEstricto("admin") && !rolEstricto("manager"));
+  assert.ok(rolEstricto("Owner") && rolEstricto("admin") && rolEstricto("super_admin") && !rolEstricto("manager"));
+});
+
+test("si la base falla, los roles estrictos fallan cerrado", async () => {
+  const { comprobarSesion } = await import("../../lib/server/sesiones.js");
+  const consulta = {
+    select() { return this; },
+    eq() { return this; },
+    async maybeSingle() { return { data: null, error: new Error("base no disponible") }; },
+  };
+  const supabase = { from: () => consulta };
+  const entrada = {
+    sid: "sesion-1",
+    email: "owner@empresa.test",
+    clientId: "empresa-a",
+  };
+
+  assert.match(await comprobarSesion({ ...entrada, role: "owner" }, { supabase }), /Vuelve a entrar/);
+  assert.match(await comprobarSesion({ ...entrada, role: "super_admin" }, { supabase }), /Vuelve a entrar/);
+  assert.equal(await comprobarSesion({ ...entrada, role: "agent" }, { supabase }), null);
 });
 
 test("el token lleva sid y huella, y cada petición comprueba huella, fila e inactividad", () => {

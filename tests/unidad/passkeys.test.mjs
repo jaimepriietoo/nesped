@@ -12,6 +12,7 @@ import {
 import { isoCBOR } from "@simplewebauthn/server/helpers";
 
 import { origenesPermitidos, rpIdDe } from "../../lib/server/passkeys.js";
+import { GestionPasskeys } from "../../lib/server/esquemas-portal.js";
 
 const RAIZ = path.resolve(import.meta.dirname, "../..");
 const leer = (f) => fs.readFileSync(path.join(RAIZ, f), "utf8");
@@ -129,13 +130,18 @@ test("la passkey manda: el login la pide antes que TOTP y el correo, y la 2FA s�
   assert.match(leer("app/api/login/2fa/resend/route.js"), /factorType === "passkey"/);
 });
 
-test("las rutas de passkey validan, limitan y quitar exige el código si hay TOTP", () => {
+test("las rutas de passkey validan, limitan y reautentican antes de añadir o quitar", () => {
   const portal = leer("app/api/portal/passkeys/route.js");
   assert.match(portal, /leerJsonLimitado\(req, \{ maxBytes: 16 \* 1024 \}\)/);
   assert.match(portal, /requireRateLimitAsync\(req/);
   assert.match(portal, /validar\(GestionPasskeys, cuerpo\.datos\)/);
-  assert.match(portal, /if \(totp\.enabled\) \{[\s\S]{0,600}verificarYConsumirTotp/);
+  assert.match(portal, /if \(datos\.action === "start"\) \{[\s\S]{0,400}verificarPasoAdicionalPasskey/);
+  assert.match(portal, /const paso = await verificarPasoAdicionalPasskey\(ctx, datos\);[\s\S]{0,500}eliminarPasskey/);
+  assert.match(portal, /verificacion: totp\.enabled \? "codigo" : "password"/);
   assert.match(portal, /passkey_added|passkey_removed/);
+  assert.equal(GestionPasskeys.safeParse({ action: "start", password: "actual" }).success, true);
+  assert.equal(GestionPasskeys.safeParse({ action: "delete", id: crypto.randomUUID(), code: "123456" }).success, true);
+  assert.equal(GestionPasskeys.safeParse({ action: "start", password: "x".repeat(201) }).success, false);
   const acceso = leer("app/api/login/passkey/route.js");
   assert.match(acceso, /tomarIntentoTwoFactor\(challenge\)/, "cuenta intentos como el resto de factores");
   assert.match(acceso, /challenge\.factorType !== "passkey"/);

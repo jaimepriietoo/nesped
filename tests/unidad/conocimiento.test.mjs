@@ -44,6 +44,13 @@ test("el servidor no se fía de la voz: número autorizado y PIN se comprueban a
   const ruta = leer("app/api/voice/elevenlabs/instruccion/route.js");
   assert.match(ruta, /requireInternalRequest\(req\)/);
   assert.match(ruta, /validar\(InstruccionPorVoz/);
+  const limite = ruta.indexOf("requireRateLimitAsync(req");
+  const scrypt = ruta.indexOf("anotarPorVoz({");
+  assert.ok(limite > 0 && scrypt > limite, "limita los intentos antes de comprobar el PIN con scrypt");
+  assert.match(ruta, /voice:ruperta-pin:empresa/);
+  assert.match(ruta, /voice:ruperta-pin:llamante/);
+  assert.match(ruta, /\[clientId, callerId\]/);
+  assert.match(ruta, /includeIp: false/);
 });
 
 test("el conocimiento entra en la voz, en WhatsApp y en el copiloto; la voz recibe el estado de Ruperta", () => {

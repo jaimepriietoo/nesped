@@ -1,7 +1,7 @@
 import { getPortalContext } from "@/lib/portal-auth";
-import { consumirCodigo } from "@/lib/server/codigos-recuperacion";
 import { validar } from "@/lib/server/esquemas";
 import { GestionPasskeys } from "@/lib/server/esquemas-portal";
+import { verificarPasoAdicionalPasskey } from "@/lib/server/passkey-step-up";
 import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 import {
   completarRegistro,
@@ -11,16 +11,16 @@ import {
   passkeyObligatoriaDesde,
 } from "@/lib/server/passkeys";
 import { leerJsonLimitado, requireRateLimitAsync, requireSameOrigin } from "@/lib/server/security";
-import { estadoTotp, verificarYConsumirTotp } from "@/lib/server/totp";
+import { estadoTotp } from "@/lib/server/totp";
 import { rolEstricto } from "@/lib/server/sesiones";
 
 /**
  * Las passkeys de la propia cuenta: ver, añadir y quitar.
  *
- * Añadir una no exige nada más que la sesión (ya lleva huella e
- * inactividad). Quitar una sí: si hay TOTP, su código o uno de recuperación,
- * para que un intruso con la sesión abierta no pueda quitar el factor que
- * le cerraría la puerta la próxima vez.
+ * Añadir o quitar exige volver a demostrar identidad. Si hay TOTP se usa su
+ * código (o uno de recuperación); si no, la contraseña actual. El reto de
+ * registro queda en una cookie firmada, de modo que `finish` sólo puede venir
+ * de un `start` que superó esta comprobación.
  */
 async function registrar(ctx, action, changes = {}) {
   const { error } = await ctx.supabase.from("audit_logs").insert({
@@ -36,11 +36,13 @@ async function manejarGET() {
     if (!ctx.ok) return Response.json({ success: false, message: ctx.message }, { status: 401 });
     const passkeys = await listarPasskeys({ email: ctx.userEmail, clientId: ctx.clientId });
     const desde = passkeyObligatoriaDesde();
+    const totp = await estadoTotp({ email: ctx.userEmail, clientId: ctx.clientId });
     return Response.json({
       success: true,
       passkeys,
       obligatoria: Boolean(desde && rolEstricto(ctx.role)),
       obligatoriaDesde: desde ? desde.toISOString() : null,
+      verificacion: totp.enabled ? "codigo" : "password",
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     logErrorSeguro("portal.passkeys_list_failed", error);
@@ -65,6 +67,12 @@ async function manejarPOST(req) {
     const { datos } = entrada;
 
     if (datos.action === "start") {
+      const paso = await verificarPasoAdicionalPasskey(ctx, datos);
+      if (!paso.valido) {
+        return Response.json({ success: false, message: paso.tipo === "codigo"
+          ? "Hace falta un código TOTP o de recuperación válido"
+          : "La contraseña actual no es correcta" }, { status: 401 });
+      }
       const opciones = await opcionesDeRegistro({ email: ctx.userEmail, clientId: ctx.clientId });
       return Response.json({ success: true, opciones }, { headers: { "Cache-Control": "no-store" } });
     }
@@ -78,13 +86,11 @@ async function manejarPOST(req) {
       return Response.json({ success: true, id: resultado.id });
     }
 
-    const totp = await estadoTotp({ email: ctx.userEmail, clientId: ctx.clientId });
-    if (totp.enabled) {
-      const code = datos.code || "";
-      const valido = /^\d{6}$/.test(code)
-        ? await verificarYConsumirTotp({ email: ctx.userEmail, clientId: ctx.clientId, codigo: code })
-        : code ? await consumirCodigo({ email: ctx.userEmail, codigo: code }) : false;
-      if (!valido) return Response.json({ success: false, message: "Para quitar una passkey hace falta el código de tu aplicación autenticadora" }, { status: 401 });
+    const paso = await verificarPasoAdicionalPasskey(ctx, datos);
+    if (!paso.valido) {
+      return Response.json({ success: false, message: paso.tipo === "codigo"
+        ? "Para quitar una passkey hace falta un código TOTP o de recuperación válido"
+        : "Para quitar una passkey hace falta la contraseña actual" }, { status: 401 });
     }
     const eliminada = await eliminarPasskey({ id: datos.id, email: ctx.userEmail, clientId: ctx.clientId });
     if (!eliminada) return Response.json({ success: false, message: "Esa passkey no existe" }, { status: 404 });

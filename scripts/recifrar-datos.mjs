@@ -15,10 +15,13 @@ for (const l of (() => { try { return fs.readFileSync(".env.local", "utf8").spli
 }
 const anterior = process.env.NESPED_DATA_ENCRYPTION_KEY_ANTERIOR;
 if (!anterior) { console.error("Falta NESPED_DATA_ENCRYPTION_KEY_ANTERIOR"); process.exit(2); }
-const { TABLAS, cifrar, descifrar } = await import("@/lib/server/cifrado-datos");
+const {
+  TABLAS, cifrar, descifrar, hashDeBusqueda, hashDeBusquedaEmpresa, modoHashBusqueda,
+} = await import("@/lib/server/cifrado-datos");
 const { getSupabaseAdministrativo } = await import("@/lib/supabase");
 const supabase = getSupabaseAdministrativo({ crudo: true });
 const envVieja = { ...process.env, NESPED_DATA_ENCRYPTION_KEY: anterior };
+const modoHash = modoHashBusqueda();
 let recifradas = 0;
 for (const [tabla, def] of Object.entries(TABLAS)) {
   for (const columna of def.cifradas) {
@@ -32,9 +35,30 @@ for (const [tabla, def] of Object.entries(TABLAS)) {
       for (const fila of data) {
         const sobre = fila[`${columna}_cifrado`];
         let claro;
-        try { descifrar({ tabla, columna, clientId: fila.client_id, sobre }); continue; } catch { /* con la nueva no abre: toca */ }
-        try { claro = descifrar({ tabla, columna, clientId: fila.client_id, sobre, env: envVieja }); } catch { console.error(`No abre ni con la vieja: ${tabla} ${fila.id}`); process.exit(1); }
-        const { error: e } = await supabase.from(tabla).update({ [`${columna}_cifrado`]: cifrar({ tabla, columna, clientId: fila.client_id, valor: claro }) }).eq("id", fila.id);
+        let yaUsaLaNueva = false;
+        try {
+          claro = descifrar({ tabla, columna, clientId: fila.client_id, sobre });
+          yaUsaLaNueva = true;
+        } catch {
+          try { claro = descifrar({ tabla, columna, clientId: fila.client_id, sobre, env: envVieja }); } catch { console.error(`No abre ni con la vieja: ${tabla} ${fila.id}`); process.exit(1); }
+        }
+        const patch = {};
+        if (!yaUsaLaNueva) {
+          patch[`${columna}_cifrado`] = cifrar({ tabla, columna, clientId: fila.client_id, valor: claro });
+        }
+        /* Los HMAC también derivan de la maestra. Se regeneran aunque el
+           sobre ya use la clave nueva para reparar rotaciones interrumpidas. */
+        if (def.buscables.includes(columna)) {
+          patch[`${columna}_hash`] = modoHash === "empresa" ? null : hashDeBusqueda(columna, claro);
+          if (modoHash !== "global") {
+            patch[`${columna}_hash_empresa`] = hashDeBusquedaEmpresa(
+              columna, claro, fila.client_id,
+            );
+          }
+        }
+        if (Object.keys(patch).length === 0) continue;
+        const { error: e } = await supabase.from(tabla).update(patch)
+          .eq("id", fila.id).eq("client_id", fila.client_id);
         if (e) { console.error(e.message); process.exit(1); }
         recifradas += 1;
       }

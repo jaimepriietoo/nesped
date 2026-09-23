@@ -12,8 +12,8 @@ Hoy `leads.telefono`, `leads.email`, `leads.nombre`, `calls.transcript`,
 están en claro. Quien tenga un volcado de la base —copia robada, cuenta de
 Supabase comprometida, panel abierto— lo tiene todo.
 
-Objetivo: que un volcado sin la clave sea inútil, que cada empresa tenga su
-propia clave (borrar la empresa = borrar la clave) y que la app siga
+Objetivo: que un volcado sin la clave sea inútil, que cada empresa use material
+criptográfico separado y que la app siga
 buscando por teléfono y correo sin descifrar la tabla entera.
 
 No protege de: alguien con acceso al servidor en ejecución (Vercel con las
@@ -25,16 +25,21 @@ código).
 **Claves.** Una maestra `NESPED_DATA_ENCRYPTION_KEY` (32 bytes, en Vercel;
 después en KMS). Por empresa, `HKDF-SHA256(maestra, info = "nesped:datos:" +
 client_id)`. Nada se guarda en la base: la clave de empresa se deriva en cada
-petición. Rotar la maestra = recifrar todo por lotes (abajo).
+petición. Esto separa los cifrados, pero todavía no permite borrado
+criptográfico independiente: mientras exista la maestra se puede volver a
+derivar cualquier clave. Una DEK aleatoria y destruible por empresa queda
+como fase posterior. Rotar la maestra = recifrar todo por lotes (abajo).
 
 **Formato.** El mismo sobre que ya usa `lib/server/totp.js`:
 `v1.<iv>.<tag>.<cifrado>` con AES-256-GCM, y el `client_id` como AAD para que
 un valor cifrado de una empresa no se pueda pegar en otra.
 
 **Columnas.** Por cada columna sensible, una gemela `<columna>_cifrado text`
-y, para las que se buscan, `<columna>_hash text` = HMAC-SHA256(clave de
-empresa, valor normalizado). El teléfono se normaliza con `normalizePhone`
-antes de hashear; el correo, en minúsculas y sin espacios.
+y, para las que se buscan, `<columna>_hash_empresa text` =
+HMAC-SHA256(clave de búsqueda derivada con `client_id`, valor normalizado).
+Durante la transición se mantiene `<columna>_hash`, que era global, para que
+el rollback no deje filas sin encontrar. El teléfono se normaliza antes de
+hashear; el correo, en minúsculas y sin espacios.
 
 **Lectura y escritura.** Un módulo `lib/server/cifrado-datos.js` con
 `cifrar(clientId, valor)`, `descifrar(clientId, sobre)`, `hashBusqueda(...)`,
@@ -124,6 +129,23 @@ Lo que queda en claro a propósito: `leads.nombre` (búsqueda libre de
 contactos) y `calls.to_number` (es el número de la empresa, no del
 cliente). Las relaciones anidadas en un `select("*, calls(*)")` no se
 descifran: las rutas del portal no las usan con columnas cifradas.
+
+## Migración del hash de búsqueda
+
+La migración `20260922122509_hashes_busqueda_por_empresa.sql` añade las
+columnas e índices nuevos sin cambiar datos. `NESPED_HASH_BUSQUEDA` controla
+la convivencia:
+
+| Valor | Escritura | Consulta | Uso |
+| --- | --- | --- | --- |
+| `global` | hash antiguo | hash antiguo | rollback temporal |
+| `doble` (por defecto) | ambos hashes | cualquiera de los dos | despliegue y relleno |
+| `empresa` | sólo hash por empresa | sólo hash por empresa | estado final |
+
+El mantenimiento rellena `*_hash_empresa` descifrando el sobre, siempre con
+`client_id`, y en modo `empresa` limpia por lotes el valor del hash global.
+No se elimina la columna antigua: volver a `doble` permite reconstruirla si
+hace falta un rollback.
 
 Rollback en cualquier fase anterior a la 4: bajar la variable un escalón.
 En la 4 ya no hay claro que leer: el rollback es `cifrado`, que lee el

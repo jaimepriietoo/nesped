@@ -13,6 +13,17 @@ más ve.
   cadena entera, en Postgres) y recalcula en Node las últimas 200 filas. Si
   algo no cuadra, registra `auditoria.cadena_verificada` con nivel `error`,
   y eso dispara la alerta operativa.
+- Si está configurado el secreto exclusivo
+  `NESPED_AUDIT_CHECKPOINT_SECRET`, firma además el último par
+  `secuencia/hash` y lo escribe en el log estructurado del runtime, fuera de
+  Supabase y sin datos personales. El material firmado es
+  `v1|secuencia|hash|emitido_en`. Para que sea una prueba duradera, el log debe
+  drenarse a un destino append-only o con retención WORM/Object Lock que
+  rechace retrocesos de secuencia y cambios de hash para una secuencia ya
+  guardada. Un reintento con igual secuencia y hash sí debe ser idempotente.
+  El secreto debe contener al menos 32 bytes aleatorios, no puede reutilizar
+  ninguna otra credencial y puede cerrarse con
+  `npm run cerrar:sobre NESPED_AUDIT_CHECKPOINT_SECRET`.
 - **A mano**: `npm run verificar:auditoria`. Sale con 1 si está rota y dice
   en qué secuencia y por qué.
 
@@ -28,10 +39,10 @@ más ve.
 4. Volver a crear los triggers con la migración `20260920210000` (es
    idempotente) y volver a verificar.
 
-## Lo que falta
+## Límite que permanece
 
 Quien pueda quitar el trigger puede reescribir la cadena y recalcularla
-entera. Contra eso sólo vale sacar la cadena fuera: volcar cada día el tramo
-del día a un almacén que no admita reescrituras (S3 con object lock o
-similar). El código de exportación no está hecho todavía; necesita decidir
-proveedor y credenciales.
+entera. El checkpoint firmado permite detectarlo siempre que el registro se
+conserve fuera de Supabase y el secreto no se comprometa a la vez. El emisor
+ya está preparado, pero todavía hay que provisionar un Log Drain inmutable.
+Hasta que se configure el secreto, la comprobación informa `no_configurado`.

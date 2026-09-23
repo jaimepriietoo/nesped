@@ -3,7 +3,14 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 
-import { hashDeAuditoria, materialDeAuditoria, primeraRotura } from "../../lib/server/auditoria-cadena.js";
+import {
+  crearCheckpointAuditoria,
+  firmarCheckpointAuditoria,
+  hashDeAuditoria,
+  materialDeAuditoria,
+  primeraRotura,
+  verificarCadenaAuditoria,
+} from "../../lib/server/auditoria-cadena.js";
 
 const RAIZ = path.resolve(import.meta.dirname, "../..");
 
@@ -75,7 +82,83 @@ test("la migración protege la auditoría y el mantenimiento la verifica", () =>
   assert.match(sql, /app\.archivando_auditoria/);
   const mantenimiento = fs.readFileSync(path.join(RAIZ, "lib/server/mantenimiento.js"), "utf8");
   assert.match(mantenimiento, /verificarCadenaAuditoria\(\)/);
+  const verificador = fs.readFileSync(path.join(RAIZ, "scripts/verificar-auditoria.mjs"), "utf8");
+  assert.match(verificador, /abrirSobresDeEntorno\(\)/, "el verificador manual abre también secretos KMS");
   const modulo = fs.readFileSync(path.join(RAIZ, "lib/server/auditoria-cadena.js"), "utf8");
   assert.match(modulo, /getSupabaseAdministrativo/, "cruza empresas: pide el cliente administrativo por su nombre");
   assert.doesNotMatch(modulo, /getSupabase\(\)/);
+});
+
+test("el checkpoint firma sólo secuencia y hash, sin incluir su secreto", () => {
+  const env = { NESPED_AUDIT_CHECKPOINT_SECRET: "c".repeat(64) };
+  const datos = {
+    secuencia: 91,
+    hash: "a".repeat(64),
+    emitido_en: "2026-09-22T12:00:00.000Z",
+  };
+  const firma = firmarCheckpointAuditoria(datos, env);
+  assert.match(firma, /^[a-f0-9]{64}$/);
+  assert.notEqual(firma, firmarCheckpointAuditoria({ ...datos, secuencia: 92 }, env));
+
+  const checkpoint = crearCheckpointAuditoria(datos, { env, ahora: () => datos.emitido_en });
+  assert.equal(checkpoint.estado, "firmado");
+  assert.equal(checkpoint.firma, `v1=${firma}`);
+  assert.doesNotMatch(JSON.stringify(checkpoint), new RegExp(env.NESPED_AUDIT_CHECKPOINT_SECRET));
+  assert.deepEqual(Object.keys(checkpoint).sort(), [
+    "emitido_en", "estado", "firma", "hash", "secuencia", "version",
+  ]);
+});
+
+test("el checkpoint exige un secreto exclusivo y sin él no genera ningún ancla", () => {
+  assert.deepEqual(crearCheckpointAuditoria({ secuencia: 1, hash: "a".repeat(64) }, { env: {} }), {
+    estado: "no_configurado",
+  });
+  assert.throws(() => firmarCheckpointAuditoria({
+    secuencia: 1, hash: "a".repeat(64), emitido_en: "2026-09-22T12:00:00.000Z",
+  }, { NESPED_AUDIT_CHECKPOINT_SECRET: "corta" }), /32 bytes/);
+  const reutilizado = "r".repeat(64);
+  assert.throws(() => firmarCheckpointAuditoria({
+    secuencia: 1, hash: "a".repeat(64), emitido_en: "2026-09-22T12:00:00.000Z",
+  }, { NESPED_AUDIT_CHECKPOINT_SECRET: reutilizado, NESPED_SESSION_SECRET: reutilizado }), /exclusivo/);
+});
+
+test("la comprobación ancla sólo una cadena intacta y detecta errores de configuración", async () => {
+  const filas = cadena(3);
+  const supabase = {
+    async rpc(nombre) {
+      if (nombre === "verificar_cadena_auditoria") return { data: [], error: null };
+      return { data: filas.slice().reverse(), error: null };
+    },
+  };
+  let registrada;
+  const correcta = await verificarCadenaAuditoria({
+    supabase,
+    crearCheckpoint: (fila) => ({ estado: "firmado", secuencia: fila.secuencia }),
+    registrarCheckpoint: (checkpoint) => { registrada = checkpoint; },
+  });
+  assert.equal(correcta.operativa, true);
+  assert.equal(correcta.checkpoint, "firmado");
+  assert.equal(registrada.secuencia, 3);
+
+  const fallo = await verificarCadenaAuditoria({
+    supabase,
+    crearCheckpoint: () => { throw new Error("configuración inválida"); },
+  });
+  assert.equal(fallo.intacta, true, "un fallo de firma no inventa una rotura de la cadena");
+  assert.equal(fallo.operativa, false);
+  assert.equal(fallo.checkpoint, "error");
+
+  let intentos = 0;
+  const rota = cadena(3);
+  rota[1].hash = "b".repeat(64);
+  const resultadoRoto = await verificarCadenaAuditoria({
+    supabase: { async rpc(nombre) {
+      return nombre === "verificar_cadena_auditoria"
+        ? { data: [{ secuencia: 2, motivo: "hash inválido" }], error: null }
+        : { data: rota, error: null };
+    } },
+    crearCheckpoint: () => { intentos += 1; return { estado: "firmado" }; },
+  });
+  assert.equal(resultadoRoto.intacta, false);
+  assert.equal(intentos, 0, "una cadena rota nunca se ancla como válida");
 });

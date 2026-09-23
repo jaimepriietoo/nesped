@@ -13,10 +13,19 @@ for (const l of (() => { try { return fs.readFileSync(".env.local", "utf8").spli
   const m = l.match(/^([A-Z0-9_]+)=(.*)$/);
   if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].trim().replace(/^["']|["']$/g, "");
 }
+const { abrirSobresDeEntorno } = await import("@/lib/server/kms");
+await abrirSobresDeEntorno();
 const muestra = Number((process.argv.find((a) => a.startsWith("--muestra=")) || "").split("=")[1] || 500);
 const { verificarCadenaAuditoria } = await import("@/lib/server/auditoria-cadena");
 const resultado = await verificarCadenaAuditoria({ muestra });
 console.log(`Postgres (cadena entera): ${resultado.postgres}`);
 console.log(`Node (últimas ${resultado.filas} filas): ${resultado.node}`);
-console.log(resultado.intacta ? "La auditoría está intacta." : "LA AUDITORÍA ESTÁ ROTA.");
-process.exit(resultado.intacta ? 0 : 1);
+console.log(`Checkpoint firmado: ${resultado.checkpoint}`);
+console.log(
+  resultado.operativa
+    ? "La auditoría está intacta y su comprobación terminó correctamente."
+    : resultado.intacta
+      ? "La auditoría está intacta, pero no se pudo firmar su checkpoint."
+      : "LA AUDITORÍA ESTÁ ROTA.",
+);
+process.exit(resultado.operativa ? 0 : 1);

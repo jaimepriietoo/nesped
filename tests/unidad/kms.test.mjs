@@ -67,7 +67,7 @@ test("un sobre que no se abre tumba el arranque, no deja un secreto a medias", a
 });
 
 test("la lista de sobres cubre los secretos de proveedor y deja fuera lo que lee Edge", () => {
-  for (const nombre of ["SUPABASE_SERVICE_ROLE_KEY", "STRIPE_SECRET_KEY", "TWILIO_AUTH_TOKEN", "ELEVENLABS_API_KEY", "OPENAI_API_KEY", "RESEND_API_KEY", "SUPABASE_JWT_SECRET", "NESPED_TOTP_ENCRYPTION_KEY"]) {
+  for (const nombre of ["SUPABASE_SERVICE_ROLE_KEY", "STRIPE_SECRET_KEY", "TWILIO_AUTH_TOKEN", "ELEVENLABS_API_KEY", "OPENAI_API_KEY", "RESEND_API_KEY", "SUPABASE_JWT_SECRET", "NESPED_TOTP_ENCRYPTION_KEY", "NESPED_AUDIT_CHECKPOINT_SECRET"]) {
     assert.ok(SECRETOS_EN_SOBRE.includes(nombre), nombre);
   }
   assert.ok(!SECRETOS_EN_SOBRE.includes("NESPED_SESSION_SECRET"), "el proxy en Edge lo necesita en claro");

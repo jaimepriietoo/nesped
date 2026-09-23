@@ -575,6 +575,21 @@ test("el transporte SSRF de alertas sólo entra en el bundle Node", () => {
   assert.doesNotMatch(observabilidad.slice(0, observabilidad.indexOf(ramaNode)), /url-segura/);
 });
 
+test("la instrumentación Edge no importa APIs exclusivas del proceso Node", () => {
+  const raiz = path.resolve(import.meta.dirname, "../..");
+  const instrumentacion = fs.readFileSync(path.join(raiz, "instrumentation.js"), "utf8");
+  const observabilidad = fs.readFileSync(path.join(raiz, "lib/server/observability.mjs"), "utf8");
+  const observabilidadNode = fs.readFileSync(path.join(raiz, "lib/server/observability-node.mjs"), "utf8");
+
+  assert.doesNotMatch(observabilidad, /process\.on\(|process\.versions/);
+  assert.match(observabilidadNode, /process\.on\("unhandledRejection"/);
+  assert.match(observabilidadNode, /process\.on\("uncaughtException"/);
+  assert.match(
+    instrumentacion,
+    /if \(runtime === "nodejs"\) \{[\s\S]{0,240}import\([\s\S]{0,120}observability-node\.mjs/,
+  );
+});
+
 test("los secretos de proveedor sólo se aceptan en cabecera, nunca en la URL", () => {
   const anterior = process.env.ELEVENLABS_WEBHOOK_SECRET;
   process.env.ELEVENLABS_WEBHOOK_SECRET = "secreto-de-pruebas-suficientemente-largo";

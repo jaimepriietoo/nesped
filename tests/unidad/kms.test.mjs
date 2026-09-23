@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 
-import { abrirSobre, abrirSobresDeEntorno, cerrarSobre, esSobre, SECRETOS_EN_SOBRE, PARA_PRUEBAS } from "../../lib/server/kms.js";
+import { abrirSobre, abrirSobresDeEntorno, cerrarSobre, clienteKms, esSobre, SECRETOS_EN_SOBRE, PARA_PRUEBAS } from "../../lib/server/kms.js";
 
 const RAIZ = path.resolve(import.meta.dirname, "../..");
 
@@ -73,4 +73,27 @@ test("la lista de sobres cubre los secretos de proveedor y deja fuera lo que lee
   assert.ok(!SECRETOS_EN_SOBRE.includes("NESPED_SESSION_SECRET"), "el proxy en Edge lo necesita en claro");
   const inst = fs.readFileSync(path.join(RAIZ, "instrumentation.js"), "utf8");
   assert.match(inst, /if \(runtime !== "edge"\) \{[\s\S]{0,400}abrirSobresDeEntorno\(\)/);
+});
+
+test("KMS usa la cadena estándar de credenciales y no exige claves IAM estáticas", () => {
+  PARA_PRUEBAS.reiniciarCliente();
+  let configuracion;
+  const falso = { send() {} };
+  const cliente = clienteKms(
+    { AWS_REGION: "eu-west-1", AWS_WEB_IDENTITY_TOKEN_FILE: "/token-temporal" },
+    { crearCliente(config) { configuracion = config; return falso; } },
+  );
+  assert.equal(cliente, falso);
+  assert.deepEqual(configuracion, { region: "eu-west-1" });
+  assert.ok(!Object.hasOwn(configuracion, "credentials"));
+  PARA_PRUEBAS.reiniciarCliente();
+});
+
+test("KMS sólo exige la región antes de resolver credenciales en el runtime", () => {
+  PARA_PRUEBAS.reiniciarCliente();
+  assert.throws(
+    () => clienteKms({}, { crearCliente() { throw new Error("no debería construir"); } }),
+    /Falta AWS_REGION/,
+  );
+  PARA_PRUEBAS.reiniciarCliente();
 });

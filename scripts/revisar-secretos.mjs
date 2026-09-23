@@ -23,11 +23,22 @@ const VARIABLES_SENSIBLES = [
   ["STRIPE", "WEBHOOK", "SECRET"],
   ["STRIPE", "SUBSCRIPTION", "WEBHOOK", "SECRET"],
   ["SUPABASE", "SERVICE", "ROLE", "KEY"],
+  ["SUPABASE", "JWT", "SECRET"],
   ["TWILIO", "AUTH", "TOKEN"],
   ["RESEND", "API", "KEY"],
   ["NESPED", "SESSION", "SECRET"],
+  ["NESPED", "TOTP", "ENCRYPTION", "KEY"],
+  ["NESPED", "DATA", "ENCRYPTION", "KEY"],
+  ["NESPED", "DATA", "ENCRYPTION", "KEY", "ANTERIOR"],
+  ["NESPED", "AUDIT", "CHECKPOINT", "SECRET"],
   ["INTERNAL", "API", "TOKEN"],
+  ["CRON", "SECRET"],
+  ["ELEVENLABS", "WEBHOOK", "SECRET"],
   ["SENTRY", "AUTH", "TOKEN"],
+  ["VERCEL", "TOKEN"],
+  ["UPSTASH", "REDIS", "REST", "TOKEN"],
+  ["AWS", "SECRET", "ACCESS", "KEY"],
+  ["AWS", "SESSION", "TOKEN"],
   ["HUBSPOT", "TOKEN"],
 ].map((partes) => partes.join("_"));
 
@@ -41,6 +52,12 @@ function pareceValorReal(valor) {
   const candidato = valor.trim();
   const entreComillas = /^(?:"[^"]*"|'[^']*'|`[^`]*`)/.exec(candidato)?.[0];
   const primero = entreComillas || candidato.split(/[\s,;}#]/, 1)[0];
+  /* Una referencia o una llamada produce el secreto al ejecutar el programa,
+     pero no lo contiene en el código. Tratar `env.CLAVE` o `Buffer.alloc()`
+     como credenciales daba falsos positivos y bloqueaba el historial de los
+     propios tests. Los literales, con o sin comillas, se siguen revisando. */
+  if (!entreComillas && /^(?:[A-Za-z_$][\w$]*\.)+[A-Za-z_$][\w$]*$/.test(primero)) return false;
+  if (!entreComillas && /[()[\]]/.test(primero)) return false;
   const limpio = primero.replace(/^["'`]|["'`]$/g, "");
   if (limpio.length < 12) return false;
   if (limpio.includes("${") || limpio.includes("process.env") || limpio.startsWith("$")) return false;

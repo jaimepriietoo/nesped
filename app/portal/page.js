@@ -2083,7 +2083,7 @@ function SesionesActivas() {
 function Passkeys() {
   const [estado, setEstado] = useState(null);
   const [nombre, setNombre] = useState("");
-  const [codigo, setCodigo] = useState("");
+  const [comprobacion, setComprobacion] = useState("");
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState("");
 
@@ -2110,10 +2110,12 @@ function Passkeys() {
     setOcupado(true);
     setError("");
     try {
-      const { opciones } = await pedir({ action: "start" });
+      const campo = estado?.verificacion === "codigo" ? "code" : "password";
+      const { opciones } = await pedir({ action: "start", [campo]: comprobacion });
       const response = await startRegistration({ optionsJSON: opciones });
       await pedir({ action: "finish", response, nombre });
       setNombre("");
+      setComprobacion("");
       await cargar();
     } catch (e) {
       setError(e?.name === "NotAllowedError" ? "Se ha cancelado." : (e?.message || "No se pudo añadir la passkey"));
@@ -2126,8 +2128,9 @@ function Passkeys() {
     setOcupado(true);
     setError("");
     try {
-      await pedir({ action: "delete", id, ...(codigo ? { code: codigo } : {}) });
-      setCodigo("");
+      const campo = estado?.verificacion === "codigo" ? "code" : "password";
+      await pedir({ action: "delete", id, [campo]: comprobacion });
+      setComprobacion("");
       await cargar();
     } catch (e) {
       setError(e?.message || "No se pudo quitar la passkey");
@@ -2163,11 +2166,20 @@ function Passkeys() {
       ))}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
         <input className="pv3-input" placeholder="Nombre (p. ej. iPhone de Jaime)" value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={80} style={{ flex: 1, minWidth: 200 }} />
-        <Accion onRun={anadir} disabled={ocupado}>Añadir passkey</Accion>
+        <Accion onRun={anadir} disabled={ocupado || !estado}>Añadir passkey</Accion>
       </div>
-      {lista.length ? (
-        <input className="pv3-input" placeholder="Código TOTP o de recuperación (sólo para quitar, si tienes TOTP)" value={codigo} onChange={(e) => setCodigo(e.target.value)} maxLength={16} style={{ marginTop: 8, width: "100%" }} />
-      ) : null}
+      <input
+        className="pv3-input"
+        type="password"
+        autoComplete={estado?.verificacion === "codigo" ? "one-time-code" : "current-password"}
+        placeholder={estado?.verificacion === "codigo"
+          ? "Código TOTP o de recuperación para añadir o quitar"
+          : "Contraseña actual para añadir o quitar"}
+        value={comprobacion}
+        onChange={(e) => setComprobacion(e.target.value)}
+        maxLength={estado?.verificacion === "codigo" ? 16 : 200}
+        style={{ marginTop: 8, width: "100%" }}
+      />
       {error ? (
         <p className="pv3-p" style={{ marginTop: 10, fontSize: 13, color: "var(--bad)" }}>{error}</p>
       ) : null}

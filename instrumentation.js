@@ -1,13 +1,14 @@
 export async function register() {
   const runtime = process.env.NEXT_RUNTIME || "nodejs";
   const { ensureServerSentry } = await import("@/lib/server/sentry.mjs");
-  const { logEvent, registerProcessHandlers } = await import(
-    "@/lib/server/observability.mjs"
-  );
+  const { logEvent } = await import("@/lib/server/observability.mjs");
 
   await ensureServerSentry(runtime);
 
-  if (runtime !== "edge") {
+  if (runtime === "nodejs") {
+    const { registerProcessHandlers } = await import(
+      "@/lib/server/observability-node.mjs"
+    );
     registerProcessHandlers("next-app");
     /* Los secretos que van en sobre KMS se abren aquí, antes de atender la
        primera petición. Si falla, la app no arranca: mejor caída que un

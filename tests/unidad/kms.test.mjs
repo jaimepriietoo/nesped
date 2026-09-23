@@ -72,7 +72,7 @@ test("la lista de sobres cubre los secretos de proveedor y deja fuera lo que lee
   }
   assert.ok(!SECRETOS_EN_SOBRE.includes("NESPED_SESSION_SECRET"), "el proxy en Edge lo necesita en claro");
   const inst = fs.readFileSync(path.join(RAIZ, "instrumentation.js"), "utf8");
-  assert.match(inst, /if \(runtime !== "edge"\) \{[\s\S]{0,400}abrirSobresDeEntorno\(\)/);
+  assert.match(inst, /if \(runtime === "nodejs"\) \{[\s\S]{0,500}abrirSobresDeEntorno\(\)/);
 });
 
 test("KMS usa la cadena estándar de credenciales y no exige claves IAM estáticas", () => {

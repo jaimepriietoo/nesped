@@ -3,9 +3,8 @@
 Desde el 21-09-2026 los secretos del servidor pueden ir en Vercel **cerrados
 en un sobre** (`kms:v1:…`) que sólo abre AWS KMS con la clave
 `nesped-secretos` (región `eu-west-1`). Quien copie las variables de Vercel
-se lleva sobres; para abrirlos hace falta el usuario IAM `nesped-vercel`,
-que sólo puede `Encrypt`/`Decrypt` sobre esa clave, se revoca en un click y
-deja rastro en CloudTrail.
+se lleva sobres; para abrirlos hace falta una identidad AWS autorizada que
+sólo pueda `Encrypt`/`Decrypt` sobre esa clave y deje rastro en CloudTrail.
 
 ## Cómo funciona
 
@@ -26,9 +25,10 @@ deja rastro en CloudTrail.
 npm run cerrar:sobre NOMBRE_DE_LA_VARIABLE
 ```
 
-Pide el valor por teclado, lo cierra, comprueba que se abre y escribe el
-sobre. Se pega en Vercel en la variable del mismo nombre (Production y
-Preview) y se redespliega. Para volver atrás: poner el valor en claro.
+Pide el valor por teclado sin mostrarlo, lo cierra, comprueba que se abre y
+escribe el sobre. Se pega en Vercel en la variable del mismo nombre
+(Production y Preview) y se redespliega. Para volver atrás: poner el valor en
+claro.
 
 Orden recomendado: `SUPABASE_JWT_SECRET` y `NESPED_TOTP_ENCRYPTION_KEY`
 primero (son las que fabrican accesos), luego `SUPABASE_SERVICE_ROLE_KEY`,
@@ -37,8 +37,12 @@ primero (son las que fabrican accesos), luego `SUPABASE_SERVICE_ROLE_KEY`,
 
 ## Variables necesarias
 
-`AWS_REGION=eu-west-1`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
-`NESPED_KMS_KEY_ID` (el ARN de la clave). En Production **y** Preview.
+`AWS_REGION=eu-west-1` y `NESPED_KMS_KEY_ID` (el ARN de la clave). En
+Production **y** Preview. La identidad se resuelve con la cadena estándar del
+SDK de AWS: usa preferentemente credenciales temporales del runtime o web
+identity. `AWS_ACCESS_KEY_ID` y `AWS_SECRET_ACCESS_KEY` sólo deben mantenerse
+como transición si la plataforma todavía no ofrece identidad temporal; no
+son un requisito de la aplicación.
 
 ## Coste
 

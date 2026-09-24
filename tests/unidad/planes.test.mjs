@@ -2,14 +2,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   ORDEN_PLANES, PLANES, funcionesDe, planDe, planQueIncluye, planSiguiente,
-  tieneFuncion, VALOR_BLOQUEADO, FUNCIONES,
+  tieneFuncion, VALOR_BLOQUEADO, FUNCIONES, planGuardado,
 } from "../../lib/planes.js";
 
 /**
- * Lo que protege esto: si Growth pudiera usar Intelligence, el plan de 999 €
- * deja de existir y nadie se entera hasta que mira la facturación. Y al revés,
- * si Enterprise se encontrara un candado, un cliente de 1.999 € descubre que
- * le falta lo que ha pagado.
+ * La definición de los planes se conserva (herencia, textos, orden) por si
+ * vuelven, pero el acceso ya no depende de ellos.
  */
 
 test("cada plan hereda entero el anterior: al subir no se pierde nada", () => {
@@ -21,44 +19,26 @@ test("cada plan hereda entero el anterior: al subir no se pierde nada", () => {
   for (const f of intelligence) assert.ok(enterprise.includes(f), `Enterprise pierde ${f}`);
 });
 
-test("Growth organiza, pero no entiende ni actúa", () => {
-  assert.ok(tieneFuncion("growth", "crm"));
-  assert.ok(tieneFuncion("growth", "llamadas"));
-  assert.ok(!tieneFuncion("growth", "inteligencia"));
-  assert.ok(!tieneFuncion("growth", "agentes"));
-  assert.ok(!tieneFuncion("growth", "copiloto"));
-});
-
-test("Intelligence entiende, pero no actúa", () => {
-  assert.ok(tieneFuncion("intelligence", "inteligencia"));
-  assert.ok(tieneFuncion("intelligence", "fugaIngresos"));
-  assert.ok(!tieneFuncion("intelligence", "agentes"));
-  assert.ok(!tieneFuncion("intelligence", "copiloto"));
-});
-
-test("Enterprise lo tiene todo", () => {
-  const todas = Object.keys(FUNCIONES);
-  for (const f of todas) {
-    assert.ok(tieneFuncion("enterprise", f), `Enterprise debería incluir ${f}`);
-  }
-});
-
 /**
- * Las cuentas existentes tienen "starter" o "pro" escrito en su fila. Migrar
- * esos valores a mano y confiar en que no queda ninguno es lo que falla seis
- * meses después con un cliente delante.
+ * Desde el 24-09-2026 no hay planes a la venta: cualquier cliente, tenga lo
+ * que tenga guardado en su fila, tiene todas las funciones.
  */
-test("los nombres antiguos siguen resolviendo", () => {
-  assert.equal(planDe({ plan: "starter" }), "growth");
-  assert.equal(planDe({ plan: "basic" }), "growth");
-  assert.equal(planDe({ plan: "pro" }), "intelligence");
-  assert.equal(planDe({ plan: "premium" }), "intelligence");
+test("cualquier cliente tiene todas las funciones", () => {
+  const todas = Object.keys(FUNCIONES);
+  for (const valor of [null, undefined, "", "growth", "starter", "pro", "intelligence", "enterprise", "inventado"]) {
+    const plan = planDe({ plan: valor });
+    for (const f of todas) {
+      assert.ok(tieneFuncion(plan, f), `${valor} debería incluir ${f}`);
+      assert.ok(tieneFuncion(valor, f), `${valor} (directo) debería incluir ${f}`);
+    }
+  }
 });
 
-test("un plan desconocido o vacío cae en el más bajo, nunca en el más alto", () => {
-  for (const valor of [null, undefined, "", "inventado", "ENTERPRISE_FALSO"]) {
-    assert.equal(planDe({ plan: valor }), "growth", `${valor} debería caer en growth`);
-  }
+test("lo guardado en la base se sigue pudiendo leer, sólo como dato", () => {
+  assert.equal(planGuardado({ plan: "starter" }), "growth");
+  assert.equal(planGuardado({ plan: "pro" }), "intelligence");
+  assert.equal(planGuardado({ plan: "enterprise" }), "enterprise");
+  assert.equal(planGuardado({ plan: "" }), "growth");
 });
 
 test("planQueIncluye señala el plan más barato que da cada función", () => {

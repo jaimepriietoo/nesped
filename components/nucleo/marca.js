@@ -53,7 +53,9 @@ export function NucleoMarca({ estado = "IDLE", tam = 40, etiqueta }) {
     const d = direccionInicial();
     // Un poco más cerca: en un disco de cuarenta píxeles el encuadre de la
     // portada deja el objeto en la mitad del hueco.
-    d.cam[2] = 2.95;
+    /* Sin llegar a pegarlo al borde: la cámara deriva sola y, tan cerca,
+       una de las tres hojas se salía del disco por abajo a la izquierda. */
+    d.cam[2] = 3.3;
     d.fov = 0.62;
     // Sin fondo: el lienzo va con alfa y cualquier valor se vería como disco.
     d.fondo = 0;

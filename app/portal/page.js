@@ -120,10 +120,9 @@ const FRASE_ESTADO = {
   SPEAKING: "Atendiendo una llamada ahora mismo.",
 };
 
+/* Sin planes de pago: el acceso ya no depende de ninguna suscripción. */
 function suscripcionAlCorriente(cliente) {
-  const estado = String(cliente?.billing_status || "").toLowerCase().trim();
-  if (!estado) return true;
-  return !ESTADOS_SIN_ACCESO.has(estado);
+  return true;
 }
 
 function vistaIncluida(idVista, plan) {
@@ -2371,35 +2370,19 @@ function Ajustes({ datos, onRecargar }) {
         </div>
 
         <div className="pv3-card">
-          <div className="pv3-lab">SUSCRIPCIÓN</div>
+          <div className="pv3-lab">TU ACCESO</div>
           <div style={{ marginTop: 14, display: "grid", gap: 11 }}>
             <div className="pv3-row">
-              <span className="pv3-small">Plan</span>
-              <span className="pv3-strong" style={{ fontSize: 13 }}>
-                {PLANES[planDe(c)]?.nombre || "—"}
-              </span>
-            </div>
-            <div className="pv3-row">
-              <span className="pv3-small">Estado</span>
-              <span className="pv3-strong" style={{ fontSize: 13, color: colorCobro }}>{textoCobro}</span>
+              <span className="pv3-small">Funciones</span>
+              <span className="pv3-strong" style={{ fontSize: 13 }}>Todas incluidas</span>
             </div>
           </div>
           <ConsumoDelMes consumo={datos?.consumo} />
 
           <p className="pv3-p" style={{ marginTop: 14, fontSize: 13, color: "var(--muted)" }}>
-            Desde facturación puedes cambiar la tarjeta, descargarte las facturas
-            o darte de baja. Sin permanencia.
+            ¿Quieres más información o necesitas algo? Escríbenos a{" "}
+            <a href="mailto:hola@nesped.com">hola@nesped.com</a> y te respondemos enseguida.
           </p>
-          <button
-            type="button"
-            className="pv3-btn"
-            data-v="light"
-            style={{ marginTop: 12 }}
-            onClick={abrirFacturacion}
-            disabled={ocupado}
-          >
-            {ocupado ? "Abriendo…" : "Facturación y facturas"}
-          </button>
         </div>
 
         <div className="pv3-card">
@@ -2953,7 +2936,7 @@ function FueraDePlan({ vista, plan, onSubir, ocupado }) {
               {ocupado ? "Abriendo…" : `Pasar a ${planDestino?.nombre}`}
             </button>
           )}
-          <a className="pv3-btn" href="/pricing">Ver los planes</a>
+          <a className="pv3-btn" href="mailto:hola@nesped.com">Escríbenos</a>
         </div>
       </div>
     </div>
@@ -3307,7 +3290,6 @@ export default function PortalV3() {
             <span>
               <b>{marca}</b>
               <small>PORTAL</small>
-              {datos ? <span className="pv3-plan">PLAN {PLANES[plan]?.nombre?.toUpperCase() || plan.toUpperCase()}</span> : null}
             </span>
           </div>
 

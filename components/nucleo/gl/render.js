@@ -171,10 +171,18 @@ export class NucleoRender {
     if (!gl) return;
     const cfg = CALIDAD[this.nivel];
     const caja = this.lienzo.getBoundingClientRect();
-    const dpr = Math.min(window.devicePixelRatio || 1, cfg.dprMax);
-
     const wCss = Math.max(1, Math.round(caja.width));
     const hCss = Math.max(1, Math.round(caja.height));
+
+    /* El tope de densidad existe para el lienzo de pantalla completa de la
+       portada. En un núcleo pequeño (la marca del portal, la entrada) pintar
+       a la densidad real de la pantalla cuesta unos pocos miles de píxeles y
+       es lo que separa un objeto nítido de uno borroso en una retina. */
+    const pequeno = wCss * hCss <= 360 * 360;
+    const dprReal = window.devicePixelRatio || 1;
+    const dpr = pequeno ? Math.min(dprReal, 3) : Math.min(dprReal, cfg.dprMax);
+    const escala = pequeno ? 1 : cfg.escala;
+
     this.lienzo.width = Math.max(1, Math.round(wCss * dpr));
     this.lienzo.height = Math.max(1, Math.round(hCss * dpr));
 
@@ -182,8 +190,8 @@ export class NucleoRender {
        objeto es oscuro y suave: a 0,85 no se distingue del 1,0 y se pintan
        casi la mitad de píxeles. En un raymarch eso no es una micro-optimización,
        es la diferencia entre 60 y 35 fps en un portátil. */
-    const w = Math.max(2, Math.round(this.lienzo.width * cfg.escala));
-    const h = Math.max(2, Math.round(this.lienzo.height * cfg.escala));
+    const w = Math.max(2, Math.round(this.lienzo.width * escala));
+    const h = Math.max(2, Math.round(this.lienzo.height * escala));
 
     const rehacer = !this.destinos.escena ||
       this.destinos.escena.ancho !== w || this.destinos.escena.alto !== h;

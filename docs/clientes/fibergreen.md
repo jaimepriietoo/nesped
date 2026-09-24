@@ -27,9 +27,11 @@ caracteres). **Cuando Fibergreen cambie la web, hay que actualizar esto.**
   existen (confirmado por la empresa el 24-09-2026), aunque la web aún
   conserve restos ocultos. La asistente tiene dicho que no hay promociones y
   que el Fiber SMART PRO cuesta 20,99 €, nunca 21,99.
-- Ojo: el 24-09-2026 la web se contradice en varios precios (tarjetas
-  "25,99 €/mes" frente a tablas "25 €" en Fiber Max, Wimax y solo fibra).
-  Mientras la empresa no confirme cuáles valen, se mantienen los de la tabla.
+- Revisado a la vista, como lo ve un cliente, el 24-09-2026: SMART 19,99 /
+  20,99; Fiber Max Lite 25 y Pro 27; Solo fibra 27,99 / 29,99; Wimax 25 / 30;
+  líneas 6,99 / 7,99 / 9,99; TV 5 €; alarmas 25 / 35 (35 / 43 no clientes).
+  Los importes con ",99" de Fiber Max que aparecen en el código de la web
+  son tarjetas ocultas: no los ve nadie y no se usan.
 
 ## Tarifas (€/mes, IVA incluido, tal como aparecen)
 **Fibra + móvil SMART** (zonas con red propia; incluye fijo flexible "paga por lo que llamas")

@@ -58,7 +58,7 @@ async function manejarGET() {
 
     const errors = [clientRes.error, settingsRes.error, leadsRes.error, usersRes.error].filter(Boolean);
     if (errors.length > 0) {
-      throw new Error(errors[0].message || "No se pudo cargar Revenue OS");
+      throw new Error(errors[0].message || "No se pudo cargar Centro de ingresos");
     }
 
     const leads = leadsRes.data || [];
@@ -86,7 +86,7 @@ async function manejarGET() {
     return Response.json(
       {
         success: false,
-        message: "No se pudo cargar Revenue OS",
+        message: "No se pudo cargar Centro de ingresos",
       },
       { status: 500 }
     );

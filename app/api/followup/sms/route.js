@@ -61,7 +61,7 @@ async function manejarPOST(req) {
 
     if (leadError || !lead) {
       return Response.json(
-        { success: false, message: "Lead no encontrado" },
+        { success: false, message: "Contacto no encontrado" },
         { status: 404 }
       );
     }
@@ -94,7 +94,7 @@ async function manejarPOST(req) {
         proxima_accion:
           lead.status === "qualified" || Number(lead.score || 0) >= 80
             ? "Esperar respuesta del SMS y hacer seguimiento si no responde"
-            : lead.proxima_accion || "Revisar respuesta del lead",
+            : lead.proxima_accion || "Revisar respuesta del contacto",
       })
       .eq("id", leadId)
       .eq("client_id", ctx.clientId)

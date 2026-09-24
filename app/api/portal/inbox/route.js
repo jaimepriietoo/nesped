@@ -37,7 +37,7 @@ async function manejarGET() {
     ].filter(Boolean);
 
     if (baseErrors.length > 0) {
-      throw new Error(baseErrors[0].message || "No se pudo cargar el inbox");
+      throw new Error(baseErrors[0].message || "No se pudo cargar la bandeja de entrada");
     }
 
     const leads = leadsRes.data || [];
@@ -101,7 +101,7 @@ async function manejarGET() {
     return Response.json(
       {
         success: false,
-        message: "No se pudo cargar el inbox",
+        message: "No se pudo cargar la bandeja de entrada",
       },
       { status: 500 }
     );

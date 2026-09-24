@@ -721,8 +721,8 @@ export function Automatismos({ canalEnPlan = true }) {
 
       {!canalEnPlan && (
         <section className="ia-seccion">
-          <div className="ia-seccion-cab"><span className="ia-num">{String(grupos.length + 1).padStart(2, "0")}</span><div><h2 className="ia-titulo">Agentes de canal</h2><p className="ia-sub">Los que llaman o escriben a los contactos por su cuenta —rescate, reactivación, seguimiento, citas— entran en Enterprise. Enterprise se ajusta a cada caso, así que se habla antes.</p></div></div>
-          <a className="pv3-btn" data-v="light" href={`mailto:ventas@nesped.com?subject=${encodeURIComponent("Nesped Enterprise")}`}>Hablar con nosotros</a>
+          <div className="ia-seccion-cab"><span className="ia-num">{String(grupos.length + 1).padStart(2, "0")}</span><div><h2 className="ia-titulo">Agentes de canal</h2><p className="ia-sub">Los que llaman o escriben a los contactos por su cuenta —rescate, reactivación, seguimiento, citas— entran en el plan Empresa, que se ajusta a cada caso, así que se habla antes.</p></div></div>
+          <a className="pv3-btn" data-v="light" href={`mailto:ventas@nesped.com?subject=${encodeURIComponent("Nesped Empresa")}`}>Hablar con nosotros</a>
         </section>
       )}
 

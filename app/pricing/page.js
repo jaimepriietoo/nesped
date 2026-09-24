@@ -11,7 +11,7 @@ const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600"], display
 export const metadata = {
   title: "Planes · Nesped",
   description:
-    "Growth, Intelligence y Enterprise. La diferencia no es cuántas funciones marca cada uno, es hasta dónde llega Nesped.",
+    "Crecimiento, Inteligencia y Empresa. La diferencia no es cuántas funciones marca cada uno, es hasta dónde llega Nesped.",
 };
 
 /*
@@ -121,7 +121,7 @@ export default async function Pricing() {
                     className={`v3-btn ${def.recomendado ? "v3-btn--white" : "v3-btn--dark"}`}
                     href={
                       porVentas
-                        ? `mailto:ventas@nesped.com?subject=${encodeURIComponent("Nesped Enterprise")}`
+                        ? `mailto:ventas@nesped.com?subject=${encodeURIComponent("Nesped Empresa")}`
                         : `/registro?plan=${id}`
                     }
                   >

@@ -54,7 +54,7 @@ export default function AdminOverview() {
   }, [cargar]);
 
   if (!metrics && cargando) {
-    return <div className="min-h-screen bg-black p-8 text-white">Cargando admin...</div>;
+    return <div className="min-h-screen bg-black p-8 text-white">Cargando administración...</div>;
   }
 
   if (error && !metrics) {
@@ -69,7 +69,7 @@ export default function AdminOverview() {
   return (
     <div className="min-h-screen bg-black p-8 text-white">
       <div className="mb-8">
-        <div className="text-sm uppercase tracking-[0.2em] text-blue-300">Admin SaaS</div>
+        <div className="text-sm uppercase tracking-[0.2em] text-blue-300">Administración de la plataforma</div>
         <h1 className="mt-2 text-4xl font-semibold">Control multi-cliente</h1>
       </div>
 

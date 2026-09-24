@@ -167,7 +167,7 @@ async function manejarPOST(req) {
     logErrorSeguro("automation.reactivation_failed", err);
     return NextResponse.json({
       success: false,
-      message: "Error reactivando leads fríos",
+      message: "Error reactivando contactos fríos",
     });
   }
 }

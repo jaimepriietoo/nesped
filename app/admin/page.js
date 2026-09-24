@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { ESTADO_LLAMADA, etiqueta } from "@/lib/etiquetas";
 
 const emptyClientForm = {
   id: "",
@@ -319,7 +320,7 @@ export default function AdminPage() {
   const callStatusData = useMemo(() => {
     const groups = {};
     for (const call of calls) {
-      const key = call.status || "unknown";
+      const key = etiqueta(ESTADO_LLAMADA, call.status || "unknown");
       groups[key] = (groups[key] || 0) + 1;
     }
     return Object.entries(groups).map(([label, value]) => ({ label, value }));
@@ -331,7 +332,7 @@ export default function AdminPage() {
         <div className="mb-8 flex items-center justify-between gap-4">
           <div>
             <div className="text-sm text-white/45">Panel interno</div>
-            <h1 className="mt-1 text-4xl font-semibold">NESPED Admin</h1>
+            <h1 className="mt-1 text-4xl font-semibold">NESPED · Administración</h1>
             <div className="mt-2 text-sm text-white/55">
               Gestiona clientes, prompts, usuarios y llamadas
             </div>
@@ -723,7 +724,7 @@ export default function AdminPage() {
                       className="grid grid-cols-7 items-center border-t border-white/10 px-5 py-4 text-sm"
                     >
                       <div className="font-medium">{call.client_id || "-"}</div>
-                      <div className="text-white/70">{call.status || "-"}</div>
+                      <div className="text-white/70">{etiqueta(ESTADO_LLAMADA, call.status)}</div>
                       <div className="text-white/70">
                         {call.lead_captured ? "Sí" : "No"}
                       </div>

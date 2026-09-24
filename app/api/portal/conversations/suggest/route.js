@@ -147,7 +147,7 @@ async function manejarPOST(req) {
     }
 
     if (leadError || !lead) {
-      throw new Error(leadError?.message || "No se pudo cargar el lead");
+      throw new Error(leadError?.message || "No se pudo cargar el contacto");
     }
 
     const memory = await memoriaDeLead(leadId);

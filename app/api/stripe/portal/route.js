@@ -32,7 +32,7 @@ async function manejarPOST(req) {
 
     if (!puede(ctx.role, "billing.manage", ctx.permissions)) {
       return NextResponse.json(
-        { success: false, message: "Sin permisos para abrir billing" },
+        { success: false, message: "Sin permisos para abrir la facturación" },
         { status: 403 }
       );
     }

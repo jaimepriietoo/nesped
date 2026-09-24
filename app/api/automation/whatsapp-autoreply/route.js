@@ -46,7 +46,7 @@ async function manejarPOST(req) {
 
     if (error || !lead?.telefono) {
       return NextResponse.json(
-        { success: false, message: "Lead sin teléfono" },
+        { success: false, message: "Contacto sin teléfono" },
         { status: 404 }
       );
     }

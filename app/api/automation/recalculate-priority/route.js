@@ -28,14 +28,14 @@ function calculatePriorityForLead(lead, events = [], memory = null) {
   if (status === "won") {
     return {
       priority_bucket: "baja",
-      priority_reason: "Lead ganado, prioridad comercial cerrada",
+      priority_reason: "Contacto ganado, prioridad comercial cerrada",
     };
   }
 
   if (status === "lost") {
     return {
       priority_bucket: "baja",
-      priority_reason: "Lead perdido, no requiere atención inmediata",
+      priority_reason: "Contacto perdido, no requiere atención inmediata",
     };
   }
 
@@ -50,7 +50,7 @@ function calculatePriorityForLead(lead, events = [], memory = null) {
   ) {
     return {
       priority_bucket: "urgente",
-      priority_reason: "Lead listo para cierre con alta probabilidad",
+      priority_reason: "Contacto listo para cierre con alta probabilidad",
     };
   }
 
@@ -63,7 +63,7 @@ function calculatePriorityForLead(lead, events = [], memory = null) {
   ) {
     return {
       priority_bucket: "alta",
-      priority_reason: "Lead valioso o cerca de conversión",
+      priority_reason: "Contacto valioso o cerca de conversión",
     };
   }
 
@@ -75,13 +75,13 @@ function calculatePriorityForLead(lead, events = [], memory = null) {
   ) {
     return {
       priority_bucket: "media",
-      priority_reason: "Lead activo que necesita seguimiento",
+      priority_reason: "Contacto activo que necesita seguimiento",
     };
   }
 
   return {
     priority_bucket: "baja",
-    priority_reason: "Lead frío o todavía poco cualificado",
+    priority_reason: "Contacto frío o todavía poco cualificado",
   };
 }
 

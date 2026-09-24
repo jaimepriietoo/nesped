@@ -312,8 +312,8 @@ test("Growth no entra en Intelligence ni en Enterprise", async ({ context, page,
   await expect(page.getByRole("heading", { name: "Resumen" })).toBeVisible();
 
   await page.getByRole("button", { name: /Inteligencia/ }).click();
-  await expect(page.getByText(/TU PLAN ES GROWTH/i)).toBeVisible();
-  await expect(page.getByRole("button", { name: /Pasar a Intelligence/i })).toBeVisible();
+  await expect(page.getByText(/TU PLAN ES CRECIMIENTO/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: /Pasar a Inteligencia/i })).toBeVisible();
 
   // Los automatismos entran en todos los planes; lo que queda en Enterprise
   // son los agentes de canal, y el candado está dentro de esa pantalla.

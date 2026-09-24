@@ -70,7 +70,7 @@ const COMO_FUNCIONA = [
   {
     n: "03",
     t: "Averigua y apunta",
-    d: "Pregunta lo que hace falta, de uno en uno, y confirma el teléfono repitiéndolo. Al colgar el lead ya está en tu panel con lo que necesita y su valor estimado.",
+    d: "Pregunta lo que hace falta, de uno en uno, y confirma el teléfono repitiéndolo. Al colgar el contacto ya está en tu panel con lo que necesita y su valor estimado.",
   },
   {
     n: "04",
@@ -110,7 +110,7 @@ const PREGUNTAS = [
   },
   {
     q: "¿Y si quiero dejarlo?",
-    a: "No hay permanencia. Cancelas desde el portal, quitas el desvío y tu número vuelve a sonar donde sonaba. Los leads que ya tienes te los llevas en CSV.",
+    a: "No hay permanencia. Cancelas desde el portal, quitas el desvío y tu número vuelve a sonar donde sonaba. Los contactos que ya tienes te los llevas en CSV.",
   },
 ];
 
@@ -132,7 +132,7 @@ const LLEVA = [
   {
     meta: "Conversación",
     t: "Voz con memoria comercial",
-    d: "La llamada no se queda en un audio sin contexto. Sale de ahí un lead con su resumen, su valor estimado y el siguiente paso escrito.",
+    d: "La llamada no se queda en un audio sin contexto. Sale de ahí un contacto con su resumen, su valor estimado y el siguiente paso escrito.",
   },
   {
     meta: "Visibilidad",
@@ -170,7 +170,7 @@ const PLANES_WEB = [
     verbo: "Entiende",
     sub: "Nesped mira tus datos y te dice dónde está el dinero y qué exige atención hoy.",
     feats: [
-      "Todo lo de Growth",
+      "Todo lo de Crecimiento",
       "Dónde se te está escapando el dinero",
       "Qué clientes se están enfriando",
       "Cómo va el mes contra tu objetivo",
@@ -183,7 +183,7 @@ const PLANES_WEB = [
     verbo: "Actúa",
     sub: "Nesped deja de recomendar y empieza a hacerlo, con el control que tú le des.",
     feats: [
-      "Todo lo de Intelligence",
+      "Todo lo de Inteligencia",
       "Agentes que hacen el seguimiento solos",
       "Preguntarle a Nesped sobre tu negocio",
       "Patrones de tu equipo comercial",
@@ -807,7 +807,7 @@ export default function Home() {
           <div className="v3-wrap">
             <Rev>
               <span className="v3-eyebrow">Cómo funciona</span>
-              <h2 className="v3-h2">De que suene el teléfono<br />a tener el lead apuntado.</h2>
+              <h2 className="v3-h2">De que suene el teléfono<br />a tener el contacto apuntado.</h2>
               <p className="v3-lede">
                 Cuatro pasos. Ninguno te obliga a cambiar de número ni a tocar
                 nada de lo que ya tienes montado.
@@ -999,7 +999,7 @@ export default function Home() {
                       className={`v3-btn ${def.recomendado ? "v3-btn--white" : "v3-btn--dark"}`}
                       href={
                         porVentas
-                          ? `mailto:ventas@nesped.com?subject=${encodeURIComponent("Nesped Enterprise")}`
+                          ? `mailto:ventas@nesped.com?subject=${encodeURIComponent("Nesped Empresa")}`
                           : `/registro?plan=${p.plan}`
                       }
                     >

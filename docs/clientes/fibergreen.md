@@ -21,11 +21,15 @@ caracteres). **Cuando Fibergreen cambie la web, hay que actualizar esto.**
   SMART sólo en zonas con red propia de Fibergreen. Donde no llega la fibra
   hay Wimax.
 
-## Promoción de portada ("¡Empieza el curso con Fibergreen!")
-- **Fiber SMART 19,99 €/mes**: fibra 600 Mb + 1 línea móvil con llamadas y
-  GB ilimitados + fijo "paga por lo que llamas".
-- **Por 1 € más al mes, 1.000 Mb** (es el Fiber SMART PRO, 20,99 €/mes).
-- **Líneas adicionales con 50 % de descuento.**
+## Promociones
+- **Ahora no hay ninguna.** La de "Empieza el curso" (Fiber SMART y "por 1 €
+  más al mes, 1.000 Mb") y la de "1 € al mes los 3 primeros meses" ya no
+  existen (confirmado por la empresa el 24-09-2026), aunque la web aún
+  conserve restos ocultos. La asistente tiene dicho que no hay promociones y
+  que el Fiber SMART PRO cuesta 20,99 €, nunca 21,99.
+- Ojo: el 24-09-2026 la web se contradice en varios precios (tarjetas
+  "25,99 €/mes" frente a tablas "25 €" en Fiber Max, Wimax y solo fibra).
+  Mientras la empresa no confirme cuáles valen, se mantienen los de la tabla.
 
 ## Tarifas (€/mes, IVA incluido, tal como aparecen)
 **Fibra + móvil SMART** (zonas con red propia; incluye fijo flexible "paga por lo que llamas")

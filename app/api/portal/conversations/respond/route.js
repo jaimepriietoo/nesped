@@ -70,7 +70,7 @@ async function manejarPOST(req) {
 
     if (leadError || !lead) {
       return Response.json(
-        { success: false, message: "Lead no encontrado" },
+        { success: false, message: "Contacto no encontrado" },
         { status: 404 }
       );
     }
@@ -82,13 +82,13 @@ async function manejarPOST(req) {
 
     if ((channel === "sms" || channel === "whatsapp") && !normalizePhone(lead.telefono)) {
       return Response.json(
-        { success: false, message: "El lead no tiene teléfono" },
+        { success: false, message: "El contacto no tiene teléfono" },
         { status: 400 },
       );
     }
     if (channel === "email" && !lead.email) {
       return Response.json(
-        { success: false, message: "El lead no tiene email" },
+        { success: false, message: "El contacto no tiene correo" },
         { status: 400 },
       );
     }

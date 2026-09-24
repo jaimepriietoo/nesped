@@ -35,7 +35,7 @@ async function handlePost(req) {
     const cuerpo = await leerJsonLimitado(req, { maxBytes: 8 * 1024 });
     if (cuerpo.respuesta) return cuerpo.respuesta;
     const supabase = getSupabase();
-    const leido = validar(Login, cuerpo.datos, { mensaje: "Faltan email o contraseña" });
+    const leido = validar(Login, cuerpo.datos, { mensaje: "Faltan el correo o la contraseña" });
     if (leido.respuesta) return leido.respuesta;
     const { email, password, next: nextPath } = leido.datos;
 

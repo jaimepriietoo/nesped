@@ -39,7 +39,7 @@ function getNextStep(call = {}, qa = {}) {
   const result = String(call.result || call.status || "").toLowerCase();
 
   if (["qualified", "completed", "booked", "converted"].includes(result)) {
-    return "Asignar owner y empujar cierre o cita en menos de 24h.";
+    return "Asignar responsable y empujar cierre o cita en menos de 24h.";
   }
 
   if (qa.overall < 55) {
@@ -50,7 +50,7 @@ function getNextStep(call = {}, qa = {}) {
     return "Activar fallback SMS/WhatsApp y programar retry inteligente.";
   }
 
-  return "Mantener seguimiento ligero y dejar CTA único para la siguiente interacción.";
+  return "Mantener seguimiento ligero y dejar una única llamada a la acción para la siguiente interacción.";
 }
 
 async function manejarGET() {
@@ -134,7 +134,7 @@ async function manejarGET() {
         callSid: call.call_sid || "",
         created_at: call.created_at,
         leadId: lead?.id || null,
-        leadName: lead?.nombre || "Lead sin identificar",
+        leadName: lead?.nombre || "Contacto sin identificar",
         owner: lead?.owner || "",
         phone: lead?.telefono || call.to_number || call.from_number || "",
         score: lead?.score || 0,
@@ -176,7 +176,7 @@ async function manejarGET() {
         objectionCounts.set(label, (objectionCounts.get(label) || 0) + 1);
       });
 
-      const owner = String(call.owner || "Sin owner");
+      const owner = String(call.owner || "Sin responsable");
       if (!ownerBuckets.has(owner)) {
         ownerBuckets.set(owner, {
           owner,

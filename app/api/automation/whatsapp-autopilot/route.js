@@ -46,7 +46,7 @@ async function manejarPOST(req) {
 
     if (error || !lead) {
       return NextResponse.json(
-        { success: false, message: "Lead no encontrado" },
+        { success: false, message: "Contacto no encontrado" },
         { status: 404 }
       );
     }
@@ -62,7 +62,7 @@ async function manejarPOST(req) {
     } else {
       return NextResponse.json({
         success: false,
-        message: "Este lead no tiene una automatización de WhatsApp aplicable.",
+        message: "Este contacto no tiene una automatización de WhatsApp aplicable.",
       });
     }
 
@@ -70,7 +70,7 @@ async function manejarPOST(req) {
   } catch (err) {
     logErrorSeguro("automation.whatsapp_autopilot_failed", err);
     return NextResponse.json(
-      { success: false, message: "Error en WhatsApp autopilot" },
+      { success: false, message: "Error en piloto automático de WhatsApp" },
       { status: 500 }
     );
   }

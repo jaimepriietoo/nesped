@@ -74,7 +74,7 @@ async function manejarGET() {
       return {
         id: call.id,
         created_at: call.created_at,
-        leadName: lead?.nombre || "Lead sin identificar",
+        leadName: lead?.nombre || "Contacto sin identificar",
         phone: call.phone || lead?.telefono || "",
         result: call.result || call.status || "unknown",
         summary: call.summary || call.summary_long || "",
@@ -107,7 +107,7 @@ async function manejarGET() {
     return Response.json(
       {
         success: false,
-        message: "No se pudo cargar la QA de voz",
+        message: "No se pudo cargar el control de calidad de voz",
       },
       { status: 500 }
     );

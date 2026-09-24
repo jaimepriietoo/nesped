@@ -36,7 +36,7 @@ function buildServices(client, settings) {
     billing: {
       ready: Boolean(client?.stripe_customer_id),
       detail: client?.stripe_customer_id
-        ? "Billing ya está vinculado a Stripe."
+        ? "La facturación ya está vinculada a Stripe."
         : "Aún no hay customer de Stripe asociado.",
     },
     reporting: {
@@ -45,8 +45,8 @@ function buildServices(client, settings) {
       ),
       detail:
         settings?.daily_report_email || settings?.weekly_report_email
-          ? "Reporting operativo configurado."
-          : "Activa reporting para dejar la experiencia ejecutiva cerrada.",
+          ? "Informes operativos configurados."
+          : "Activa los informes para dejar la experiencia ejecutiva cerrada.",
     },
   };
 }
@@ -80,7 +80,7 @@ async function manejarGET() {
 
     const errors = [clientRes.error, settingsRes.error].filter(Boolean);
     if (errors.length > 0) {
-      throw new Error(errors[0].message || "No se pudo cargar Brand Lab");
+      throw new Error(errors[0].message || "No se pudo cargar Laboratorio de marca");
     }
 
     const client = clientRes.data || {};
@@ -101,7 +101,7 @@ async function manejarGET() {
     return Response.json(
       {
         success: false,
-        message: "No se pudo cargar Brand Lab",
+        message: "No se pudo cargar Laboratorio de marca",
       },
       { status: 500 }
     );

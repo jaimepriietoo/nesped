@@ -23,7 +23,7 @@ async function manejarPOST(req) {
 
     const sameOriginError = requireSameOrigin(
       req,
-      "Origen no permitido para abrir el checkout"
+      "Origen no permitido para abrir la página de pago"
     );
     if (sameOriginError) return sameOriginError;
 
@@ -38,7 +38,7 @@ async function manejarPOST(req) {
 
     if (!puede(ctx.role, "billing.checkout", ctx.permissions)) {
       return NextResponse.json(
-        { success: false, message: "Sin permisos para crear un checkout" },
+        { success: false, message: "Sin permisos para crear una página de pago" },
         { status: 403 }
       );
     }
@@ -181,7 +181,7 @@ async function manejarPOST(req) {
   } catch (error) {
     logErrorSeguro("stripe.checkout_failed", error);
     return NextResponse.json(
-      { success: false, message: "No se pudo abrir el checkout" },
+      { success: false, message: "No se pudo abrir la página de pago" },
       { status: 500 }
     );
   }

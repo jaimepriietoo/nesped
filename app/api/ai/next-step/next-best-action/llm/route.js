@@ -50,7 +50,7 @@ async function manejarPOST(req) {
 
     if (error || !lead) {
       return Response.json(
-        { success: false, message: "Lead no encontrado" },
+        { success: false, message: "Contacto no encontrado" },
         { status: 404 }
       );
     }

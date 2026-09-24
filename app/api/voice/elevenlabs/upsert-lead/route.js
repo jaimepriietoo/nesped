@@ -11,7 +11,7 @@ async function manejarPOST(req) {
 
     const cuerpo = await leerJsonLimitado(req, { maxBytes: 64 * 1024 });
     if (cuerpo.respuesta) return cuerpo.respuesta;
-    const leido = validar(LeadElevenLabs, cuerpo.datos, { mensaje: "Lead no válido" });
+    const leido = validar(LeadElevenLabs, cuerpo.datos, { mensaje: "Contacto no válido" });
     if (leido.respuesta) return leido.respuesta;
     const body = leido.datos;
     const result = await upsertElevenLabsLead({
@@ -40,7 +40,7 @@ async function manejarPOST(req) {
     return Response.json(
       {
         success: false,
-        message: "No se pudo guardar el lead de ElevenLabs",
+        message: "No se pudo guardar el contacto de ElevenLabs",
       },
       { status: 500 }
     );

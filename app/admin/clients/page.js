@@ -368,7 +368,7 @@ export default function AdminClientsPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por id, nombre, email, marca o industria"
+            placeholder="Buscar por id, nombre, correo, marca o industria"
             className="w-full rounded-2xl border border-white/10 bg-black px-4 py-4 text-white"
           />
         </div>

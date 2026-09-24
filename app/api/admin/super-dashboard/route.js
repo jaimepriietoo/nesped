@@ -55,7 +55,7 @@ async function manejarGET(req) {
 
     if (error) {
       return Response.json(
-        { success: false, message: "Error cargando super dashboard" },
+        { success: false, message: "Error cargando superpanel" },
         { status: 500 }
       );
     }
@@ -74,7 +74,7 @@ async function manejarGET(req) {
     });
   } catch (error) {
     return Response.json(
-      { success: false, message: "Error cargando super dashboard" },
+      { success: false, message: "Error cargando superpanel" },
       { status: 500 }
     );
   }

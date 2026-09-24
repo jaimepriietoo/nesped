@@ -201,7 +201,7 @@ async function findLeadByPhone(phone, clientId) {
     .limit(500);
 
   if (error) {
-    throw new Error(error.message || "No se pudieron cargar leads");
+    throw new Error(error.message || "No se pudieron cargar contactos");
   }
 
   const normalizedPhone = normalizePhone(phone);
@@ -335,7 +335,7 @@ function getObjectionStrategy(analysis, paymentLink, bookingUrl) {
         "reencuadra el precio contra el beneficio, coste de no hacerlo y rapidez de resultado",
       tone: "seguro, claro, breve",
       structure:
-        "1) valida la preocupación, 2) explica valor, 3) reduce fricción, 4) CTA",
+        "1) valida la preocupación, 2) explica valor, 3) reduce fricción, 4) llamada a la acción",
       example:
         "Te entiendo. La clave no es solo el precio, sino que te ahorra tiempo y acelera el resultado. Si te encaja, damos el siguiente paso ahora.",
       cta,
@@ -345,7 +345,7 @@ function getObjectionStrategy(analysis, paymentLink, bookingUrl) {
         "reduce la fricción, transmite facilidad, rapidez y poco compromiso inicial",
       tone: "ágil, práctico, nada pesado",
       structure:
-        "1) valida, 2) deja claro que es rápido/simple, 3) CTA corto",
+        "1) valida, 2) deja claro que es rápido/simple, 3) llamada a la acción corta",
       example:
         "Totalmente. Precisamente está pensado para hacerlo fácil y rápido, sin complicarte. Lo más simple es dejarlo cerrado ya o verlo en una llamada corta.",
       cta,
@@ -355,7 +355,7 @@ function getObjectionStrategy(analysis, paymentLink, bookingUrl) {
         "aumenta seguridad, claridad y acompañamiento; elimina sensación de riesgo",
       tone: "tranquilo, profesional, humano",
       structure:
-        "1) valida, 2) transmite claridad/acompañamiento, 3) CTA sin presión",
+        "1) valida, 2) transmite claridad/acompañamiento, 3) llamada a la acción sin presión",
       example:
         "Es normal querer tenerlo claro antes de avanzar. Te explico exactamente cómo funciona y qué encaja mejor contigo para que decidas con seguridad.",
       cta,
@@ -365,7 +365,7 @@ function getObjectionStrategy(analysis, paymentLink, bookingUrl) {
         "evita presión, pero baja la inercia proponiendo un siguiente paso concreto",
       tone: "natural, sin empujar demasiado",
       structure:
-        "1) valida, 2) simplifica decisión, 3) CTA concreto",
+        "1) valida, 2) simplifica decisión, 3) llamada a la acción concreta",
       example:
         "Claro, tiene sentido pensarlo bien. Para no dejarlo en el aire, lo mejor es darte el siguiente paso más fácil ahora y así lo valoras con todo claro.",
       cta,
@@ -375,7 +375,7 @@ function getObjectionStrategy(analysis, paymentLink, bookingUrl) {
         "si no hay objeción, avanza directo al cierre con naturalidad",
       tone: "directo, cercano",
       structure:
-        "1) respuesta clara, 2) CTA",
+        "1) respuesta clara, 2) llamada a la acción",
       example:
         "Perfecto, entonces lo más sencillo es avanzar ya por aquí.",
       cta,
@@ -385,7 +385,7 @@ function getObjectionStrategy(analysis, paymentLink, bookingUrl) {
         "responde la duda de forma útil y vuelve a llevar a acción",
       tone: "claro y orientado a avance",
       structure:
-        "1) responde, 2) CTA",
+        "1) responde, 2) llamada a la acción",
       example:
         "Buena pregunta. Te aclaro eso y, si te encaja, damos el siguiente paso ahora.",
       cta,
@@ -535,7 +535,7 @@ function getCrmUpdateFromAnalysis(analysis) {
       next_action: "wait",
       next_action_priority: "baja",
       proxima_accion: "No insistir. Revisar más adelante si reaparece interés.",
-      ultima_accion: "Lead marcado como perdido por desinterés detectado en WhatsApp",
+      ultima_accion: "Contacto marcado como perdido por desinterés detectado en WhatsApp",
     };
   }
 
@@ -547,7 +547,7 @@ function getCrmUpdateFromAnalysis(analysis) {
       proxima_accion: analysis?.should_push_payment
         ? "Enviar link de pago y seguimiento corto de cierre"
         : "Empujar reserva de cita inmediata",
-      ultima_accion: "Lead calentado por conversación IA en WhatsApp",
+      ultima_accion: "Contacto calentado por conversación IA en WhatsApp",
     };
   }
 
@@ -586,8 +586,8 @@ function getCrmUpdateFromAnalysis(analysis) {
       status: "contacted",
       next_action: "whatsapp",
       next_action_priority: "media",
-      proxima_accion: "Follow-up corto para evitar que el lead se enfríe",
-      ultima_accion: "Lead indica que quiere pensarlo",
+      proxima_accion: "Seguimiento corto para evitar que el contacto se enfríe",
+      ultima_accion: "Contacto indica que quiere pensarlo",
     };
   }
 
@@ -597,7 +597,7 @@ function getCrmUpdateFromAnalysis(analysis) {
       next_action: "whatsapp",
       next_action_priority: "alta",
       proxima_accion: "Enviar reserva y confirmar cita",
-      ultima_accion: "Lead con intención de agenda detectada en WhatsApp",
+      ultima_accion: "Contacto con intención de agenda detectada en WhatsApp",
     };
   }
 
@@ -607,7 +607,7 @@ function getCrmUpdateFromAnalysis(analysis) {
       next_action: "whatsapp",
       next_action_priority: "alta",
       proxima_accion: "Empujar cierre directo con pago",
-      ultima_accion: "Lead con intención de compra detectada en WhatsApp",
+      ultima_accion: "Contacto con intención de compra detectada en WhatsApp",
     };
   }
 

@@ -60,7 +60,7 @@ async function manejarGET() {
     ].filter(Boolean);
 
     if (errors.length > 0) {
-      throw new Error(errors[0].message || "No se pudieron cargar insights");
+      throw new Error(errors[0].message || "No se pudieron cargar análisis");
     }
 
     const leads = leadsRes.data || [];
@@ -104,7 +104,7 @@ async function manejarGET() {
     return Response.json(
       {
         success: false,
-        message: "No se pudieron cargar los insights avanzados",
+        message: "No se pudieron cargar los análisis avanzados",
       },
       { status: 500 }
     );

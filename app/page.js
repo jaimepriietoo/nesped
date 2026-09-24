@@ -170,7 +170,7 @@ const PLANES_WEB = [
     verbo: "Entiende",
     sub: "Nesped mira tus datos y te dice dónde está el dinero y qué exige atención hoy.",
     feats: [
-      "Todo lo de Growth",
+      "Todo lo de Crecimiento",
       "Dónde se te está escapando el dinero",
       "Qué clientes se están enfriando",
       "Cómo va el mes contra tu objetivo",
@@ -183,7 +183,7 @@ const PLANES_WEB = [
     verbo: "Actúa",
     sub: "Nesped deja de recomendar y empieza a hacerlo, con el control que tú le des.",
     feats: [
-      "Todo lo de Intelligence",
+      "Todo lo de Inteligencia",
       "Agentes que hacen el seguimiento solos",
       "Preguntarle a Nesped sobre tu negocio",
       "Patrones de tu equipo comercial",
@@ -999,7 +999,7 @@ export default function Home() {
                       className={`v3-btn ${def.recomendado ? "v3-btn--white" : "v3-btn--dark"}`}
                       href={
                         porVentas
-                          ? `mailto:ventas@nesped.com?subject=${encodeURIComponent("Nesped Enterprise")}`
+                          ? `mailto:ventas@nesped.com?subject=${encodeURIComponent("Nesped Empresa")}`
                           : `/registro?plan=${p.plan}`
                       }
                     >

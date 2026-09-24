@@ -62,7 +62,7 @@ async function manejarGET(req) {
     ].filter(Boolean);
 
     if (errors.length > 0) {
-      throw new Error(errors[0].message || "No se pudo cargar Enterprise");
+      throw new Error(errors[0].message || "No se pudo cargar el plan Empresa");
     }
 
     let domainStatus = null;
@@ -114,7 +114,7 @@ async function manejarGET(req) {
     return Response.json(
       {
         success: false,
-        message: "No se pudo cargar Enterprise",
+        message: "No se pudo cargar el plan Empresa",
       },
       { status: 500 }
     );

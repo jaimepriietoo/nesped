@@ -46,7 +46,7 @@ import { NIVEL_SALUD, TODAS, etiqueta } from "@/lib/etiquetas";
    `calls_limit` estaban en la base desde el principio y nadie las leía.
 
    Lo que no entra en el plan no se esconde: se enseña bloqueado. Un cliente
-   de Growth viendo qué le daría Intelligence es la mejor palanca de subida
+   de Crecimiento viendo qué le daría Inteligencia es la mejor palanca de subida
    que hay, y esconderlo sólo consigue que no sepa que existe.
    ========================================================================= */
 
@@ -2928,7 +2928,7 @@ function FueraDePlan({ vista, plan, onSubir, ocupado }) {
           <p className="pv3-p" style={{ marginTop: 18, fontSize: 13.5, color: "var(--muted)" }}>
             {planDestino.promesa}{" "}
             {porVentas
-              ? "Enterprise se ajusta a cada caso, así que se habla antes."
+              ? "El plan Empresa se ajusta a cada caso, así que se habla antes."
               : `${planDestino.precio} € al mes, sin permanencia.`}
           </p>
         )}
@@ -2938,7 +2938,7 @@ function FueraDePlan({ vista, plan, onSubir, ocupado }) {
             <a
               className="pv3-btn"
               data-v="light"
-              href={`mailto:ventas@nesped.com?subject=${encodeURIComponent("Nesped Enterprise")}`}
+              href={`mailto:ventas@nesped.com?subject=${encodeURIComponent("Nesped Empresa")}`}
             >
               Hablar con nosotros
             </a>

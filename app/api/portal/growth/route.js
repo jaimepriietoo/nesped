@@ -55,7 +55,7 @@ async function manejarGET() {
     ].filter(Boolean);
 
     if (errors.length > 0) {
-      throw new Error(errors[0].message || "No se pudo cargar Growth");
+      throw new Error(errors[0].message || "No se pudo cargar el plan Crecimiento");
     }
 
     const leads = leadsRes.data || [];
@@ -84,7 +84,7 @@ async function manejarGET() {
     return Response.json(
       {
         success: false,
-        message: "No se pudo cargar Growth",
+        message: "No se pudo cargar el plan Crecimiento",
       },
       { status: 500 }
     );

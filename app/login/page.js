@@ -100,7 +100,7 @@ function Acceso() {
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok || !json.success) {
-        setError(json.message || "Login incorrecto");
+        setError(json.message || "Acceso incorrecto");
         return;
       }
 

@@ -111,7 +111,7 @@ async function manejarPOST(req) {
       return Response.json(
         {
           success: false,
-          message: "Ya existe un usuario con ese email",
+          message: "Ya existe un usuario con ese correo",
         },
         { status: 400 }
       );

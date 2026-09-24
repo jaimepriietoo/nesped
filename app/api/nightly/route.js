@@ -172,7 +172,7 @@ async function manejarPOST(req) {
     logErrorSeguro("nightly.failed", err);
     return NextResponse.json({
       success: false,
-      message: "Error ejecutando follow-up automático",
+      message: "Error ejecutando seguimiento automático",
     });
   }
 }

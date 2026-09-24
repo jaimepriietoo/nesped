@@ -10,7 +10,7 @@ async function manejarPATCH(req) {
   try {
     const sameOriginError = requireSameOrigin(
       req,
-      "Origen no permitido para actualizar leads"
+      "Origen no permitido para actualizar contactos"
     );
     if (sameOriginError) return sameOriginError;
 

@@ -14,7 +14,7 @@ export const metadata = {
   applicationName: "Nesped",
   keywords: [
     "recepcionista virtual", "contestador con IA", "voz con IA",
-    "atención telefónica", "captación de leads", "clínicas", "instaladores",
+    "atención telefónica", "captación de contactos", "clínicas", "instaladores",
   ],
   authors: [{ name: "Nesped" }],
   alternates: { canonical: "/" },

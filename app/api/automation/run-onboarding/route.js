@@ -26,7 +26,7 @@ async function manejarPOST(req) {
     logErrorSeguro("automation.onboarding_failed", err);
     return NextResponse.json({
       success: false,
-      message: "Error ejecutando onboarding automático",
+      message: "Error ejecutando el alta automática",
     });
   }
 }

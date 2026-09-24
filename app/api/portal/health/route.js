@@ -152,7 +152,7 @@ async function handleGet() {
               : "warning",
         detail:
           client?.stripe_customer_id || billingRes
-            ? "Billing conectado a Stripe."
+            ? "Facturación conectada a Stripe."
             : "Aún no hay customer o suscripción gestionada en Stripe.",
       },
       reporting: {
@@ -165,8 +165,8 @@ async function handleGet() {
             : "warning",
         detail:
           settings?.daily_report_email || settings?.weekly_report_email
-            ? "Reporting por email activo."
-            : "No hay emails de reporting configurados.",
+            ? "Informes por correo activos."
+            : "No hay correos de informes configurados.",
       },
     };
 

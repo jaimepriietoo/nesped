@@ -40,7 +40,7 @@ async function manejarGET() {
     });
   } catch (error) {
     return Response.json(
-      { success: false, message: "Error cargando insights", data: [] },
+      { success: false, message: "Error cargando análisis", data: [] },
       { status: 500 }
     );
   }

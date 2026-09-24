@@ -90,7 +90,7 @@ async function manejarGET() {
     return Response.json(
       {
         success: false,
-        message: "No se pudo cargar la biblioteca de playbooks",
+        message: "No se pudo cargar la biblioteca de guiones",
       },
       { status: 500 }
     );
@@ -111,7 +111,7 @@ async function manejarPATCH(req) {
 
     if (!puede(ctx.role, "playbooks.manage", ctx.permissions)) {
       return Response.json(
-        { success: false, message: "Sin permisos para actualizar playbooks" },
+        { success: false, message: "Sin permisos para actualizar guiones" },
         { status: 403 }
       );
     }
@@ -141,7 +141,7 @@ async function manejarPATCH(req) {
 
     return Response.json({
       success: true,
-      message: "Playbook guardado correctamente",
+      message: "Guion guardado correctamente",
       data: {
         workspace: {
           ...workspace,
@@ -154,7 +154,7 @@ async function manejarPATCH(req) {
     return Response.json(
       {
         success: false,
-        message: "No se pudo guardar el playbook",
+        message: "No se pudo guardar el guion",
       },
       { status: 500 }
     );

@@ -186,7 +186,7 @@ async function manejarPOST(req) {
         await patchLead(leadId, {
           score: dynamic.score,
           predicted_close_probability: dynamic.predicted_close_probability,
-          ultima_accion: `Score dinámico recalculado automáticamente`,
+          ultima_accion: `Puntuación dinámica recalculada automáticamente`,
         });
 
         processed.push({
@@ -212,7 +212,7 @@ async function manejarPOST(req) {
     logErrorSeguro("automation.dynamic_score_failed", err);
     return NextResponse.json({
       success: false,
-      message: "Error recalculando scoring dinámico",
+      message: "Error recalculando puntuación dinámica",
     });
   }
 }

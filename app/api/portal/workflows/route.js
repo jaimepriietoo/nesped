@@ -53,7 +53,7 @@ async function manejarGET() {
     ].filter(Boolean);
 
     if (errors.length > 0) {
-      throw new Error(errors[0].message || "No se pudo cargar Workflow Studio");
+      throw new Error(errors[0].message || "No se pudo cargar Estudio de flujos");
     }
 
     const leads = leadsRes.data || [];
@@ -78,7 +78,7 @@ async function manejarGET() {
     return Response.json(
       {
         success: false,
-        message: "No se pudo cargar Workflow Studio",
+        message: "No se pudo cargar Estudio de flujos",
       },
       { status: 500 }
     );

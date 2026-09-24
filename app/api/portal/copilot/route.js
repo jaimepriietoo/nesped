@@ -57,7 +57,7 @@ async function manejarGET() {
     ].filter(Boolean);
 
     if (errors.length > 0) {
-      throw new Error(errors[0].message || "No se pudo cargar Copilot");
+      throw new Error(errors[0].message || "No se pudo cargar Copiloto");
     }
 
     const payments = await getClientPaymentRows(ctx.clientId, 1000);
@@ -77,7 +77,7 @@ async function manejarGET() {
     return Response.json(
       {
         success: false,
-        message: "No se pudo cargar Copilot",
+        message: "No se pudo cargar Copiloto",
       },
       { status: 500 }
     );

@@ -26,7 +26,7 @@ async function manejarPOST(req) {
     logErrorSeguro("automation.funnel_failed", err);
     return NextResponse.json({
       success: false,
-      message: "Error ejecutando funnel automático",
+      message: "Error ejecutando embudo automático",
     });
   }
 }

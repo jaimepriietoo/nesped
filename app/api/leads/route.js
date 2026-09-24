@@ -91,7 +91,7 @@ async function manejarGET() {
     return Response.json(
       {
         success: false,
-        message: "Error obteniendo leads",
+        message: "Error obteniendo contactos",
         data: [],
       },
       { status: 500 }

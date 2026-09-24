@@ -53,7 +53,7 @@ function buildAutoInsights(calls = [], leads = []) {
     insights.push({
       id: "auto-2",
       title: "Mejor franja horaria",
-      body: `La franja de las ${bestHour[0]}:00 es una de las que más leads está generando.`,
+      body: `La franja de las ${bestHour[0]}:00 es una de las que más contactos está generando.`,
       insight_type: "timing",
       priority: 8,
     });
@@ -80,8 +80,8 @@ function buildAutoInsights(calls = [], leads = []) {
   if (withoutOwner > 0) {
     insights.push({
       id: "auto-4",
-      title: "Leads sin asignar",
-      body: `Hay ${withoutOwner} lead(s) sin owner asignado.`,
+      title: "Contactos sin asignar",
+      body: `Hay ${withoutOwner} contacto(s) sin responsable asignado.`,
       insight_type: "ops",
       priority: 6,
     });
@@ -98,8 +98,8 @@ function buildAutoInsights(calls = [], leads = []) {
   if (smsPending > 0) {
     insights.push({
       id: "auto-5",
-      title: "Follow-up pendiente",
-      body: `Hay ${smsPending} lead(s) con score alto pendientes de follow-up.`,
+      title: "Seguimiento pendiente",
+      body: `Hay ${smsPending} contacto(s) con puntuación alta pendientes de seguimiento.`,
       insight_type: "followup",
       priority: 8,
     });
@@ -119,7 +119,7 @@ function buildSmsTemplates(client) {
     },
     {
       id: "sms-2",
-      name: "Lead caliente",
+      name: "Contacto caliente",
       text: `Hola, hemos revisado tu solicitud en ${brand}. Si te viene bien, podemos avanzar hoy mismo contigo.`,
     },
     {
@@ -153,7 +153,7 @@ function buildQuickActions() {
     { id: "copy_phone", label: "Copiar teléfono", type: "copy" },
     { id: "mark_contacted", label: "Marcar contactado", type: "status" },
     { id: "generate_next_step", label: "Generar siguiente paso IA", type: "ai" },
-    { id: "send_sms", label: "Enviar SMS follow-up", type: "sms" },
+    { id: "send_sms", label: "Enviar SMS de seguimiento", type: "sms" },
   ];
 }
 

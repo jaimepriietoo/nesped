@@ -29,6 +29,7 @@ import { NucleoMarca, estadoDe } from "@/components/nucleo/marca";
 import { EntradaNesped } from "@/components/nucleo/entrada";
 import "./portal.css";
 import { ConfiguracionIA, DepartamentosYAvisos, Automatismos } from "./ia";
+import { NIVEL_SALUD, TODAS, etiqueta } from "@/lib/etiquetas";
 
 /* ── utilidades ──────────────────────────────────────────────────────── */
 
@@ -246,7 +247,7 @@ function Tarjeta({ label, valor, detalle, retraso = 0 }) {
 }
 
 function Tag({ estado }) {
-  const e = ETIQUETA_ESTADO[estado] || { txt: estado || "—", t: "grey" };
+  const e = ETIQUETA_ESTADO[estado] || { txt: etiqueta(TODAS, estado), t: "grey" };
   return <span className="pv3-tag" data-t={e.t}>{e.txt}</span>;
 }
 
@@ -394,7 +395,7 @@ function FichaLead({ lead, usuarios, onCerrar, onCambiado }) {
     <aside className="pv3-ficha" aria-label={`Ficha de ${lead.nombre || "lead"}`}>
       <div className="pv3-row">
         <div>
-          <div className="pv3-lab">FICHA DE LEAD</div>
+          <div className="pv3-lab">FICHA DE CONTACTO</div>
           <h3 className="pv3-ficha-nombre">{lead.nombre || "Sin nombre"}</h3>
         </div>
         <button type="button" className="pv3-btn" onClick={onCerrar}>Cerrar</button>
@@ -580,7 +581,7 @@ function FichaLead({ lead, usuarios, onCerrar, onCambiado }) {
       <textarea
         className="pv3-input"
         rows={3}
-        placeholder="Lo que conviene recordar de este lead…"
+        placeholder="Lo que conviene recordar de este contacto…"
         value={nota}
         onChange={(e) => setNota(e.target.value)}
       />
@@ -668,7 +669,7 @@ function FichaLead({ lead, usuarios, onCerrar, onCambiado }) {
         confirmar={`¿Enviar este SMS a ${lead.telefono}?`}
         onRun={async () => {
           if (!sms.trim()) throw new Error("Escribe el mensaje primero.");
-          if (!lead.telefono) throw new Error("Este lead no tiene teléfono.");
+          if (!lead.telefono) throw new Error("Este contacto no tiene teléfono.");
           await enviar("/api/followup/sms", "POST", {
             leadId: lead.id,
             to: lead.telefono,
@@ -1251,7 +1252,7 @@ function Leads({ datos, onRecargar, onMas }) {
       {forma === "embudo" ? (
         <Embudo leads={visibles} onAbrir={setAbierto} />
       ) : visibles.length === 0 ? (
-        <div style={{ marginTop: 16 }}><Vacio>No hay leads que encajen con este filtro.</Vacio></div>
+        <div style={{ marginTop: 16 }}><Vacio>No hay contactos que encajen con este filtro.</Vacio></div>
       ) : (
         <div className="pv3-tablewrap" style={{ marginTop: 16 }}>
           <table className="pv3-table">
@@ -1520,7 +1521,7 @@ function Voz({ voz, cargando }) {
         <Tarjeta label="ANALIZADAS" valor={num(s.total)} detalle={`${num(s.withRecording)} con grabación`} />
         <Tarjeta label="CALIDAD MEDIA" valor={`${num(s.avgScore)}`} detalle="Sobre 100" retraso={60} />
         <Tarjeta label="CUMPLIMIENTO" valor={`${num(s.avgCompliance)}`} detalle="Sobre 100" retraso={120} />
-        <Tarjeta label="LEADS CAPTADOS" valor={num(s.capturedLeads)} detalle={`${duracion(s.avgDuration)} de media`} retraso={180} />
+        <Tarjeta label="CONTACTOS CAPTADOS" valor={num(s.capturedLeads)} detalle={`${duracion(s.avgDuration)} de media`} retraso={180} />
       </div>
 
       <div className="pv3-grid" data-c="2">
@@ -1602,7 +1603,7 @@ function Estado({ salud, cargando }) {
       <div className="pv3-card" style={{ marginTop: 22 }}>
         <div className="pv3-row">
           <span className="pv3-lab">DIAGNÓSTICO</span>
-          <span className="pv3-tag" data-t={nivelTag(salud.summary?.level)}>{salud.summary?.level || "—"}</span>
+          <span className="pv3-tag" data-t={nivelTag(salud.summary?.level)}>{etiqueta(NIVEL_SALUD, salud.summary?.level)}</span>
         </div>
         <p className="pv3-p" style={{ marginTop: 10 }}>{salud.summary?.message}</p>
       </div>
@@ -1613,7 +1614,7 @@ function Estado({ salud, cargando }) {
           <div key={clave} className="pv3-card" style={{ animationDelay: `${i * 45}ms` }}>
             <div className="pv3-row">
               <span className="pv3-lab">{clave.toUpperCase()}</span>
-              <span className="pv3-tag" data-t={nivelTag(item.level)}>{item.level}</span>
+              <span className="pv3-tag" data-t={nivelTag(item.level)}>{etiqueta(NIVEL_SALUD, item.level)}</span>
             </div>
             {item.message ? <p className="pv3-p" style={{ marginTop: 10 }}>{item.message}</p> : null}
           </div>
@@ -1644,7 +1645,7 @@ function Estado({ salud, cargando }) {
             {(salud.env?.features || []).map((f) => (
               <tr key={f.id}>
                 <td className="pv3-strong">{f.label}</td>
-                <td><span className="pv3-tag" data-t={nivelTag(f.status)}>{f.status}</span></td>
+                <td><span className="pv3-tag" data-t={nivelTag(f.status)}>{etiqueta(NIVEL_SALUD, f.status)}</span></td>
                 <td>{num(f.requiredMissing)}</td>
                 <td>{num(f.recommendedMissing)}</td>
               </tr>
@@ -1681,10 +1682,10 @@ function Equipo({ datos, onRecargar, acceso }) {
           <Campo label="Rol">
             <select className="pv3-input" value={nuevo.role}
               onChange={(e) => setNuevo({ ...nuevo, role: e.target.value })}>
-              <option value="agent">Agente — trabaja leads</option>
+              <option value="agent">Agente — trabaja contactos</option>
               <option value="manager">Manager — además ve informes</option>
               <option value="admin">Admin — además configura</option>
-              <option value="owner">Owner — control total</option>
+              <option value="owner">Propietario — control total</option>
             </select>
           </Campo>
           <Campo label="Contraseña inicial">
@@ -1701,7 +1702,7 @@ function Equipo({ datos, onRecargar, acceso }) {
           variante="light"
           onRun={async () => {
             if (!nuevo.email.trim() || !nuevo.password) {
-              throw new Error("Hacen falta al menos el email y la contraseña.");
+              throw new Error("Hacen falta al menos el correo y la contraseña.");
             }
             await enviar("/api/portal/users/create", "POST", nuevo);
             setNuevo({ full_name: "", email: "", role: "agent", phone: "", password: "" });
@@ -2416,7 +2417,7 @@ function Ajustes({ datos, onRecargar }) {
       <h2 className="pv3-h2">Objetivos y avisos</h2>
       <div className="pv3-card">
         <div className="pv3-form">
-          <Campo label="Leads al mes">
+          <Campo label="Contactos al mes">
             <input className="pv3-input" type="number" min="0" value={obj.monthly_target_leads}
               onChange={(e) => setObj({ ...obj, monthly_target_leads: Number(e.target.value) })} />
           </Campo>
@@ -2464,7 +2465,7 @@ function Ajustes({ datos, onRecargar }) {
             <input className="pv3-input" value={marca.industry}
               onChange={(e) => setMarca({ ...marca, industry: e.target.value })} />
           </Campo>
-          <Campo label="Email del propietario">
+          <Campo label="Correo del propietario">
             <input className="pv3-input" type="email" value={marca.owner_email}
               onChange={(e) => setMarca({ ...marca, owner_email: e.target.value })} />
           </Campo>
@@ -2582,7 +2583,7 @@ const TRADUCCIONES = {
   avgScore: "Nota media",
   avgDuration: "Duración media",
   avgCompliance: "Cumplimiento medio",
-  capturedLeads: "Leads captados",
+  capturedLeads: "Contactos captados",
 
   // Guion comercial
   camposCubiertos: "Campos cubiertos",
@@ -2659,7 +2660,7 @@ function Lista({ titulo, items, columnas = "2" }) {
             <div key={item.id || i} className="pv3-card" style={{ animationDelay: `${i * 45}ms` }}>
               <div className="pv3-row">
                 <span className="pv3-lab">{String(tit ?? `Elemento ${i + 1}`).toUpperCase()}</span>
-                {estado ? <span className="pv3-tag" data-t={tono(estado)}>{estado}</span> : null}
+                {estado ? <span className="pv3-tag" data-t={tono(estado)}>{etiqueta(TODAS, estado)}</span> : null}
               </div>
               {val != null && val !== tit ? (
                 <div className="pv3-stat" style={{ fontSize: 24 }}>
@@ -2700,7 +2701,7 @@ function Conversaciones({ inbox, cargando, onRecargar }) {
   const idEnvio = useRef(null);
 
   if (cargando) return <div className="pv3-grid" data-c="4">{[0, 1, 2, 3].map((i) => <div key={i} className="pv3-skel" />)}</div>;
-  if (!inbox) return <div style={{ marginTop: 22 }}><Vacio>No se pudo cargar el inbox.</Vacio></div>;
+  if (!inbox) return <div style={{ marginTop: 22 }}><Vacio>No se pudo cargar la bandeja de entrada.</Vacio></div>;
 
   const hilos = inbox.threads || [];
   const activo = hilos.find((h) => h.id === abierto) || null;

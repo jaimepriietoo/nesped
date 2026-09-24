@@ -34,7 +34,7 @@ async function manejarGET() {
 
     const errors = [leadRes.error, userRes.error].filter(Boolean);
     if (errors.length > 0) {
-      throw new Error(errors[0].message || "No se pudo cargar el ranking");
+      throw new Error(errors[0].message || "No se pudo cargar la clasificación");
     }
 
     const ranking = buildOwnerRevenueRanking({

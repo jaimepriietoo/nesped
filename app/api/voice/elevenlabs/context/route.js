@@ -6,6 +6,7 @@ import { bloqueDeConocimiento, bloqueRuperta, conocimientoVigente, estadoRuperta
 import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 import { ContextoElevenLabs, validar } from "@/lib/server/esquemas";
 import { leerJsonLimitado } from "@/lib/server/security";
+import { getSupabase } from "@/lib/supabase";
 
 /**
  * Lo que ElevenLabs pide ANTES de descolgar.
@@ -26,7 +27,42 @@ import { leerJsonLimitado } from "@/lib/server/security";
  * con la empresa en blanco: mejor una llamada atendida a secas que un
  * agente que no descuelga porque el CRM no contestó.
  */
-const REPREGUNTAR = "CADA LLAMADA ES UN EXPEDIENTE NUEVO, SALVO EL NOMBRE. Esta regla prevalece sobre cualquier instrucción general que diga que uses lo que ya sabes del contacto. De su ficha anterior sólo puedes usar el nombre: salúdale por su nombre y confirma que es esa persona. No menciones ni uses ninguna otra respuesta anterior. Vuelve a preguntar adrede teléfono de contacto (el identificador de llamada no cuenta como confirmado), correo, localidad, dirección del servicio cuando corresponda, qué necesita, preferencias y cualquier otro dato necesario, aunque conste en su ficha o haya llamado hace poco. Al guardar, resumir, clasificar o preparar el correo usa exclusivamente lo dicho o confirmado en esta conversación.";
+/**
+ * Cómo se atiende a quien ya ha llamado otras veces.
+ *
+ * Lo que pidió la empresa: se le conoce (nombre y teléfono no se vuelven a
+ * pedir), se le pregunta si sigue en la misma dirección por si ha cambiado, y
+ * se atiende lo que plantea AHORA. Lo que contó en otras llamadas ni se
+ * menciona ni se mezcla: el resumen, la clasificación y el correo de esta
+ * llamada llevan sólo lo de esta llamada. En la base no se borra nada.
+ */
+function reglaDeContacto({ nombre, telefono, direccion }) {
+  if (!nombre) {
+    return "QUIEN LLAMA ES NUEVO: pide nombre, teléfono de contacto, localidad, qué necesita y, si hace falta para su petición, la dirección.";
+  }
+  return [
+    `QUIEN LLAMA YA ES CLIENTE: se llama ${nombre}${telefono ? ` y su teléfono es ${telefono}` : ""}.`,
+    "Salúdale por su nombre. No le vuelvas a pedir el nombre ni el teléfono.",
+    direccion
+      ? `Su última dirección conocida es "${direccion}": pregúntale, cuando venga a cuento, si sigue siendo esa o ha cambiado.`
+      : "Si su petición necesita una dirección, pregúntasela.",
+    "Atiende sólo lo que plantea ahora. No menciones ni uses lo que contó en llamadas anteriores (necesidades, averías, contrataciones o resúmenes de antes): el resumen, la clasificación y el correo de esta llamada son únicamente de esta conversación.",
+  ].join(" ");
+}
+
+/** La última dirección que dio el contacto en alguna llamada. Nunca lanza. */
+async function ultimaDireccion(clientId, leadId) {
+  if (!clientId || !leadId) return "";
+  try {
+    const { data } = await getSupabase().from("lead_events").select("meta")
+      .eq("client_id", clientId).eq("lead_id", leadId).eq("type", "datos_de_llamada")
+      .not("meta->>direccion", "is", null)
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    return String(data?.meta?.direccion || "").slice(0, 200);
+  } catch {
+    return "";
+  }
+}
 
 async function manejarPOST(req) {
   const authError = requireInternalRequest(req);
@@ -49,11 +85,12 @@ async function manejarPOST(req) {
       conversationId,
     });
 
-    const [config, { lista: departamentos }, conocimiento, ruperta] = await Promise.all([
+    const [config, { lista: departamentos }, conocimiento, ruperta, direccion] = await Promise.all([
       configIA(ctx.clientId),
       departamentosDeEmpresa(ctx.clientId),
       conocimientoVigente(ctx.clientId).catch(() => []),
       estadoRuperta({ clientId: ctx.clientId, callerId }).catch(() => ({ permitido: false })),
+      ultimaDireccion(ctx.clientId, ctx.leadId),
     ]);
     const enHorario = dentroDeHorario(config);
     const contexto = promptDeEmpresa(config, { empresa: ctx.brandName, sector: ctx.industry, departamentos });
@@ -63,18 +100,20 @@ async function manejarPOST(req) {
       client_id: ctx.clientId,
       sector: ctx.industry || "",
       lead_id: ctx.leadId || "",
-      /* De la ficha sólo se le cuenta al agente el nombre: la empresa pidió
-         que cada llamada empiece de cero (mismas preguntas aunque la persona
-         llamara ayer) y que lo que se guarde y se avise sea lo de esta vez,
-         pero que a quien ya conoce le salude por su nombre. El lead_id sí,
-         para enlazar la llamada con su ficha. */
+      /* De la ficha se le cuenta al agente quién es (nombre, teléfono y la
+         última dirección, para confirmarla), nunca lo que contó otras veces.
+         El lead_id sí, para enlazar la llamada con su ficha. */
       lead_nombre: ctx.leadName || "",
       lead_necesidad: "",
       resumen_contacto: "",
-      objetivo_llamada: `Atiende esta llamada como ${ctx.brandName || ctx.companyName || "la empresa"}. Recoge de nuevo todos los datos necesarios y resuelve únicamente lo planteado en esta conversación.`,
+      objetivo_llamada: `Atiende esta llamada como ${ctx.brandName || ctx.companyName || "la empresa"} y resuelve lo que plantea ahora.`,
       en_horario: enHorario ? "sí" : "no",
       mensaje_fuera_horario: config.mensaje_fuera_horario || "",
-      contexto_empresa: [ctx.companyPrompt, contexto, bloqueDeConocimiento(conocimiento), REPREGUNTAR, bloqueRuperta(ruperta)]
+      contexto_empresa: [
+        ctx.companyPrompt, contexto, bloqueDeConocimiento(conocimiento),
+        reglaDeContacto({ nombre: ctx.leadName, telefono: ctx.leadId ? callerId : "", direccion }),
+        bloqueRuperta(ruperta),
+      ]
         .filter(Boolean).join("\n\n").slice(0, 8000),
       /* El agente los reenvía tal cual a anotar_instruccion; el servidor no se fía de ellos. */
       ruperta_permitido: ruperta.permitido ? "sí" : "no",

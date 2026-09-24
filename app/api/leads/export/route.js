@@ -31,7 +31,7 @@ import { observeRoute } from "@/lib/server/observability.mjs";
 const COLUMNAS = [
   ["Nombre", (l) => l.nombre],
   ["Teléfono", (l) => l.telefono],
-  ["Email", (l) => l.email],
+  ["Correo", (l) => l.email],
   ["Ciudad", (l) => l.ciudad],
   ["Necesidad", (l) => l.necesidad],
   ["Estado", (l) => l.status],

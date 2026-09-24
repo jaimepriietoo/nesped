@@ -76,7 +76,7 @@ export default function AdminOverview() {
       <div className="mb-8 grid gap-4 md:grid-cols-4">
         <Card title="Clientes" value={metrics?.totalClients ?? 0} />
         <Card title="Llamadas" value={metrics?.totalCalls ?? 0} nota={nota} />
-        <Card title="Leads" value={metrics?.totalLeads ?? 0} nota={nota} />
+        <Card title="Contactos" value={metrics?.totalLeads ?? 0} nota={nota} />
         <Card title="Usuarios" value={metrics?.totalUsers ?? 0} />
       </div>
 
@@ -89,7 +89,7 @@ export default function AdminOverview() {
                 <th className="pb-3 pr-4">Cliente</th>
                 <th className="pb-3 pr-4">Plan</th>
                 <th className="pb-3 pr-4">Llamadas</th>
-                <th className="pb-3 pr-4">Leads</th>
+                <th className="pb-3 pr-4">Contactos</th>
                 <th className="pb-3 pr-4">Conversión</th>
                 <th className="pb-3 pr-4">Usuarios</th>
               </tr>

@@ -899,7 +899,7 @@ export default function Home() {
                 <h3 className="v3-h3">Detecta la necesidad y se queda con el contacto</h3>
                 <p className="v3-p">
                   El agente entiende qué se le pide, pregunta sólo lo que falta,
-                  repite el teléfono para confirmarlo y deja el lead registrado
+                  repite el teléfono para confirmarlo y deja el contacto registrado
                   antes de colgar.
                 </p>
                 <div className="v3-chips">

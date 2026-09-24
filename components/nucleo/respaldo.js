@@ -27,7 +27,9 @@ export function Respaldo({ estado = "IDLE", quieto = false, etiqueta }) {
   return (
     <svg
       className="nsp-respaldo"
-      viewBox="-150 -150 300 300"
+      /* Con margen: las hojas se balancean unos grados y, pegadas al borde,
+         la de abajo a la izquierda asomaba fuera del círculo de la marca. */
+      viewBox="-172 -172 344 344"
       data-quieto={quieto ? "1" : undefined}
       data-estado={estado}
       role={etiqueta ? "img" : "presentation"}

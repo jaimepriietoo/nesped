@@ -56,38 +56,12 @@ test("la portada responde: el menú se abre", async ({ page }) => {
   await expect(page.locator(".v3-menu")).toBeVisible();
 });
 
-test("pricing enseña precios reales y lleva al checkout", async ({ page }) => {
-  /* Los precios salen de Stripe y de ningún otro sitio: sin clave no hay
-     cifra que comprobar, y la prueba lo dice en vez de fallar por un motivo
-     que no es un fallo. En CI la clave entra como secreto del repositorio. */
-  test.skip(!hayStripe(), "sin STRIPE_SECRET_KEY no hay precios reales que comprobar");
-
+test("ya no hay planes: la antigua página de precios lleva al contacto", async ({ page }) => {
   await page.goto("/pricing");
-
-  await expect(
-    page.getByRole("heading", { name: /Ordena\. Entiende\./i })
-  ).toBeVisible();
-
-  const precios = page.locator(".v3-price");
-  await expect(precios.first()).toBeVisible();
-
-  /*
-   * Los importes salen de Stripe, no del código. La prueba no fija una cifra
-   * —cambiarla en Stripe no debe romper el test— pero sí exige que sea una
-   * cifra: si la web volviera a inventarse el precio o dejara de resolverlo,
-   * aquí saltaría.
-   */
-  const textos = await precios.allInnerTexts();
-  const conImporte = textos.filter((t) => /\d/.test(t));
-  expect(conImporte.length).toBeGreaterThan(0);
-
-  /* Los tres planes tienen salida: los dos contratables llevan al alta, y
-     Enterprise a ventas. Que uno se quede sin botón es un fallo que no da
-     error en ninguna parte, sólo pierde la venta. */
-  const alta = page.locator('a[href^="/registro?plan="]');
-  const ventas = page.locator('a[href^="mailto:"]');
-  expect(await alta.count()).toBeGreaterThanOrEqual(2);
-  expect(await ventas.count()).toBeGreaterThanOrEqual(1);
+  await expect(page).toHaveURL(/\/#contacto$/);
+  await expect(page.getByRole("heading", { name: /Quieres saber más/i })).toBeVisible();
+  await expect(page.locator('#contacto a[href^="mailto:"]').first()).toBeVisible();
+  await expect(page.locator(".v3-price")).toHaveCount(0);
 });
 
 test("las páginas internas no se sirven sin sesión", async ({ request }) => {

@@ -643,6 +643,13 @@
 
   display: inline-block;
   white-space: pre;
+  /* El degradado sólo se pinta dentro de la caja de la palabra, y con un
+     interlineado tan cerrado los rasgos que bajan (g, j, p, q, y) y los que
+     suben por encima de las mayúsculas quedaban fuera: se veían cortados.
+     Se agranda el área pintada y se compensa con margen negativo, así el
+     texto no se mueve ni un píxel. */
+  padding: 0.12em 0.06em 0.22em;
+  margin: -0.12em -0.06em -0.22em;
   /* El frente de luz recorre cada palabra por dentro. */
   background-image: linear-gradient(
     97deg,

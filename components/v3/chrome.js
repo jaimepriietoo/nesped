@@ -15,8 +15,8 @@ export { Logo };
 
 export const NAV = [
   { href: "/#como", label: "Cómo funciona", id: "como" },
-  { href: "/#demo", label: "Escúchalo", id: "demo" },
-  { href: "/pricing", label: "Precios", id: "pricing" },
+  { href: "/#demo", label: "Pruébalo", id: "demo" },
+  { href: "/#contacto", label: "Contacto", id: "contacto" },
   { href: "/#preguntas", label: "Preguntas", id: "preguntas" },
 ];
 
@@ -117,12 +117,12 @@ export function Footer() {
             <div>
               <span className="v3-foot-title">Producto</span>
               <Link className="v3-foot-link" href="/#como">Cómo funciona</Link>
-              <Link className="v3-foot-link" href="/#demo">Escúchalo</Link>
+              <Link className="v3-foot-link" href="/#demo">Pruébalo</Link>
               <Link className="v3-foot-link" href="/#preguntas">Preguntas</Link>
             </div>
             <div>
               <span className="v3-foot-title">Empezar</span>
-              <a className="v3-foot-link" href="/pricing">Precios</a>
+              <Link className="v3-foot-link" href="/#contacto">Contacto</Link>
               <a className="v3-foot-link" href="/login">Acceder al portal</a>
               <a className="v3-foot-link" href="mailto:ventas@nesped.com">Hablar con ventas</a>
             </div>

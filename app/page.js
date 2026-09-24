@@ -25,12 +25,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Inter } from "next/font/google";
-import { PLANES } from "@/lib/planes";
 import "@/components/v3/v3.css";
 import "@/components/nucleo/pelicula.css";
 import { Footer, Header } from "@/components/v3/chrome";
 import { Rev } from "@/components/v3/rev";
-import { EscuchaLlamada } from "@/components/v3/escucha";
 import { Contador } from "@/components/v3/contador";
 import GUION from "@/components/v3/muestra-guion.json";
 import { NucleoVivo } from "@/components/nucleo/nucleo";
@@ -90,7 +88,7 @@ const COMO_FUNCIONA = [
 const PREGUNTAS = [
   {
     q: "¿Se nota que no es una persona?",
-    a: "Escucha la muestra de arriba y júzgalo tú. Habla castellano de España, acusa recibo antes de contestar, duda cuando piensa y calla si le interrumpes. Lo que no hace es fingir ser humano: si alguien pregunta, lo dice.",
+    a: "Pruébalo en la demo: déjanos tu número y te llama. Habla castellano de España, acusa recibo antes de contestar, duda cuando piensa y calla si le interrumpes. Lo que no hace es fingir ser humano: si alguien pregunta, lo dice.",
   },
   {
     q: "¿Y si no entiende lo que le piden?",
@@ -143,53 +141,6 @@ const LLEVA = [
     meta: "Operación",
     t: "Captación y cierre en una capa",
     d: "WhatsApp, seguimiento, puntuación, siguiente acción y cobro dentro del mismo sistema, no repartidos entre cuatro herramientas pegadas con cinta.",
-  },
-];
-
-/*
- * Los tres planes, descritos por lo que hace Nesped en cada uno.
- *
- * La lista de funciones y los precios salen de lib/planes.js y de Stripe: aquí
- * sólo vive cómo se cuentan.
- */
-const PLANES_WEB = [
-  {
-    plan: "growth",
-    verbo: "Ordena",
-    sub: "Todo lo que entra por teléfono, recogido, ordenado y sin que se pierda nadie.",
-    feats: [
-      "El agente coge las llamadas y capta los datos",
-      "Contactos, fases y actividad en un sitio",
-      "Grabación y transcripción de cada llamada",
-      "Recorrido completo de cada contacto",
-      "Qué hacer con cada uno, y por qué",
-    ],
-  },
-  {
-    plan: "intelligence",
-    verbo: "Entiende",
-    sub: "Nesped mira tus datos y te dice dónde está el dinero y qué exige atención hoy.",
-    feats: [
-      "Todo lo de Crecimiento",
-      "Dónde se te está escapando el dinero",
-      "Qué clientes se están enfriando",
-      "Cómo va el mes contra tu objetivo",
-      "Aviso cuando algo se sale de lo normal",
-      "Por qué se pierden las operaciones",
-    ],
-  },
-  {
-    plan: "enterprise",
-    verbo: "Actúa",
-    sub: "Nesped deja de recomendar y empieza a hacerlo, con el control que tú le des.",
-    feats: [
-      "Todo lo de Inteligencia",
-      "Agentes que hacen el seguimiento solos",
-      "Preguntarle a Nesped sobre tu negocio",
-      "Patrones de tu equipo comercial",
-      "Simulación de escenarios",
-      "Conectar más fuentes de datos",
-    ],
   },
 ];
 
@@ -367,7 +318,6 @@ function pintarHaces(caja, direccion, proyectar) {
 }
 
 export default function Home() {
-  const [precios, setPrecios] = useState(null);
   const [telefono, setTelefono] = useState("");
   const [cargando, setCargando] = useState(false);
   const [estado, setEstado] = useState(null);
@@ -510,18 +460,6 @@ export default function Home() {
     return () => { vivo = false; soltar(); };
   }, []);
 
-  /* ── Precios ──────────────────────────────────────────────────────────
-     Salen de Stripe. Tenerlos en dos sitios fue lo que hizo que la web
-     anunciara una cifra y se cobrara otra. */
-  useEffect(() => {
-    let vivo = true;
-    fetch("/api/precios")
-      .then((r) => r.json())
-      .then((j) => { if (vivo) setPrecios(j?.data || {}); })
-      .catch(() => { if (vivo) setPrecios({}); });
-    return () => { vivo = false; };
-  }, []);
-
   /* El menú son anclas de esta misma página: marcar una fija sería mentira
      en cuanto se hace scroll. */
   useEffect(() => {
@@ -539,33 +477,6 @@ export default function Home() {
     );
     nodos.forEach((n) => io.observe(n));
     return () => io.disconnect();
-  }, []);
-
-  /**
-   * La muestra de llamada mueve el núcleo.
-   *
-   * Es la regla del sistema: un estado visual no se dispara porque quede
-   * bien, se dispara porque está pasando. Suena el agente, Nesped habla;
-   * suena el cliente, Nesped escucha. Sin audio, vuelve a estar disponible.
-   */
-  const alSonarMuestra = useCallback((quien) => {
-    const c = control.current;
-    if (!c) return;
-    if (quien === "agente") c.ir("SPEAKING");
-    else if (quien === "cliente") c.ir("LISTENING");
-    else c.ir("IDLE");
-  }, []);
-
-  /**
-   * Y la fuerza de la voz, fotograma a fotograma.
-   *
-   * El shader usa este número como envolvente de los pulsos que salen del
-   * núcleo al hablar. Con él, los pulsos coinciden con lo que se oye; sin él
-   * hay un seno inventado, que se lee como palpitar y no como hablar. Se pasa
-   * -1 cuando no suena nada y el núcleo vuelve a su ritmo propio.
-   */
-  const alVibrarMuestra = useCallback((amplitud) => {
-    control.current?.oirVoz(amplitud);
   }, []);
 
   /* Mismo contrato de siempre: POST { telefono, client_id }. */
@@ -791,8 +702,8 @@ export default function Home() {
             <div>
               <Revelado clase="pel-h2" texto={"Tu negocio.\nSiempre activo."} />
               <div className="pel-botones" style={{ justifyContent: "center" }}>
-                <a className="pel-btn pel-btn--luz" href="#demo">Escúchalo ahora</a>
-                <a className="pel-btn" href="/pricing">Ver planes</a>
+                <a className="pel-btn pel-btn--luz" href="#demo">Pruébalo ahora</a>
+                <a className="pel-btn" href="#contacto">Más información</a>
               </div>
             </div>
           </div>
@@ -877,38 +788,15 @@ export default function Home() {
         <section id="demo" className="v3-section v3-section--line">
           <div className="v3-wrap">
             <Rev>
-              <span className="v3-eyebrow">Demo real</span>
-              <h2 className="v3-h2">Escúchalo antes de creerte nada.</h2>
+              <span className="v3-eyebrow">Demo en vivo</span>
+              <h2 className="v3-h2">Que te llame y júzgalo tú.</h2>
               <p className="v3-lede">
-                Veinticinco segundos de una llamada del agente. Ninguna de las
-                dos voces es una persona. Si prefieres oírlo en tu propio móvil,
-                déjanos tu número y te llama.
+                Déjanos tu número y la asistente te llama en unos segundos.
+                Pregúntale lo que quieras, interrúmpela, ponla a prueba.
               </p>
             </Rev>
 
-            {/* Oírlo pesa más que cualquier párrafo, así que va antes que el
-                formulario: pedir el teléfono es fricción y no todo el mundo la
-                acepta sin haber oído nada primero. */}
-            <Rev d={0.06}>
-              <EscuchaLlamada alSonar={alSonarMuestra} alVibrar={alVibrarMuestra} />
-            </Rev>
-
-            <div className="v3-grid" data-c="2" style={{ marginTop: 22 }}>
-              <Rev className="v3-card">
-                <span className="v3-card-meta">Qué acabas de oír</span>
-                <h3 className="v3-h3">Detecta la necesidad y se queda con el contacto</h3>
-                <p className="v3-p">
-                  El agente entiende qué se le pide, pregunta sólo lo que falta,
-                  repite el teléfono para confirmarlo y deja el contacto registrado
-                  antes de colgar.
-                </p>
-                <div className="v3-chips">
-                  <span className="v3-chip">Instancia: demo</span>
-                  <span className="v3-chip">Voz cloud lista</span>
-                  <span className="v3-chip">Realtime IA</span>
-                </div>
-              </Rev>
-
+            <div className="v3-grid" data-c="1" style={{ marginTop: 22, maxWidth: 560 }}>
               <Rev className="v3-card" d={0.09}>
                 <div className="v3-field">
                   <label className="v3-label" htmlFor="v3-tel">Teléfono para la demo</label>
@@ -954,61 +842,28 @@ export default function Home() {
           </div>
         </section>
 
-        <section id="planes" className="v3-section v3-section--line">
+        <section id="contacto" className="v3-section v3-section--line">
           <div className="v3-wrap">
-            <Rev>
-              <span className="v3-eyebrow">Planes</span>
-              <h2 className="v3-h2">Listos para vender, cobrar y escalar.</h2>
+            <Rev className="v3-contacto">
+              <span className="v3-eyebrow">Más información</span>
+              <h2 className="v3-h2">¿Quieres saber más?<br />Escríbenos.</h2>
               <p className="v3-lede">
-                La diferencia no es cuántas cosas marca cada uno. Es hasta dónde
-                llega Nesped: ordena, entiende, o trabaja por ti.
+                Cuéntanos cómo atiende hoy el teléfono tu empresa y te enseñamos
+                cómo quedaría con Nesped. Sin compromiso y sin letra pequeña.
+              </p>
+              <div className="v3-cta-row">
+                <a
+                  className="v3-btn v3-btn--white"
+                  href={`mailto:hola@nesped.com?subject=${encodeURIComponent("Más información sobre Nesped")}`}
+                >
+                  Escríbenos
+                </a>
+                <a className="v3-btn" href="#demo">Que me llame la IA</a>
+              </div>
+              <p className="v3-p" style={{ marginTop: 18 }}>
+                O escríbenos directamente a <a href="mailto:hola@nesped.com">hola@nesped.com</a>.
               </p>
             </Rev>
-
-            <div className="v3-grid" data-c="3">
-              {PLANES_WEB.map((p, i) => {
-                const def = PLANES[p.plan];
-                const real = precios?.[p.plan];
-                const importe = precios === null ? "" : real?.precio || `${def.precio} €`;
-                const porVentas = def.hablarConVentas;
-
-                return (
-                  <Rev
-                    as="article"
-                    key={p.plan}
-                    d={i * 0.09}
-                    className={`v3-card v3-plan ${def.recomendado ? "v3-plan--hi" : ""}`}
-                  >
-                    <span className="v3-card-meta">
-                      {def.recomendado ? "El que recomendamos" : "Plan"}
-                    </span>
-                    <h3 className="v3-h3">{def.nombre}</h3>
-                    <p className="v3-plan-verbo">{p.verbo}</p>
-                    <p className="v3-p">{p.sub}</p>
-                    <div className="v3-price" aria-busy={precios === null}>
-                      {def.desde && importe ? <span className="v3-desde">desde </span> : null}
-                      {importe || " "}
-                    </div>
-                    <div className="v3-billing">{real?.periodo || "al mes"}</div>
-                    <ul className="v3-feats">
-                      {p.feats.map((f) => (
-                        <li key={f}><span className="v3-tick">/</span>{f}</li>
-                      ))}
-                    </ul>
-                    <a
-                      className={`v3-btn ${def.recomendado ? "v3-btn--white" : "v3-btn--dark"}`}
-                      href={
-                        porVentas
-                          ? `mailto:ventas@nesped.com?subject=${encodeURIComponent("Nesped Empresa")}`
-                          : `/registro?plan=${p.plan}`
-                      }
-                    >
-                      {porVentas ? "Hablar con nosotros" : `Empezar con ${def.nombre}`}
-                    </a>
-                  </Rev>
-                );
-              })}
-            </div>
           </div>
         </section>
 
@@ -1041,19 +896,19 @@ export default function Home() {
             <Rev className="v3-cta">
               <span className="v3-eyebrow">Siguiente paso</span>
               <h2 className="v3-h2">
-                Si quieres venderlo como producto serio,
+                Tu teléfono, atendido siempre.
                 <br />
-                enséñalo como producto serio.
+                Desde hoy.
               </h2>
               <p className="v3-lede">
-                El mejor argumento comercial no es explicarlo. Es abrir la
-                plataforma, cobrar un plan y dejar al cliente viendo una
-                experiencia impecable de punta a punta.
+                Llámala, pruébala y pregúntanos lo que quieras. Te enseñamos
+                cómo quedaría en tu empresa, con tu nombre y tu forma de
+                atender.
               </p>
               <div className="v3-cta-row">
-                <a className="v3-btn v3-btn--white" href="/pricing">Ver planes</a>
+                <a className="v3-btn v3-btn--white" href="#demo">Probar la demo</a>
                 <a className="v3-btn" href="/portal">Entrar al portal</a>
-                <a className="v3-btn" href="mailto:hola@nesped.com">Hablar con ventas</a>
+                <a className="v3-btn" href="#contacto">Más información</a>
               </div>
             </Rev>
           </div>

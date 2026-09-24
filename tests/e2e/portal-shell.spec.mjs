@@ -305,21 +305,17 @@ test("no se puede leer la ficha de un contacto ajeno", async ({ request, baseURL
  * lo que puede fallar no es la tabla de funciones, es que una pantalla se
  * olvide de declarar cuál necesita.
  */
-test("Growth no entra en Intelligence ni en Enterprise", async ({ context, page, baseURL }) => {
+test("sin planes: un cliente con plan de entrada lo abre todo", async ({ context, page, baseURL }) => {
   await montarPortal(context, page, baseURL, { plan: "growth" });
 
-  // Entra por Resumen: a nadie se le recibe con un candado.
-  await expect(page.getByRole("heading", { name: "Resumen" })).toBeVisible();
+  // Entra como cualquier cuenta completa: por lo que está pasando.
+  await expect(page.getByRole("heading", { name: /Qué está pasando/ })).toBeVisible();
+  // Ninguna entrada del menú lleva candado ni etiqueta de plan superior.
+  await expect(page.locator(".pv3-candado")).toHaveCount(0);
+  await expect(page.getByText(/TU PLAN ES/i)).toHaveCount(0);
 
-  await page.getByRole("button", { name: /Inteligencia/ }).click();
-  await expect(page.getByText(/TU PLAN ES CRECIMIENTO/i)).toBeVisible();
-  await expect(page.getByRole("button", { name: /Pasar a Inteligencia/i })).toBeVisible();
-
-  // Los automatismos entran en todos los planes; lo que queda en Enterprise
-  // son los agentes de canal, y el candado está dentro de esa pantalla.
-  // Enterprise no se contrata con tarjeta: se habla antes.
-  await page.getByRole("button", { name: /Automatismos/ }).click();
-  await expect(page.getByRole("link", { name: /Hablar con nosotros/i })).toBeVisible();
+  await page.getByRole("button", { name: /Inteligencia/ }).first().click();
+  await expect(page.getByRole("button", { name: /Pasar a /i })).toHaveCount(0);
 });
 
 test("Enterprise no se encuentra ningún candado", async ({ context, page, baseURL }) => {

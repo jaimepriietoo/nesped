@@ -54,7 +54,7 @@ test("el servidor no se fía de la voz: número autorizado y PIN se comprueban a
 });
 
 test("el conocimiento entra en la voz, en WhatsApp y en el copiloto; la voz recibe el estado de Ruperta", () => {
-  assert.match(leer("app/api/voice/elevenlabs/context/route.js"), /bloqueDeConocimiento\(conocimiento\), REPREGUNTAR, bloqueRuperta\(ruperta\)/);
+  assert.match(leer("app/api/voice/elevenlabs/context/route.js"), /bloqueDeConocimiento\(conocimiento\),\s*reglaDeContacto\([\s\S]*?\),\s*bloqueRuperta\(ruperta\)/);
   assert.match(leer("app/api/voice/elevenlabs/context/route.js"), /ruperta_permitido: ruperta\.permitido/);
   assert.match(leer("app/api/whatsapp/webhook/route.js"), /conocimiento: bloqueDeConocimiento\(conocimiento\)/);
   assert.match(leer("app/api/portal/conversations/suggest/route.js"), /conocimiento: bloqueDeConocimiento\(conocimiento\)/);

@@ -204,15 +204,16 @@ test("los datos parciales de una conversación se unen sin aceptar campos de otr
   ]), { nombre: "Ana", email: "nuevo@ejemplo.invalid", necesidad: "alta nueva" });
 });
 
-test("el agente empieza cada llamada de cero salvo el nombre: recibe el nombre, no el resto, y se le dice que repregunte", () => {
+test("al cliente que vuelve se le conoce (nombre, teléfono, dirección a confirmar) pero no se mezcla lo de antes", () => {
   const ruta = fs.readFileSync(path.join(RAIZ, "app/api/voice/elevenlabs/context/route.js"), "utf8");
   assert.match(ruta, /lead_nombre: ctx\.leadName \|\| "",\s*lead_necesidad: "",\s*resumen_contacto: ""/);
   assert.match(ruta, /leadStatus: "",\s*leadOwner: "",\s*leadSummary: "",\s*callObjective: ""/);
   assert.doesNotMatch(ruta, /leadName: ""/);
-  assert.match(ruta, /CADA LLAMADA ES UN EXPEDIENTE NUEVO, SALVO EL NOMBRE/);
-  assert.match(ruta, /Esta regla prevalece sobre cualquier instrucción general/);
-  assert.match(ruta, /el identificador de llamada no cuenta como confirmado/);
-  assert.match(ruta, /salúdale por su nombre/);
+  assert.match(ruta, /No le vuelvas a pedir el nombre ni el teléfono/);
+  assert.match(ruta, /si sigue siendo esa o ha cambiado/);
+  assert.match(ruta, /No menciones ni uses lo que contó en llamadas anteriores/);
+  assert.match(ruta, /el resumen, la clasificación y el correo de esta llamada son únicamente de esta conversación/);
+  assert.match(ruta, /Salúdale por su nombre/);
   assert.doesNotMatch(ruta, /ctx\.callObjective/);
   assert.match(ruta, /lead_id: ctx\.leadId/, "el enlace con la ficha se conserva");
   const eleven = fs.readFileSync(path.join(RAIZ, "lib/server/elevenlabs.js"), "utf8");

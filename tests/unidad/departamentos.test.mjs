@@ -204,16 +204,17 @@ test("los datos parciales de una conversación se unen sin aceptar campos de otr
   ]), { nombre: "Ana", email: "nuevo@ejemplo.invalid", necesidad: "alta nueva" });
 });
 
-test("al cliente que vuelve se le conoce (nombre, teléfono, dirección a confirmar) pero no se mezcla lo de antes", () => {
+test("al cliente que vuelve sólo se le conoce el nombre y los datos se recogen de nuevo", () => {
   const ruta = fs.readFileSync(path.join(RAIZ, "app/api/voice/elevenlabs/context/route.js"), "utf8");
   assert.match(ruta, /lead_nombre: ctx\.leadName \|\| "",\s*lead_necesidad: "",\s*resumen_contacto: ""/);
   assert.match(ruta, /leadStatus: "",\s*leadOwner: "",\s*leadSummary: "",\s*callObjective: ""/);
   assert.doesNotMatch(ruta, /leadName: ""/);
-  assert.match(ruta, /No le vuelvas a pedir el nombre ni el teléfono/);
-  assert.match(ruta, /si sigue siendo esa o ha cambiado/);
-  assert.match(ruta, /No menciones ni uses lo que contó en llamadas anteriores/);
-  assert.match(ruta, /el resumen, la clasificación y el correo de esta llamada son únicamente de esta conversación/);
-  assert.match(ruta, /Salúdale por su nombre/);
+  assert.match(ruta, /sólo puede reutilizar el\s*\* nombre/);
+  assert.match(ruta, /no digas que ya le conoces ni menciones llamadas anteriores/);
+  assert.match(ruta, /Vuelve a pedir o confirmar en ESTA llamada el teléfono de contacto/);
+  assert.match(ruta, /la localidad, la dirección del servicio y qué necesita/);
+  assert.match(ruta, /únicamente información dicha o confirmada en ESTA conversación/);
+  assert.doesNotMatch(ruta, /ultimaDireccion|su teléfono es|última dirección conocida/);
   assert.doesNotMatch(ruta, /ctx\.callObjective/);
   assert.match(ruta, /lead_id: ctx\.leadId/, "el enlace con la ficha se conserva");
   const eleven = fs.readFileSync(path.join(RAIZ, "lib/server/elevenlabs.js"), "utf8");

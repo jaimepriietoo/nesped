@@ -37,12 +37,66 @@ primero (son las que fabrican accesos), luego `SUPABASE_SERVICE_ROLE_KEY`,
 
 ## Variables necesarias
 
-`AWS_REGION=eu-west-1` y `NESPED_KMS_KEY_ID` (el ARN de la clave). En
-Production **y** Preview. La identidad se resuelve con la cadena estándar del
-SDK de AWS: usa preferentemente credenciales temporales del runtime o web
-identity. `AWS_ACCESS_KEY_ID` y `AWS_SECRET_ACCESS_KEY` sólo deben mantenerse
-como transición si la plataforma todavía no ofrece identidad temporal; no
-son un requisito de la aplicación.
+`AWS_REGION=eu-west-1` y `NESPED_KMS_KEY_ID` (el ARN de la clave), en
+Production **y** Preview. La identidad AWS sale de una de estas, por orden:
+
+1. **`AWS_ROLE_ARN` (la buena).** Vercel cambia su token OIDC por
+   credenciales de una hora (`AssumeRoleWithWebIdentity`). En Vercel no
+   queda ninguna clave AWS fija: quien copie las variables se lleva sobres
+   y un ARN, y con eso no abre nada.
+2. `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY`: la transición. Una copia
+   entera del entorno trae los sobres **y** la llave que los abre.
+3. La cadena estándar del SDK (perfil local, etc.): para scripts en local.
+
+El log `kms.sobres_abiertos` dice cuál se usó (`identidad`: `oidc_vercel`,
+`claves_estaticas` o `cadena_sdk`).
+
+## Pasar a OIDC (de claves fijas a credenciales de una hora)
+
+Datos de este proyecto: cuenta AWS `190884857032`, equipo de Vercel
+`jaimepriietoos-projects`, proyecto `nesped`, región `eu-west-1`.
+
+1. **Vercel** → proyecto `nesped` → Settings → Security → *Secure Backend
+   Access with OIDC Federation*: activado, modo **Team**.
+2. **AWS IAM** → Identity providers → Add provider → *OpenID Connect*:
+   - Provider URL: `https://oidc.vercel.com/jaimepriietoos-projects`
+   - Audience: `https://vercel.com/jaimepriietoos-projects`
+3. **AWS IAM** → Roles → Create role → *Web identity* → ese proveedor y esa
+   audiencia. Nombre: `nesped-vercel-kms`. Política de confianza (sustituye
+   la que genera el asistente):
+
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [{
+       "Effect": "Allow",
+       "Principal": { "Federated": "arn:aws:iam::190884857032:oidc-provider/oidc.vercel.com/jaimepriietoos-projects" },
+       "Action": "sts:AssumeRoleWithWebIdentity",
+       "Condition": {
+         "StringEquals": { "oidc.vercel.com/jaimepriietoos-projects:aud": "https://vercel.com/jaimepriietoos-projects" },
+         "StringLike": { "oidc.vercel.com/jaimepriietoos-projects:sub": [
+           "owner:jaimepriietoos-projects:project:nesped:environment:production",
+           "owner:jaimepriietoos-projects:project:nesped:environment:preview"
+         ] }
+       }
+     }]
+   }
+   ```
+
+   Permisos: una política en línea que sólo permita `kms:Decrypt` sobre la
+   clave `nesped-secretos` (el ARN de `NESPED_KMS_KEY_ID`). `kms:Encrypt`
+   no hace falta en Vercel: los sobres se cierran en local.
+4. **Vercel** → `AWS_ROLE_ARN=arn:aws:iam::190884857032:role/nesped-vercel-kms`
+   **sólo en Preview**, redesplegar una preview y comprobar en el log
+   `kms.sobres_abiertos` que `identidad` es `oidc_vercel` y que abre los
+   nueve sobres. Los sobres se abren al arrancar, fuera de una petición: si
+   el token OIDC no estuviera disponible en ese momento, la preview no
+   arrancaría y producción no se habría tocado.
+5. Si va bien: `AWS_ROLE_ARN` también en Production, redesplegar, comprobar
+   el mismo log. Después, **borrar** `AWS_ACCESS_KEY_ID` y
+   `AWS_SECRET_ACCESS_KEY` de Vercel y desactivar esa access key del usuario
+   `nesped-vercel` en IAM (se puede conservar para `cerrar-sobre` en local,
+   con sólo `kms:Encrypt`/`kms:Decrypt`).
 
 ## Coste
 

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 
-import { abrirSobre, abrirSobresDeEntorno, cerrarSobre, clienteKms, esSobre, SECRETOS_EN_SOBRE, PARA_PRUEBAS } from "../../lib/server/kms.js";
+import { abrirSobre, abrirSobresDeEntorno, cerrarSobre, clienteKms, esSobre, identidadKms, SECRETOS_EN_SOBRE, PARA_PRUEBAS } from "../../lib/server/kms.js";
 
 const RAIZ = path.resolve(import.meta.dirname, "../..");
 
@@ -96,4 +96,43 @@ test("KMS sólo exige la región antes de resolver credenciales en el runtime", 
     /Falta AWS_REGION/,
   );
   PARA_PRUEBAS.reiniciarCliente();
+});
+
+test("con AWS_ROLE_ARN, KMS usa el token OIDC de Vercel y ninguna clave fija", () => {
+  PARA_PRUEBAS.reiniciarCliente();
+  let configuracion;
+  let pedido;
+  const proveedor = () => "credenciales-temporales";
+  clienteKms(
+    { AWS_REGION: "eu-west-1", AWS_ROLE_ARN: "arn:aws:iam::123456789012:role/nesped-vercel-kms", AWS_ACCESS_KEY_ID: "AKIAFIJA" },
+    {
+      crearCliente(config) { configuracion = config; return { send() {} }; },
+      proveedorOidc(opciones) { pedido = opciones; return proveedor; },
+    },
+  );
+  assert.equal(configuracion.region, "eu-west-1");
+  assert.equal(configuracion.credentials, proveedor);
+  assert.equal(pedido.roleArn, "arn:aws:iam::123456789012:role/nesped-vercel-kms");
+  assert.equal(pedido.roleSessionName, "nesped-kms");
+  PARA_PRUEBAS.reiniciarCliente();
+});
+
+test("sin AWS_ROLE_ARN no se toca el proveedor OIDC", () => {
+  PARA_PRUEBAS.reiniciarCliente();
+  let configuracion;
+  clienteKms(
+    { AWS_REGION: "eu-west-1" },
+    {
+      crearCliente(config) { configuracion = config; return { send() {} }; },
+      proveedorOidc() { throw new Error("no debería pedir OIDC"); },
+    },
+  );
+  assert.deepEqual(configuracion, { region: "eu-west-1" });
+  PARA_PRUEBAS.reiniciarCliente();
+});
+
+test("el log de apertura dice qué identidad AWS se usó, sin valores", () => {
+  assert.equal(identidadKms({ AWS_ROLE_ARN: "arn:aws:iam::1:role/x", AWS_ACCESS_KEY_ID: "AKIA" }), "oidc_vercel");
+  assert.equal(identidadKms({ AWS_ACCESS_KEY_ID: "AKIA" }), "claves_estaticas");
+  assert.equal(identidadKms({}), "cadena_sdk");
 });

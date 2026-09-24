@@ -702,7 +702,7 @@ export default function AdminPage() {
                 <div className="grid grid-cols-7 bg-white/[0.04] px-5 py-4 text-xs uppercase tracking-[0.18em] text-white/40">
                   <div>Cliente</div>
                   <div>Estado</div>
-                  <div>Lead</div>
+                  <div>Contacto</div>
                   <div>Resumen</div>
                   <div>Origen</div>
                   <div>Duración</div>

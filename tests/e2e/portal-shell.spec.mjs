@@ -168,7 +168,7 @@ test("las secciones piden sus datos y los pintan", async ({ context, page, baseU
   await expect(page.getByRole("heading", { name: "Resumen" })).toBeVisible();
 
   await page.getByRole("button", { name: /Contactos/ }).click();
-  await expect(page.getByRole("heading", { name: "Leads" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Contactos" })).toBeVisible();
   await expect(page.getByText("Ana Ruiz")).toBeVisible();
 
   await page.getByRole("button", { name: /Llamadas/ }).click();

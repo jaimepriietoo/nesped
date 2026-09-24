@@ -1088,7 +1088,7 @@ function Resumen({ datos, onRecargar }) {
     <div className="pv3-view">
       <div className="pv3-grid" data-c="4">
         <Tarjeta label="LLAMADAS" valor={num(m.totalCalls)} detalle={`${duracion(m.avgDuration)} de media`} retraso={0} />
-        <Tarjeta label="LEADS" valor={num(m.totalLeads)} detalle={`${num(m.hotLeads)} calientes`} retraso={60} />
+        <Tarjeta label="CONTACTOS" valor={num(m.totalLeads)} detalle={`${num(m.hotLeads)} calientes`} retraso={60} />
         <Tarjeta label="CONVERSIÓN" valor={`${num(m.conversionRate)}%`} detalle={`${num(m.wonLeads)} ganados`} retraso={120} />
         <Tarjeta label="SIN RESPONDER" valor={num(m.sinResponder)} detalle={m.sinResponder ? "contactos nuevos esperando" : "nadie espera respuesta"} retraso={180} />
       </div>
@@ -1258,7 +1258,7 @@ function Leads({ datos, onRecargar, onMas }) {
           <table className="pv3-table">
             <thead>
               <tr>
-                <th>NOMBRE</th><th>TELÉFONO</th><th>ESTADO</th><th>DEPTO.</th><th>SCORE</th>
+                <th>NOMBRE</th><th>TELÉFONO</th><th>ESTADO</th><th>DEPTO.</th><th>PUNTUACIÓN</th>
                 <th>VALOR</th><th>INTERÉS</th><th>SIGUIENTE PASO</th><th>ALTA</th>
               </tr>
             </thead>
@@ -1336,7 +1336,7 @@ function Llamadas({ datos, onMas }) {
         <div className="pv3-tablewrap" style={{ marginTop: 22 }}>
           <table className="pv3-table">
             <thead>
-              <tr><th>FECHA</th><th>ORIGEN</th><th>DESTINO</th><th>DURACIÓN</th><th>LEAD</th><th>RESUMEN</th><th /></tr>
+              <tr><th>FECHA</th><th>ORIGEN</th><th>DESTINO</th><th>DURACIÓN</th><th>CONTACTO</th><th>RESUMEN</th><th /></tr>
             </thead>
             <tbody>
               {llamadas.slice(0, limite).map((c, i) => (
@@ -1558,7 +1558,7 @@ function Voz({ voz, cargando }) {
         <div className="pv3-tablewrap">
           <table className="pv3-table">
             <thead>
-              <tr><th>FECHA</th><th>NOTA</th><th>CUMPLIMIENTO</th><th>DURACIÓN</th><th>LEAD</th><th>RESUMEN</th></tr>
+              <tr><th>FECHA</th><th>NOTA</th><th>CUMPLIMIENTO</th><th>DURACIÓN</th><th>CONTACTO</th><th>RESUMEN</th></tr>
             </thead>
             <tbody>
               {(voz.calls || []).slice(0, 60).map((c, i) => {
@@ -1671,7 +1671,7 @@ function Equipo({ datos, onRecargar, acceso }) {
             <input className="pv3-input" value={nuevo.full_name}
               onChange={(e) => setNuevo({ ...nuevo, full_name: e.target.value })} />
           </Campo>
-          <Campo label="Email">
+          <Campo label="Correo">
             <input className="pv3-input" type="email" autoComplete="off" value={nuevo.email}
               onChange={(e) => setNuevo({ ...nuevo, email: e.target.value })} />
           </Campo>
@@ -1695,7 +1695,7 @@ function Equipo({ datos, onRecargar, acceso }) {
         </div>
 
         <p className="pv3-det">
-          Admin y owner tendrán que confirmar cada acceso con un código enviado por email.
+          Los administradores y el propietario tendrán que confirmar cada acceso con un código enviado por correo.
         </p>
 
         <Accion
@@ -1720,7 +1720,7 @@ function Equipo({ datos, onRecargar, acceso }) {
         <div className="pv3-tablewrap" style={{ marginTop: 22 }}>
           <table className="pv3-table">
             <thead>
-              <tr><th>NOMBRE</th><th>EMAIL</th><th>ROL</th><th>ESTADO</th><th>ALTA</th><th>ACCIONES</th></tr>
+              <tr><th>NOMBRE</th><th>CORREO</th><th>ROL</th><th>ESTADO</th><th>ALTA</th><th>ACCIONES</th></tr>
             </thead>
             <tbody>
               {usuarios.map((u, i) => (
@@ -2771,7 +2771,7 @@ function Conversaciones({ inbox, cargando, onRecargar }) {
                       }}>
                         <option value="whatsapp">WhatsApp</option>
                         <option value="sms">SMS</option>
-                        <option value="email">Email</option>
+                        <option value="email">Correo</option>
                       </select>
                     </Campo>
                   </div>
@@ -3021,9 +3021,9 @@ const META = {
   agentes: ["AUTOMATISMOS", "Qué hace Nesped solo", "Qué vigila, cuándo salta y cuánta libertad le das."],
   avisos: ["DEPARTAMENTOS Y AVISOS", "A quién le llega cada contacto", "Los departamentos de tu empresa y quién recibe cada uno por correo."],
   resumen: ["PANEL", "Resumen", "Lo que ha pasado y lo que hay abierto ahora mismo."],
-  leads: ["CAPTACIÓN", "Leads", "Todo lo que la voz ha capturado, en lista o por fases."],
+  leads: ["CAPTACIÓN", "Contactos", "Todo lo que la voz ha capturado, en lista o por fases."],
   llamadas: ["REGISTRO", "Llamadas", "Cada conversación, con grabación y transcripción."],
-  conversaciones: ["INBOX", "Conversaciones", "Cada hilo con su historial completo."],
+  conversaciones: ["BANDEJA DE ENTRADA", "Conversaciones", "Cada hilo con su historial completo."],
   voz: ["CALIDAD", "Calidad de voz", "Cómo está funcionando el agente, llamada a llamada."],
   equipo: ["ORGANIZACIÓN", "Equipo", "Quién tiene acceso, qué puede hacer y qué ha hecho."],
   ajustes: ["CONFIGURACIÓN", "Ajustes", "Tu cuenta, tus objetivos y tu facturación."],

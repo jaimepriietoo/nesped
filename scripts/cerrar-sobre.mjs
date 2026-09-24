@@ -7,6 +7,11 @@
  * Pide el valor por teclado (no por argumento, para que no quede en el
  * historial de la shell) y escribe el sobre `kms:v1:…`. Ese sobre va en
  * Vercel en la variable del mismo nombre; la app lo abre al arrancar.
+ *
+ * Si la terminal no entrega el Enter en modo oculto (pasa en algunos
+ * terminales integrados), el valor puede llegar por tubería, sin eco:
+ *
+ *   pbpaste | npm run -s cerrar:sobre NOMBRE_DE_LA_VARIABLE
  * Usa la cadena estándar de identidad de AWS (incluidos valores locales si
  * están configurados en .env.local).
  */
@@ -24,7 +29,9 @@ if (!nombre || !SECRETOS_EN_SOBRE.includes(nombre)) {
 }
 let valor;
 try {
-  valor = (await preguntarSecreto(`Valor actual de ${nombre} (entrada oculta): `)).trim();
+  valor = (await preguntarSecreto(process.stdin.isTTY
+    ? `Valor actual de ${nombre} (entrada oculta; si Enter no responde, Ctrl+C y usa: pbpaste | npm run -s cerrar:sobre ${nombre}): `
+    : `Leyendo ${nombre} de la entrada (sin eco)… `)).trim();
 } catch (error) {
   if (error?.code === "NESPED_INPUT_CANCELLED") process.exit(130);
   throw error;

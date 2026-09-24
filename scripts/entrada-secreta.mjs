@@ -1,4 +1,3 @@
-import readline from "node:readline/promises";
 import * as readlineTty from "node:readline";
 
 /**
@@ -7,12 +6,10 @@ import * as readlineTty from "node:readline";
  */
 export async function preguntarSecreto(pregunta, { input = process.stdin, output = process.stderr } = {}) {
   if (!input.isTTY || typeof input.setRawMode !== "function") {
-    const rl = readline.createInterface({ input, output });
-    try {
-      return await rl.question(pregunta);
-    } finally {
-      rl.close();
-    }
+    output.write(pregunta);
+    const valor = await leerPrimeraLinea(input);
+    output.write("\n");
+    return valor;
   }
 
   output.write(pregunta);
@@ -68,5 +65,40 @@ export async function preguntarSecreto(pregunta, { input = process.stdin, output
     input.on("keypress", alPulsar);
     input.once("error", alFallar);
     input.once("end", alTerminarEntrada);
+  });
+}
+
+/**
+ * Por tubería (`… | npm run cerrar:sobre X`) no se usa readline: si la salida
+ * es un terminal, readline entra en modo interactivo y repite en pantalla lo
+ * que lee —el secreto—, y sin salto de línea final nunca devuelve nada. Aquí
+ * se lee hasta el primer salto de línea o el final de la entrada, sin eco.
+ */
+function leerPrimeraLinea(input) {
+  return new Promise((resolve, reject) => {
+    let leido = "";
+    let terminado = false;
+    const terminar = (error, valor) => {
+      if (terminado) return;
+      terminado = true;
+      input.off("data", alLeer);
+      input.off("end", alAcabar);
+      input.off("error", alFallar);
+      input.pause?.();
+      if (error) reject(error);
+      else resolve(valor);
+    };
+    const alLeer = (trozo) => {
+      leido += String(trozo);
+      const salto = leido.search(/\r?\n/);
+      if (salto !== -1) terminar(null, leido.slice(0, salto));
+    };
+    const alAcabar = () => terminar(null, leido.replace(/\r$/, ""));
+    const alFallar = (error) => terminar(error);
+    input.setEncoding?.("utf8");
+    input.on("data", alLeer);
+    input.once("end", alAcabar);
+    input.once("error", alFallar);
+    input.resume?.();
   });
 }

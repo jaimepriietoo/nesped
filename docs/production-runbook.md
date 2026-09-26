@@ -23,8 +23,7 @@ If any token has ever been pasted in chat, screen-shared, committed, or exposed 
 - `NESPED_SESSION_SECRET`
 - `NESPED_TOTP_ENCRYPTION_KEY`
 - `INTERNAL_API_TOKEN`
-- `CRON_SECRET` (y el secreto `nesped_cola_cron_secret` de Supabase Vault, que
-  tiene el mismo valor; ver §10)
+- `CRON_SECRET` (y su copia en Supabase Vault; ver §10)
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
 - `TWILIO_AUTH_TOKEN`
@@ -174,30 +173,16 @@ clasificación de contactos, automatismos (cada 15 min) y mantenimiento
 diario. Alguien tiene que llamarlo cada 30 segundos; la ejecución siempre
 ocurre en funciones de Vercel.
 
-Hasta ahora lo llamaba Railway (`voice-server.js` + `lib/server/latido-cola.cjs`).
-El cron de `vercel.json` sólo corre una vez al día en el plan Hobby, y hasta
-esta PR **devolvía 401 cada día**: Vercel manda `Authorization: Bearer
-$CRON_SECRET` y `CRON_SECRET` no existía. Es decir, hoy Railway es el único
-latido real.
+Hasta ahora lo llamaba Railway (`voice-server.js` + `lib/server/latido-cola.cjs`);
+el cron de `vercel.json` sólo corre una vez al día en el plan Hobby.
 
-La sustitución: un trabajo de **Supabase Cron** (`pg_cron`), llamado
-`nesped-procesar-cola`, que cada `30 seconds` ejecuta
-`private.latir_cola()`. Esa función lee el secreto de **Vault** y hace un
-`net.http_post` (`pg_net`) a `https://www.nesped.com/api/cola/procesar` con
-`Authorization: Bearer <secreto>` y un techo de 55 s. Migración:
-`supabase/migrations/20260926100000_latido_cola_en_supabase.sql`.
-Reversión: `supabase/reversiones/20260926100000_latido_cola_en_supabase.sql`.
-
-La ruta acepta (`requireColaRequest` en `lib/server/internal-api.js`):
-
-- el token interno, como hasta ahora (Railway, `procesar-cola-local.mjs`);
-- `Authorization: Bearer <CRON_SECRET>`: Supabase Cron y el cron diario de
-  Vercel. `CRON_SECRET` **sólo abre esta ruta**: no sirve para las
-  herramientas de ElevenLabs ni para ninguna otra ruta interna.
-
-Nunca por la URL. Comparación en tiempo constante. Un `CRON_SECRET` de menos
-de 32 caracteres, o igual a la clave de servicio, al secreto de sesión o al
-token interno, no se acepta.
+La sustitución es un trabajo de **Supabase Cron**, `nesped-procesar-cola`,
+cada 30 segundos, que toma el secreto de **Vault** y llama a la ruta. El
+cómo está en la cabecera de la migración,
+`supabase/migrations/20260926100000_latido_cola_en_supabase.sql`, y la
+vuelta atrás en `supabase/reversiones/20260926100000_latido_cola_en_supabase.sql`.
+Quién puede llamar a la ruta lo decide `requireColaRequest`
+(`lib/server/internal-api.js`); `CRON_SECRET` sólo abre esta ruta.
 
 Tener Supabase y Railway a la vez **no duplica trabajo**: `tomar_trabajos()`
 reparte con `for update skip locked` y el mantenimiento y el barrido de
@@ -217,28 +202,23 @@ automatismos entran con clave única. Lo prueba
    `CRON_SECRET`, pegar, marcar *Sensitive*, entornos **Production** (y
    Preview si se quiere probar allí). **En claro, no en sobre KMS**: Vercel
    Cron manda el valor tal cual está guardado, y un `kms:v1:…` no coincidiría.
-3. **Supabase** → Project Settings → Vault → Secrets → *Add new secret*:
-   nombre `nesped_cola_cron_secret`, pegar el **mismo** valor, sin espacios ni
+3. **Supabase** → Project Settings → Vault → Secrets → *Add new secret*,
+   con el nombre que lee la migración y el **mismo** valor, sin espacios ni
    salto de línea. No usar `vault.create_secret` en el editor SQL: la
    sentencia con el valor queda en el historial de consultas.
 4. Vaciar el portapapeles (`pbcopy < /dev/null`).
-5. Comprobar sólo que existe, nunca su valor:
+5. Comprobar sólo que existe (`vault.secrets`, columna `name`), nunca su
+   valor.
 
-   ```sql
-   select name, created_at from vault.secrets where name = 'nesped_cola_cron_secret';
-   ```
-
-Si algún día se rota: cambiar primero Vault y Vercel (y volver a desplegar
-Vercel) en el mismo minuto; durante ese hueco las pasadas reciben 401 y la
-cola espera, sin perder nada.
+Para rotarlo, cambiar Vault y Vercel (y volver a desplegar Vercel) seguidos;
+en el hueco la cola espera, sin perder nada.
 
 ### Despliegue, por fases (no saltarse ninguna)
 
 **Fase A — encender el latido de Supabase con Railway encendido.**
 
 1. Pasos manuales 1–5 de arriba.
-2. Fusionar la PR (Vercel despliega la ruta que acepta `CRON_SECRET`).
-   Comprobar que el cron diario de Vercel deja de dar 401 a las 04:00 UTC.
+2. Fusionar la PR y comprobar que el cron diario de Vercel responde 200.
 3. Aplicar la migración (conector de Supabase o panel). Si el secreto ya
    está en Vault, el trabajo queda **activo**; si no, queda **inactivo** y se
    activa con:

@@ -10,6 +10,7 @@ cierran con `pbpaste | npm run -s cerrar:sobre NOMBRE` y se pegan en Vercel
 | `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_JWT_SECRET` | Panel de Supabase (API keys) | Sí | [ ] |
 | `NESPED_SESSION_SECRET` | `openssl rand -hex 32` | No (cambiarlo cierra todas las sesiones) | [ ] |
 | `INTERNAL_API_TOKEN` | `openssl rand -hex 32`; cambiarlo también en ElevenLabs (cabecera de las herramientas) y Railway | Sí | [ ] |
+| `CRON_SECRET` | `openssl rand -hex 32`; el mismo valor en Supabase Vault, pegado desde el panel (runbook de producción §10). Sólo abre `/api/cola/procesar` | No: Vercel Cron lo manda tal cual está guardado | [ ] |
 | `NESPED_TOTP_ENCRYPTION_KEY` | Ver `docs/sobres-kms.md` (rotarla exige recifrar los factores) | Sí | [ ] |
 | `NESPED_DATA_ENCRYPTION_KEY` | `npm run recifrar:datos` con la anterior en `…_ANTERIOR` | Sí | 24-09-2026 |
 | `STRIPE_SECRET_KEY` | Panel de Stripe | Sí | [ ] |

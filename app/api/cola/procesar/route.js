@@ -1,4 +1,4 @@
-import { requireInternalRequest } from "@/lib/server/internal-api";
+import { requireColaRequest } from "@/lib/server/internal-api";
 import { encolar, tomarTrabajos, terminar, fallar, rescatarColgados, latidoDeLaCola, SinArreglo } from "@/lib/server/cola";
 import { colaEnPausa } from "@/lib/server/interruptores";
 import { logEvent } from "@/lib/server/observability.mjs";
@@ -21,7 +21,9 @@ import { getSupabase } from "@/lib/supabase";
  * y un lote pequeño que termina siempre vale más que uno grande que a veces
  * se corta a la mitad. Lo que quede sigue ahí para la siguiente pasada.
  *
- * Sólo desde dentro, con el token interno: aquí se manda correo.
+ * Sólo desde dentro: aquí se manda correo. Entra el token interno (el latido
+ * de Railway) o CRON_SECRET en `Authorization: Bearer` (el cron de Vercel y el
+ * latido de Supabase). Ver requireColaRequest.
  */
 
 /** Cuántos trabajos por pasada. Cabe de sobra en el tiempo de una función. */
@@ -119,8 +121,9 @@ async function pedirMantenimientoDelDia() {
 /**
  * El barrido de automatismos se pide cada quince minutos, también solo: la
  * clave lleva el cuarto de hora, así que por muchas pasadas que haya en ese
- * rato entra un barrido. Con el latido de Railway son quince minutos de
- * verdad; con sólo el cron diario de Vercel, uno al día.
+ * rato entra un barrido. Con un latido cada treinta segundos (Supabase Cron,
+ * o Railway mientras siga de respaldo) son quince minutos de verdad; con sólo
+ * el cron diario de Vercel, uno al día.
  */
 async function pedirBarridoDeAutomatismos() {
   const cuarto = Math.floor(Date.now() / (15 * 60 * 1000));
@@ -128,7 +131,7 @@ async function pedirBarridoDeAutomatismos() {
 }
 
 async function procesar(req) {
-  const errorInterno = requireInternalRequest(req);
+  const errorInterno = requireColaRequest(req);
   if (errorInterno) return errorInterno;
 
   try {
@@ -144,15 +147,15 @@ async function procesar(req) {
 
     /* Y se mira si esta pasada llega tarde. Si hay trabajos vencidos desde
        hace más de quince minutos, las pasadas anteriores no ocurrieron: el
-       latido de Railway está caído y sólo el cron diario de Vercel ha
-       llegado hasta aquí. Se avisa a operaciones —logEvent en nivel error
+       latido (Supabase Cron, y Railway mientras siga de respaldo) está caído
+       y sólo el cron diario de Vercel ha llegado hasta aquí. Se avisa a operaciones —logEvent en nivel error
        manda al webhook— y se sigue procesando, que es lo urgente. */
     const latido = await latidoDeLaCola();
     if (latido.comprobado && latido.pendientesViejos > 0) {
       logEvent("error", "cola.sin_latido", {
         pendientesViejos: latido.pendientesViejos,
         masAntiguoMin: latido.masAntiguoMin,
-        palanca: "Mirar el latido en Railway (voice-server.js) y CRON_SECRET",
+        palanca: "Mirar el trabajo nesped-procesar-cola en Supabase (cron.job_run_details, net._http_response), el secreto de Vault y CRON_SECRET; Railway es el respaldo",
       });
     }
 

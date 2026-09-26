@@ -20,6 +20,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
+import { loQueNoSePuedePublicar } from "./senales-publicacion.mjs";
 
 const RAIZ = path.resolve(import.meta.dirname, "..");
 const DESTINO = path.join(RAIZ, "supabase/migrations/historico");
@@ -27,47 +28,6 @@ const DESTINO = path.join(RAIZ, "supabase/migrations/historico");
 const env = fs.readFileSync(path.join(RAIZ, ".env.local"), "utf8");
 const leer = (clave) =>
   (env.match(new RegExp(`^${clave}=(.*)$`, "m")) || [])[1]?.trim().replace(/^"|"$/g, "");
-
-/**
- * El número de voz de Nesped ya está en lib/clients.js, que se publica. No es
- * exposición nueva y no debe disparar el filtro.
- */
-const YA_PUBLICO = new Set(["+34983460825", "34983460825"]);
-
-/** Qué hace que un fichero no pueda publicarse. */
-const SENALES = [
-  {
-    nombre: "una dirección de correo",
-    // Se excluyen los dominios de ejemplo, que existen justo para esto.
-    prueba: (sql) =>
-      [...sql.matchAll(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g)]
-        .map((m) => m[0])
-        .filter((c) => !/@(ejemplo|example)\.(invalid|com|org)$/i.test(c)),
-  },
-  {
-    nombre: "un teléfono",
-    prueba: (sql) =>
-      [...sql.matchAll(/\+?34\d{9}/g)].map((m) => m[0]).filter((t) => !YA_PUBLICO.has(t)),
-  },
-  {
-    nombre: "algo que parece una clave o un hash",
-    // Cadenas largas sin espacios dentro de comillas simples: hashes de scrypt,
-    // tokens, claves. Un identificador normal no llega a 40 caracteres.
-    prueba: (sql) =>
-      [...sql.matchAll(/'([A-Za-z0-9+/=$:._-]{40,})'/g)]
-        .map((m) => m[1])
-        .filter((v) => !/^[a-z_]+$/i.test(v)),
-  },
-];
-
-function loQueNoSePuedePublicar(sql) {
-  const motivos = [];
-  for (const senal of SENALES) {
-    const encontrado = senal.prueba(sql);
-    if (encontrado.length > 0) motivos.push(`${senal.nombre} (${encontrado.length})`);
-  }
-  return motivos;
-}
 
 const supabase = createClient(
   leer("NEXT_PUBLIC_SUPABASE_URL"),

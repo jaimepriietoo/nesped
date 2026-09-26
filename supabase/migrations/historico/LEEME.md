@@ -7,8 +7,8 @@ depender de que la consola del proveedor siga estando ahí.
 Los ficheros `../2026*_fase*.sql` son otra cosa: explican **por qué** se hizo
 cada cambio. Estos de aquí son el **qué**, tal cual se aplicó.
 
-Última actualización: 2026-09-23
-Migraciones publicadas: 60 de 61
+Última actualización: 2026-09-26
+Migraciones publicadas: 61 de 62
 
 ## Lo que NO está aquí, y por qué
 

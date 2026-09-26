@@ -23,6 +23,8 @@ If any token has ever been pasted in chat, screen-shared, committed, or exposed 
 - `NESPED_SESSION_SECRET`
 - `NESPED_TOTP_ENCRYPTION_KEY`
 - `INTERNAL_API_TOKEN`
+- `CRON_SECRET` (y el secreto `nesped_cola_cron_secret` de Supabase Vault, que
+  tiene el mismo valor; ver §10)
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
 - `TWILIO_AUTH_TOKEN`
@@ -39,7 +41,8 @@ Make sure the same critical variables exist in:
 
 - local `.env.local`
 - Vercel production environment
-- Railway voice server environment
+- Railway (sólo mientras siga de respaldo temporal del latido de la cola; ver
+  §10). Ya no atiende llamadas.
 
 Recommended observability variables:
 
@@ -74,9 +77,10 @@ no se puede hacer force push ni borrarla. Vercel despliega producción desde
    `auth_totp_factors` y `mensajes_salientes_idempotentes` antes de publicar
    el código; no contienen datos de clientes ni eliminan columnas.
 3. Deploy Next app to Vercel (fusionar la PR en `main`)
-4. Deploy `voice-server.js` service to Railway
-5. Confirm public `BASE_URL` still points to the voice service
-6. Confirm Stripe and Twilio webhooks still target the right production URLs
+4. Comprobar que el latido de la cola sigue vivo: `nesped-procesar-cola` en
+   Supabase (§10) y, mientras siga de respaldo, el servicio de Railway
+   (`voice-server.js`). Railway ya no lleva audio ni recibe llamadas.
+5. Confirm Stripe and Twilio webhooks still target the right production URLs
 
 ## 5. Smoke test after deploy
 
@@ -116,7 +120,9 @@ npm run smoke -- https://tu-dominio.com
 - App readiness: `/api/ops/readiness`
 - Incident test: `POST /api/ops/incident-test`
 - Portal health: `/api/portal/health`
-- Voice server liveness: `/healthz`
+- Salud completa (incluye si la cola lleva más de 15 min sin latido): `/api/ops/salud`
+- Latido de la cola: `cron.job_run_details` y `net._http_response` (§10)
+- Servicio de fondo en Railway, mientras siga de respaldo: `/healthz`
 - Voice compliance page: `/legal/voice-compliance`
 
 ## 8. E2E and rate limiting
@@ -150,9 +156,194 @@ Palancas de emergencia (sin desplegar):
 If production breaks:
 
 1. Check Vercel deploy logs
-2. Check Railway voice logs
-3. Hit `/api/ops/readiness`
+2. Comprobar el latido de la cola (§10: `cron.job_run_details`,
+   `net._http_response`) y, mientras siga de respaldo, los logs de Railway
+3. Hit `/api/ops/readiness` y `/api/ops/salud`
 4. Confirm env variables still exist after redeploy
 5. Confirm Twilio and Stripe signatures are still valid
 6. Run smoke test again against production
 7. Trigger `POST /api/ops/incident-test` from an owner/admin session to verify webhook + Sentry delivery
+
+## 10. Latido de la cola: Supabase Cron en lugar de Railway
+
+### Qué es y por qué
+
+`/api/cola/procesar` ejecuta los trabajos de fondo: correos de avisos e
+informes, copias de grabaciones, webhooks entrantes y salientes,
+clasificación de contactos, automatismos (cada 15 min) y mantenimiento
+diario. Alguien tiene que llamarlo cada 30 segundos; la ejecución siempre
+ocurre en funciones de Vercel.
+
+Hasta ahora lo llamaba Railway (`voice-server.js` + `lib/server/latido-cola.cjs`).
+El cron de `vercel.json` sólo corre una vez al día en el plan Hobby, y hasta
+esta PR **devolvía 401 cada día**: Vercel manda `Authorization: Bearer
+$CRON_SECRET` y `CRON_SECRET` no existía. Es decir, hoy Railway es el único
+latido real.
+
+La sustitución: un trabajo de **Supabase Cron** (`pg_cron`), llamado
+`nesped-procesar-cola`, que cada `30 seconds` ejecuta
+`private.latir_cola()`. Esa función lee el secreto de **Vault** y hace un
+`net.http_post` (`pg_net`) a `https://www.nesped.com/api/cola/procesar` con
+`Authorization: Bearer <secreto>` y un techo de 55 s. Migración:
+`supabase/migrations/20260926100000_latido_cola_en_supabase.sql`.
+Reversión: `supabase/reversiones/20260926100000_latido_cola_en_supabase.sql`.
+
+La ruta acepta (`requireColaRequest` en `lib/server/internal-api.js`):
+
+- el token interno, como hasta ahora (Railway, `procesar-cola-local.mjs`);
+- `Authorization: Bearer <CRON_SECRET>`: Supabase Cron y el cron diario de
+  Vercel. `CRON_SECRET` **sólo abre esta ruta**: no sirve para las
+  herramientas de ElevenLabs ni para ninguna otra ruta interna.
+
+Nunca por la URL. Comparación en tiempo constante. Un `CRON_SECRET` de menos
+de 32 caracteres, o igual a la clave de servicio, al secreto de sesión o al
+token interno, no se acepta.
+
+Tener Supabase y Railway a la vez **no duplica trabajo**: `tomar_trabajos()`
+reparte con `for update skip locked` y el mantenimiento y el barrido de
+automatismos entran con clave única. Lo prueba
+`tests/unidad/cola-latido.test.mjs`.
+
+### Lo que hace el propietario a mano (nadie más ve el valor)
+
+1. **Generar el secreto** en tu máquina y copiarlo al portapapeles sin que
+   salga en pantalla:
+
+   ```bash
+   openssl rand -hex 32 | tr -d '\n' | pbcopy
+   ```
+
+2. **Vercel** → Project `nesped` → Settings → Environment Variables → Add:
+   `CRON_SECRET`, pegar, marcar *Sensitive*, entornos **Production** (y
+   Preview si se quiere probar allí). **En claro, no en sobre KMS**: Vercel
+   Cron manda el valor tal cual está guardado, y un `kms:v1:…` no coincidiría.
+3. **Supabase** → Project Settings → Vault → Secrets → *Add new secret*:
+   nombre `nesped_cola_cron_secret`, pegar el **mismo** valor, sin espacios ni
+   salto de línea. No usar `vault.create_secret` en el editor SQL: la
+   sentencia con el valor queda en el historial de consultas.
+4. Vaciar el portapapeles (`pbcopy < /dev/null`).
+5. Comprobar sólo que existe, nunca su valor:
+
+   ```sql
+   select name, created_at from vault.secrets where name = 'nesped_cola_cron_secret';
+   ```
+
+Si algún día se rota: cambiar primero Vault y Vercel (y volver a desplegar
+Vercel) en el mismo minuto; durante ese hueco las pasadas reciben 401 y la
+cola espera, sin perder nada.
+
+### Despliegue, por fases (no saltarse ninguna)
+
+**Fase A — encender el latido de Supabase con Railway encendido.**
+
+1. Pasos manuales 1–5 de arriba.
+2. Fusionar la PR (Vercel despliega la ruta que acepta `CRON_SECRET`).
+   Comprobar que el cron diario de Vercel deja de dar 401 a las 04:00 UTC.
+3. Aplicar la migración (conector de Supabase o panel). Si el secreto ya
+   está en Vault, el trabajo queda **activo**; si no, queda **inactivo** y se
+   activa con:
+
+   ```sql
+   select cron.alter_job((select jobid from cron.job where jobname = 'nesped-procesar-cola'), active := true);
+   ```
+
+4. `npm run volcar:migraciones` para llevar el SQL aplicado a
+   `supabase/migrations/historico/`, y commit del volcado.
+5. Mantener **Railway encendido**.
+6. Comprobar las ejecuciones (deben salir cada ~30 s y `succeeded`):
+
+   ```sql
+   select start_time, status, return_message
+     from cron.job_run_details
+    where jobid = (select jobid from cron.job where jobname = 'nesped-procesar-cola')
+    order by start_time desc limit 20;
+   ```
+
+7. Comprobar las respuestas HTTP sin mirar cabeceras (deben ser 200):
+
+   ```sql
+   select status_code, timed_out, error_msg, count(*), max(created)
+     from net._http_response
+    where created > now() - interval '15 minutes'
+    group by 1, 2, 3;
+   ```
+
+8. Logs de Vercel filtrando `/api/cola/procesar`: POST cada ~30 s desde
+   Supabase además de los de Railway, todos 200. No exportar ni pegar
+   cabeceras.
+9. La cola no acumula trabajos vencidos de más de 15 minutos:
+
+   ```sql
+   select count(*) as vencidos_15min
+     from public.trabajos
+    where estado = 'pendiente' and no_antes_de < now() - interval '15 minutes';
+   ```
+
+**Fase B — los dos latidos juntos, 24 a 48 horas.**
+
+- Cero duplicados. Dos pasadas no pueden coger la misma fila; lo que sí
+  daría `intentos > 1` es un reintento tras fallo o un rescate de un trabajo
+  colgado. Con la cola sana deben ser pocos y explicables:
+
+  ```sql
+  select tipo, count(*) filter (where estado = 'hecho' and intentos > 1) as hechos_con_reintento,
+         count(*) filter (where estado = 'fallido') as fallidos
+    from public.trabajos
+   where creado_en > now() - interval '48 hours'
+   group by 1 order by 1;
+  ```
+
+  Cada `hechos_con_reintento` se mira en los logs de Vercel por su `job_id`
+  (`conContexto` lo añade a cada línea) antes de pasar a la fase C: tiene que
+  haber un fallo o un rescate que lo explique. Y ningún destinatario debe
+  haber recibido dos veces el mismo aviso.
+- Cero backlog envejecido (consulta del paso 9) y `/api/ops/salud` sin el
+  aviso "La cola de trabajos no se está procesando".
+- Prueba de extremo a extremo: una llamada real al número de prueba (llega al
+  portal con **grabación copiada** y **contacto clasificado**, y el
+  departamento recibe el **correo**), un **webhook saliente** entregado a un
+  destino de prueba y un **automatismo** que salta en su barrido.
+- Un `mantenimiento` diario en estado `hecho`.
+
+**Fase C — pausar Railway, sin borrarlo.**
+
+- Railway → servicio → *Settings* → reducir a 0 réplicas o *Pause*. No
+  borrar el servicio ni sus variables.
+- Observar al menos 24 horas: `/api/ops/salud` en verde, consultas de la
+  fase A limpias, un informe y un mantenimiento diario completados.
+- Comprobar en los logs de Vercel que ya **no llega ningún POST con el
+  token interno** a `/api/cola/procesar`: Railway ya no recibe ni hace
+  tráfico.
+
+**Fase D — sólo con autorización explícita del propietario.**
+
+- Cancelar Railway.
+- Rotar lo que estaba también en Railway —`INTERNAL_API_TOKEN` (y con él la
+  cabecera de las herramientas en ElevenLabs), `SUPABASE_SERVICE_ROLE_KEY`,
+  y `SENTRY_DSN` si se quiere— y borrar allí sus variables antes de cerrar la
+  cuenta.
+- Otra PR, aparte: retirar `voice-server.js`, `lib/server/latido-cola.cjs`,
+  sus pruebas, las menciones a Railway en la documentación y a Railway como
+  subencargado en `lib/legal.js` y `docs/rgpd/`.
+
+### Aceptación final (con pruebas, no con intuición)
+
+Mismo intervalo de 30 s · cola sin trabajos vencidos de más de 15 min ·
+correos enviados · grabaciones copiadas · webhooks entregados · automatismos
+ejecutados · mantenimiento diario completado · rollback probado (pausar y
+reactivar el trabajo con `cron.alter_job` y ver que Railway, o el cron, lo
+recoge) · Railway sin tráfico antes de cancelarlo.
+
+### Pausar, reactivar, revertir
+
+- Pausar: `select cron.alter_job((select jobid from cron.job where jobname = 'nesped-procesar-cola'), active := false);`
+- Reactivar: lo mismo con `active := true`.
+- Revertir del todo: ejecutar
+  `supabase/reversiones/20260926100000_latido_cola_en_supabase.sql`. Quita el
+  trabajo con `cron.unschedule` y la función; **no borra ningún trabajo de la
+  cola**, ni las extensiones, ni el secreto de Vault. Antes, asegurarse de
+  que Railway está encendido.
+- Nunca `insert`/`update`/`delete` sobre `cron.job`: sólo `cron.schedule`,
+  `cron.alter_job` y `cron.unschedule`.
+- `pausa_global` en `ajustes_plataforma` sigue funcionando igual: el latido
+  llega, la ruta ve la pausa y no coge nada.

@@ -15,6 +15,13 @@ el número y se encarga del audio de punta a punta. `voice-server.js` pasó de
 2.109 líneas a unas 300, y lo único que le queda es empujar la cola de trabajos
 —que hace falta porque los cron de Vercel en plan Hobby corren una vez al día—.
 
+Ese empujón se está pasando a **Supabase Cron** (`pg_cron` + `pg_net`, trabajo
+`nesped-procesar-cola`, cada 30 s; `docs/production-runbook.md` §10). Durante
+la transición Railway sigue encendido como **respaldo temporal**. Ni uno ni
+otro participa en las llamadas: si los dos se paran, se sigue contestando el
+teléfono y lo único que se retrasa es lo que va por la cola (grabaciones,
+avisos, clasificación).
+
 Telnyx desapareció del proyecto. También llevaba los SMS y los WhatsApp, y esos
 pasaron a Twilio (`lib/server/twilio.js`).
 
@@ -62,7 +69,16 @@ TWILIO_WHATSAPP_NUMBER=+34...       # sólo si se usa WhatsApp
 NEXT_PUBLIC_APP_URL=https://nesped.com
 ```
 
-En `Railway` (el servicio de fondo, que ya no atiende llamadas):
+En `Vercel`, para que el latido de Supabase y el cron diario puedan empujar
+la cola (en claro, no en sobre KMS; el mismo valor va en Supabase Vault como
+`nesped_cola_cron_secret`):
+
+```env
+CRON_SECRET=...
+```
+
+En `Railway` (respaldo temporal del latido de la cola; no atiende llamadas y
+se retirará cuando el propietario confirme la sustitución):
 
 ```env
 INTERNAL_API_TOKEN=...

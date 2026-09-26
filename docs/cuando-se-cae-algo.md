@@ -49,18 +49,53 @@ reentregados, y la cola. Si la caída fue larga, ElevenLabs habrá agotado
 reintentos: recuperar las conversaciones por su API.
 **Verificación.** Login completo con 2FA, abrir Contactos, `/api/ops/salud`.
 
-## Railway caído (el latido)
+## La cola no avanza (el latido)
+
+Quién empuja la cola: el trabajo `nesped-procesar-cola` de **Supabase Cron**
+cada 30 s; **Railway** (`voice-server.js`) cada 30 s mientras siga de
+respaldo temporal; y el cron diario de Vercel a las 04:00 UTC. Ninguno
+ejecuta trabajos: sólo llaman a `/api/cola/procesar`, que corre en Vercel.
+Detalle y fases de la transición: `docs/production-runbook.md` §10.
 
 **Detección.** `/api/ops/salud` avisa "la cola de trabajos no se está
 procesando"; `/api/cola/procesar` manda `cola.sin_latido` al webhook de
-operaciones en la siguiente pasada (como tarde, el cron diario de Vercel).
-**Impacto.** Bajo: informes por correo, purgas y copias de grabaciones
-esperan. Nada visible para el cliente en las primeras horas.
-**Mitigación.** Llamar a mano a `/api/cola/procesar` con `CRON_SECRET`
-cada pocos minutos, o desde un cron externo. Con Vercel Pro esto deja de
-depender de Railway (crons cada minuto).
-**Recuperación.** Reiniciar el servicio en Railway; la cola se pone al día
-sola.
+operaciones en la siguiente pasada que llegue. En la base:
+
+```sql
+select start_time, status, return_message from cron.job_run_details
+ where jobid = (select jobid from cron.job where jobname = 'nesped-procesar-cola')
+ order by start_time desc limit 10;
+select status_code, timed_out, error_msg, count(*) from net._http_response
+ where created > now() - interval '15 minutes' group by 1, 2, 3;
+```
+
+**Impacto.** Bajo al principio: avisos por correo, informes, copias de
+grabaciones, webhooks salientes, clasificación, automatismos y purgas
+esperan. Las llamadas no se ven afectadas: las atienden Twilio y ElevenLabs.
+Si dura horas, el portal enseña llamadas sin grabación ni clasificar.
+**Causas y qué hacer.**
+- `cron.job_run_details` con `failed` y "falta el secreto": el secreto
+  `nesped_cola_cron_secret` no está en Vault o es corto. Crearlo (runbook
+  §10) y reactivar el trabajo.
+- Sin filas nuevas en `cron.job_run_details`: el trabajo está inactivo
+  (`select active from cron.job where jobname = 'nesped-procesar-cola'`) o
+  el planificador de pg_cron se ha parado (Supabase → *Fast reboot*, ver su
+  guía de depuración de pg_cron).
+- `net._http_response` con 401: `CRON_SECRET` en Vercel y el secreto de
+  Vault no coinciden, o `CRON_SECRET` está en sobre KMS (tiene que ir en
+  claro). Con 5xx o `timed_out`: mirar los logs de Vercel de la ruta.
+**Mitigación.** Mientras siga de respaldo, Railway empuja solo. Si tampoco:
+`node --import ./tests/alias.mjs scripts/procesar-cola-local.mjs` desde el
+portátil, o `POST /api/cola/procesar` a mano con el token interno en la
+cabecera `x-nesped-internal-token` (nunca en la URL).
+**Rollback.** Pausar el trabajo de Supabase con `cron.alter_job(…, active :=
+false)` o revertir con `supabase/reversiones/20260926100000_latido_cola_en_supabase.sql`;
+ninguno de los dos borra trabajos. Railway recoge la cola mientras siga
+encendido.
+**Recuperación.** La cola se pone al día sola en cuanto vuelve un latido:
+diez trabajos por pasada, tres a la vez.
+**Verificación.** La consulta de vencidos de más de 15 min
+(runbook §10, paso 9) a cero y `/api/ops/salud` sin el aviso.
 
 ## ElevenLabs caído
 
@@ -123,7 +158,8 @@ cargos inesperados; una clave en un sitio público.
 **Mitigación, en este orden.**
 1. `pausa_global = true` (si la base sigue siendo de confianza).
 2. Rotar la clave en el proveedor y en Vercel/Railway (sección 2 del
-   runbook de producción).
+   runbook de producción). `CRON_SECRET` se rota a la vez en Vercel y en
+   Supabase Vault (`nesped_cola_cron_secret`); sólo abre la cola.
 3. Si es la de sesión (`NESPED_SESSION_SECRET`): rotarla **cierra todas las
    sesiones**; además subir `session_epoch` de los usuarios afectados
    (`revocar_sesiones_usuario`).
@@ -153,7 +189,7 @@ cargos inesperados; una clave en un sitio público.
    pendiente que borra la versión sin parámetros.
 **Recuperación.** `node --import ./tests/alias.mjs scripts/recuperar-llamadas.mjs --desde=AAAA-MM-DD [--empresa=<id>]`
 trae de ElevenLabs las conversaciones que no llegaron y las pasa por el
-mismo camino que el webhook. Si el latido de Railway no procesa la cola,
+mismo camino que el webhook. Si ningún latido procesa la cola,
 `node --import ./tests/alias.mjs scripts/procesar-cola-local.mjs` la
 procesa desde el portátil con el `.env.local`.
 **Verificación.** La siguiente llamada aparece en el portal en menos de un

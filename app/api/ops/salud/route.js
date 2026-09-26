@@ -76,8 +76,8 @@ async function handleGet(req) {
 
   const avisos = [...(saludRes.data?.avisos || [])];
 
-  /* La cola depende de que alguien la empuje —el latido desde Railway, o el
-     cron diario de Vercel—. Si el latido cae, nada avisa: los informes y las
+  /* La cola depende de que alguien la empuje —el latido de Supabase Cron,
+     Railway mientras siga de respaldo, o el cron diario de Vercel—. Si el latido cae, nada avisa: los informes y las
      purgas simplemente no salen. Un trabajo pendiente desde hace más de
      quince minutos es la señal de que nadie está empujando. */
   if (latido.comprobado && latido.pendientesViejos > 0) {
@@ -85,7 +85,7 @@ async function handleGet(req) {
       que: "La cola de trabajos no se está procesando",
       medido: `${latido.pendientesViejos} pendiente(s) desde hace más de ${latido.minutos} min; el más antiguo, ${latido.masAntiguoMin} min`,
       palanca:
-        "Mirar el servicio de Railway (voice-server.js, el latido) y CRON_SECRET. Mientras tanto, /api/cola/procesar se puede llamar a mano.",
+        "Mirar el trabajo nesped-procesar-cola en Supabase (cron.job_run_details y net._http_response), el secreto de Vault y CRON_SECRET en Vercel; Railway es el respaldo. Mientras tanto, /api/cola/procesar se puede llamar a mano.",
     });
   }
 

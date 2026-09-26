@@ -74,9 +74,9 @@ grabaciones, webhooks salientes, clasificación, automatismos y purgas
 esperan. Las llamadas no se ven afectadas: las atienden Twilio y ElevenLabs.
 Si dura horas, el portal enseña llamadas sin grabación ni clasificar.
 **Causas y qué hacer.**
-- `cron.job_run_details` con `failed` y "falta el secreto": el secreto
-  `nesped_cola_cron_secret` no está en Vault o es corto. Crearlo (runbook
-  §10) y reactivar el trabajo.
+- `cron.job_run_details` con `failed` y "falta el secreto": el secreto de
+  Vault que lee la migración no existe o es corto. Crearlo (runbook §10) y
+  reactivar el trabajo.
 - Sin filas nuevas en `cron.job_run_details`: el trabajo está inactivo
   (`select active from cron.job where jobname = 'nesped-procesar-cola'`) o
   el planificador de pg_cron se ha parado (Supabase → *Fast reboot*, ver su
@@ -159,7 +159,7 @@ cargos inesperados; una clave en un sitio público.
 1. `pausa_global = true` (si la base sigue siendo de confianza).
 2. Rotar la clave en el proveedor y en Vercel/Railway (sección 2 del
    runbook de producción). `CRON_SECRET` se rota a la vez en Vercel y en
-   Supabase Vault (`nesped_cola_cron_secret`); sólo abre la cola.
+   Supabase Vault; sólo abre la cola.
 3. Si es la de sesión (`NESPED_SESSION_SECRET`): rotarla **cierra todas las
    sesiones**; además subir `session_epoch` de los usuarios afectados
    (`revocar_sesiones_usuario`).

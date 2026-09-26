@@ -70,8 +70,8 @@ NEXT_PUBLIC_APP_URL=https://nesped.com
 ```
 
 En `Vercel`, para que el latido de Supabase y el cron diario puedan empujar
-la cola (en claro, no en sobre KMS; el mismo valor va en Supabase Vault como
-`nesped_cola_cron_secret`):
+la cola (en claro, no en sobre KMS; el mismo valor va en Supabase Vault, ver
+`docs/production-runbook.md` §10):
 
 ```env
 CRON_SECRET=...

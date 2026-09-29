@@ -1,5 +1,5 @@
 import { requireColaRequest } from "@/lib/server/internal-api";
-import { encolar, tomarTrabajos, terminar, fallar, rescatarColgados, latidoDeLaCola, SinArreglo } from "@/lib/server/cola";
+import { encolar, tomarTrabajos, terminar, fallar, rescatarColgados, latidoDeLaCola, SinArreglo, tomarTurnoCola, soltarTurnoCola } from "@/lib/server/cola";
 import { colaEnPausa } from "@/lib/server/interruptores";
 import { logEvent } from "@/lib/server/observability.mjs";
 import { conContexto } from "@/lib/server/contexto.mjs";
@@ -134,7 +134,20 @@ async function procesar(req) {
   const errorInterno = requireColaRequest(req);
   if (errorInterno) return errorInterno;
 
+  /* Una pasada a la vez. El latido llama cada 30 s aunque la anterior siga
+     en marcha; si la base va lenta, sin turno se amontonan y la hunden más. */
+  const por = globalThis.crypto.randomUUID();
+  let turno = null;
+
   try {
+    turno = await tomarTurnoCola({ por });
+    if (!turno.tomado) {
+      return Response.json({ success: true, ocupada: true, procesados: 0 });
+    }
+    if (turno.sinTurno) {
+      logEvent("warn", "cola.sin_turno", { motivo: turno.motivo });
+    }
+
     /* Con la plataforma en pausa la cola se queda quieta: los trabajos
        siguen ahí, pendientes, y se procesan cuando se levante la pausa. */
     if (await colaEnPausa()) {
@@ -236,8 +249,17 @@ async function procesar(req) {
       { success: false, message: "Error procesando la cola" },
       { status: 500 }
     );
+  } finally {
+    /* Si esto falla da igual: el turno caduca solo en TURNO_SEGUNDOS. */
+    await soltarTurnoCola({ por, turno }).catch(() => {});
   }
 }
+
+/* Techo de la función. Una pasada normal dura segundos; si la base se cuelga,
+   mejor cortar a los dos minutos que retener conexiones cinco. Por debajo de
+   TURNO_SEGUNDOS, para que el turno de una pasada cortada caduque solo. Cabe
+   una copia de grabación, que tiene su propio techo de 60 s. */
+export const maxDuration = 120;
 
 /* Vercel Cron llama con GET y su propio token; los avisos internos con POST.
    El guardia es el mismo para los dos. */

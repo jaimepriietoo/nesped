@@ -31,6 +31,11 @@ process.env.CRON_SECRET = CRON;
 let filas = [];
 let cierres = [];
 let siguienteId = 1;
+/* El turno único de la cola (tomar_turno_cola / soltar_turno_cola). Apagado,
+   el doble contesta 404 como una base sin la migración aplicada. */
+let turno = { activo: false, por: null, hasta: 0 };
+let fallarReparto = false;
+let turnosSoltados = [];
 
 function nuevoTrabajo(datos = {}) {
   const fila = {
@@ -69,7 +74,20 @@ globalThis.fetch = async (entrada, opciones = {}) => {
   if (ruta === "rpc/rescatar_trabajos_colgados") return json(0);
   if (ruta === "rpc/purgar_seguridad_caducada") return json(null);
 
+  if (turno.activo && ruta === "rpc/tomar_turno_cola") {
+    /* Como la sentencia de la migración: comprobar y tomar de una vez. */
+    const libre = !turno.por || turno.hasta < Date.now();
+    if (libre) { turno.por = cuerpo.p_por; turno.hasta = Date.now() + cuerpo.p_segundos * 1000; }
+    return json(libre);
+  }
+  if (turno.activo && ruta === "rpc/soltar_turno_cola") {
+    turnosSoltados.push(cuerpo.p_por);
+    if (turno.por === cuerpo.p_por) { turno.por = null; turno.hasta = 0; }
+    return json(null);
+  }
+
   if (ruta === "rpc/tomar_trabajos") {
+    if (fallarReparto) return json({ message: "canceling statement due to statement timeout" }, 500);
     /* Como la sentencia de Postgres: todo de una vez, sin await en medio. */
     const ahora = Date.now();
     const libres = filas
@@ -116,6 +134,9 @@ beforeEach(() => {
   filas = [];
   cierres = [];
   siguienteId = 1;
+  turno = { activo: false, por: null, hasta: 0 };
+  fallarReparto = false;
+  turnosSoltados = [];
   process.env.INTERNAL_API_TOKEN = INTERNO;
   process.env.CRON_SECRET = CRON;
 });
@@ -247,4 +268,80 @@ test("un fallo temporal queda pendiente y la siguiente pasada lo reintenta", asy
   const [otraVez] = await tomarTrabajos({ cuantos: 10, trabajador: "prueba" });
   assert.equal(otraVez.id, cogido.id);
   assert.equal(otraVez.intentos, 2);
+});
+
+/* ── Una pasada a la vez ── */
+
+test("con el turno ocupado, la pasada se va sin tocar la cola", async () => {
+  nuevoTrabajo();
+  turno = { activo: true, por: "otra-pasada", hasta: Date.now() + 60_000 };
+
+  const cuerpo = await (await POST(peticion({ authorization: `Bearer ${CRON}` }))).json();
+
+  assert.equal(cuerpo.ocupada, true);
+  assert.equal(filas[0].estado, "pendiente", "no se ha cogido nada");
+  assert.equal(filas[0].intentos, 0);
+  assert.equal(turno.por, "otra-pasada", "no le quita el turno a quien lo tiene");
+});
+
+test("dos latidos a la vez: trabaja uno y el otro se va; al acabar el turno queda libre", async () => {
+  for (let i = 0; i < 5; i += 1) nuevoTrabajo();
+  turno.activo = true;
+
+  const cuerpos = await Promise.all([
+    POST(peticion({ authorization: `Bearer ${CRON}` })),
+    POST(peticion({ "x-nesped-internal-token": INTERNO })),
+  ].map(async (p) => (await p).json()));
+
+  assert.equal(cuerpos.filter((c) => c.ocupada).length, 1, "uno se encuentra el turno ocupado");
+  assert.equal(cuerpos.reduce((s, c) => s + (c.cogidos || 0), 0), 5, "el otro hace todo el trabajo");
+  assert.equal(turno.por, null, "quien trabajó suelta el turno al terminar");
+
+  /* Y el siguiente latido puede entrar. */
+  nuevoTrabajo();
+  const siguiente = await (await POST(peticion({ authorization: `Bearer ${CRON}` }))).json();
+  assert.equal(siguiente.ocupada, undefined);
+  assert.equal(siguiente.cogidos, 1);
+});
+
+test("el turno se suelta aunque la pasada falle", async () => {
+  /* Si una pasada que revienta se quedara el turno, la cola esperaría a que
+     caducara en cada fallo. */
+  turno.activo = true;
+  fallarReparto = true;
+
+  const respuesta = await POST(peticion({ authorization: `Bearer ${CRON}` }));
+
+  assert.equal(respuesta.status, 500);
+  assert.equal(turnosSoltados.length, 1);
+  assert.equal(turno.por, null);
+});
+
+test("un turno caducado se puede volver a tomar: una pasada muerta no bloquea la cola", async () => {
+  nuevoTrabajo();
+  turno = { activo: true, por: "pasada-que-murio", hasta: Date.now() - 1 };
+
+  const cuerpo = await (await POST(peticion({ authorization: `Bearer ${CRON}` }))).json();
+
+  assert.equal(cuerpo.ocupada, undefined);
+  assert.equal(cuerpo.cogidos, 1);
+});
+
+test("sin la función del turno en la base, la cola sigue procesando", async () => {
+  /* turno.activo = false: el doble contesta 404, como una base sin la
+     migración. Que la cola se pare sería peor que dos pasadas a la vez. */
+  nuevoTrabajo();
+  const cuerpo = await (await POST(peticion({ authorization: `Bearer ${CRON}` }))).json();
+
+  assert.equal(cuerpo.ocupada, undefined);
+  assert.equal(cuerpo.cogidos, 1);
+});
+
+test("la función se corta antes de que caduque el turno", async () => {
+  const { maxDuration } = await import("@/app/api/cola/procesar/route.js");
+  const { TURNO_SEGUNDOS } = await import("@/lib/server/cola");
+
+  assert.ok(maxDuration > 60, "cabe una copia de grabación, que tiene su propio techo de 60 s");
+  assert.ok(maxDuration < TURNO_SEGUNDOS, "si la función muere, el turno caduca poco después");
+  assert.ok(maxDuration < 300, "más corto que el techo por defecto, que es lo que dejó colgarse las pasadas");
 });

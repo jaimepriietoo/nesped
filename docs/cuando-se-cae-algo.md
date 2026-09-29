@@ -81,6 +81,9 @@ Si dura horas, el portal enseña llamadas sin grabación ni clasificar.
   (`select active from cron.job where jobname = 'nesped-procesar-cola'`) o
   el planificador de pg_cron se ha parado (Supabase → *Fast reboot*, ver su
   guía de depuración de pg_cron).
+- Respuestas con `"ocupada": true` una y otra vez: hay un turno de la cola
+  tomado. Caduca solo a los 150 s; si no, liberarlo a mano:
+  `update public.ajustes_plataforma set cola_ocupada_hasta = null, cola_ocupada_por = null where id = 'plataforma';`
 - `net._http_response` con 401: `CRON_SECRET` en Vercel y el secreto de
   Vault no coinciden, o `CRON_SECRET` está en sobre KMS (tiene que ir en
   claro). Con 5xx o `timed_out`: mirar los logs de Vercel de la ruta.
@@ -96,6 +99,22 @@ encendido.
 diez trabajos por pasada, tres a la vez.
 **Verificación.** La consulta de vencidos de más de 15 min
 (runbook §10, paso 9) a cero y `/api/ops/salud` sin el aviso.
+
+## Supabase lento (sin memoria)
+
+**Lo que pasó (28 y 29-09-2026).** La base estaba en el tamaño Nano (0,5 GB
+de memoria) y se quedó sin ella: mucha swap, Postgres cancelando hasta sus
+propias consultas de monitorización («statement timeout») y la API de
+Supabase contestando 522/504. Supabase seguía marcándolo como «sano». Se pasó
+a Micro (1 GB), que con el plan Pro cuesta lo mismo.
+**Detección.** Pasadas de la cola que acaban en 504 a los dos minutos; en los
+registros de Postgres, «canceling statement due to statement timeout» también
+en consultas de `postgres_exporter`; en *Observability* → *Database*, la
+franja de swap del gráfico de memoria.
+**Mitigación.** *Settings* → *General* → «Restart project» suelta lo atascado.
+Si vuelve, subir un tamaño en *Settings* → *Infrastructure* (el cambio
+reinicia un par de minutos). La cola ya no amontona pasadas: una a la vez,
+con un techo de 120 s.
 
 ## ElevenLabs caído
 

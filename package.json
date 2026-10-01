@@ -33,7 +33,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-kms": "^3.1136.0",
-    "@sentry/nextjs": "^10.75.0",
+    "@sentry/nextjs": "^11.1.0",
     "@sentry/node": "^10.50.0",
     "@simplewebauthn/browser": "^14.0.0",
     "@simplewebauthn/server": "^14.0.2",

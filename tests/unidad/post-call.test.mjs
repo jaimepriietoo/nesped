@@ -163,3 +163,28 @@ test("el webhook de inicio contesta con la forma que ElevenLabs espera y siempre
   assert.match(catchBlock, /type: "conversation_initiation_client_data"/);
   assert.doesNotMatch(catchBlock, /status: 500/);
 });
+
+test("una llamada pasada a un departamento lo dice en la llamada y en la ficha", async () => {
+  const bd = baseFalsa({ filas: { clients: EMPRESA, leads: [] }, reclamar: true });
+  const pasada = structuredClone(PAYLOAD);
+  pasada.data.transcript = [
+    { role: "user", message: "No me funciona la fibra." },
+    { role: "agent", message: "Le paso, un momento.", tool_calls: [{ tool_name: "transfer_to_number", params_as_json: JSON.stringify({ transfer_number: "+34600333444" }) }] },
+  ];
+  pasada.data.conversation_initiation_client_data.dynamic_variables = {
+    ...pasada.data.conversation_initiation_client_data.dynamic_variables,
+    transferir_1_nombre: "Soporte técnico", transferir_1_telefono: "+34600333444",
+  };
+
+  await persistElevenLabsCall({ supabase: bd, payload: pasada });
+
+  const fila = bd.apuntes.find((a) => a.tabla === "calls" && a.op === "insert")?.datos;
+  assert.match(fila.summary_long, /Pasada a Soporte técnico a petición del cliente/);
+  const evento = bd.apuntes.find((a) => a.tabla === "lead_events" && a.op === "insert")?.datos;
+  if (evento) assert.match(JSON.stringify(evento), /Llamada pasada a Soporte técnico/);
+
+  /* Y una llamada normal no dice nada de pasarla. */
+  const normal = baseFalsa({ filas: { clients: EMPRESA, leads: [] }, reclamar: true });
+  await persistElevenLabsCall({ supabase: normal, payload: PAYLOAD });
+  assert.doesNotMatch(normal.apuntes.find((a) => a.tabla === "calls" && a.op === "insert")?.datos.summary_long, /Pasada a/);
+});

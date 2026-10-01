@@ -87,6 +87,44 @@ SUPABASE_URL=...
 SUPABASE_SERVICE_ROLE_KEY=...
 ```
 
+## Pasar la llamada a una persona
+
+La asistente puede ofrecer «¿quiere que le pase con el servicio técnico?».
+Si el cliente dice que sí, ElevenLabs llama al teléfono de ese departamento,
+le lee al trabajador una frase con quién llama y para qué, conecta a los dos
+y se sale de la llamada (herramienta de sistema `transfer_to_number`, tipo
+`conference`, con la integración nativa de Twilio).
+
+**Dónde se configura.** En el portal, *Tu IA* → *Departamentos*, campo
+«Pasar llamadas a este teléfono». Se guarda en
+`departamentos.telefono_transferencia` (E.164). Sin teléfono, ese
+departamento no se ofrece.
+
+**Cuándo se ofrece.** Sólo en horario de la empresa y sólo a departamentos
+activos con teléfono, como mucho tres. El agente es el mismo para todas las
+empresas, así que no conoce departamentos sino tres huecos: el webhook de
+inicio manda `transferir_N_nombre` y `transferir_N_telefono` (N = 1, 2, 3,
+vacíos si no hay) y, al principio de `contexto_empresa`, las reglas: pedir
+permiso, pasar sólo con un sí claro, no decir nunca el teléfono interno.
+Código: `lib/server/transferencias.js`.
+
+**Qué queda en el portal.** La llamada lleva «Pasada a <departamento> a
+petición del cliente» y la ficha del contacto, «Llamada pasada a
+<departamento>». Lo que hablan después cliente y trabajador ya no pasa por
+ElevenLabs y no se graba ni se transcribe.
+
+**Activarlo en el agente.** `node scripts/configurar-transferencias.mjs`
+(añade la herramienta con tres reglas y los valores por defecto de las
+variables, para que la vista previa del panel siga funcionando).
+`--ver` enseña cómo está; `--quitar` la quita y la asistente deja de pasar
+llamadas al momento.
+
+**Pendiente de comprobar con una llamada real.** Qué oye el cliente si el
+trabajador no coge (la documentación de ElevenLabs no lo dice; con la
+asistente ya fuera, puede acabar en el buzón de voz del trabajador) y si
+ElevenLabs deja de cobrar minutos al salirse. En la transferencia con
+resumen el trabajador ve el número de la empresa, no el del cliente.
+
 ## Webhook de WhatsApp
 
 En la consola de Twilio, el número de WhatsApp apunta a:

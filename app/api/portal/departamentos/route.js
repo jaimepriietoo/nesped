@@ -48,13 +48,16 @@ async function manejarPUT(req) {
      clasificar y lo decide una persona. */
 
   try {
-    const filas = lista.map((d, i) => ({ client_id: ctx.clientId, clave: d.clave, nombre: d.nombre, descripcion: d.descripcion, palabras_clave: d.palabras_clave, areas: d.areas || [], orden: d.orden || i, activo: d.activo, updated_at: new Date().toISOString() }));
+    const filas = lista.map((d, i) => ({ client_id: ctx.clientId, clave: d.clave, nombre: d.nombre, descripcion: d.descripcion, palabras_clave: d.palabras_clave, areas: d.areas || [], orden: d.orden || i, activo: d.activo, telefono_transferencia: d.telefono_transferencia || null, updated_at: new Date().toISOString() }));
     const { error } = await ctx.datos.from("departamentos").upsert(filas, { onConflict: "client_id,clave" });
     if (error) throw new Error(error.message);
     const claves = lista.map((d) => d.clave);
     const { error: e2 } = await ctx.datos.from("departamentos").delete().not("clave", "in", `(${claves.map((c) => `"${c}"`).join(",")})`);
     if (e2) throw new Error(e2.message);
-    await ctx.datos.from("audit_logs").insert({ client_id: ctx.clientId, entity_type: "departamentos", entity_id: ctx.clientId, action: "departamentos_actualizados", actor: ctx.userEmail, changes: { claves } });
+    /* Qué departamentos pasan llamadas, no los teléfonos: el registro de
+       auditoría no tiene por qué guardar el móvil de nadie. */
+    const conTransferencia = lista.filter((d) => d.telefono_transferencia).map((d) => d.clave);
+    await ctx.datos.from("audit_logs").insert({ client_id: ctx.clientId, entity_type: "departamentos", entity_id: ctx.clientId, action: "departamentos_actualizados", actor: ctx.userEmail, changes: { claves, conTransferencia } });
     const { lista: nueva, deSerie } = await departamentosDeEmpresa(ctx.clientId, ctx.datos);
     return Response.json({ success: true, data: nueva, deSerie });
   } catch (err) {

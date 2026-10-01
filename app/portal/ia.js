@@ -463,7 +463,7 @@ export function DepartamentosYAvisos() {
   async function guardarDeps() {
     setOcupado(true); setError("");
     try {
-      const j = await pedir("/api/portal/departamentos", { method: "PUT", body: JSON.stringify({ departamentos: deps.map(({ clave, nombre, descripcion, palabras_clave, areas, activo }, i) => ({ clave, nombre, descripcion: descripcion || "", palabras_clave: palabras_clave || [], areas: areas || [], orden: i, activo: activo !== false })) }) });
+      const j = await pedir("/api/portal/departamentos", { method: "PUT", body: JSON.stringify({ departamentos: deps.map(({ clave, nombre, descripcion, palabras_clave, areas, activo, telefono_transferencia }, i) => ({ clave, nombre, descripcion: descripcion || "", palabras_clave: palabras_clave || [], areas: areas || [], orden: i, activo: activo !== false, telefono_transferencia: telefono_transferencia || "" })) }) });
       if (j) { setDeps(j.data); setDeSerie(j.deSerie); }
     } catch (e) { setError(e.message); } finally { setOcupado(false); }
   }
@@ -512,6 +512,16 @@ export function DepartamentosYAvisos() {
               </div>
               <div style={{ marginTop: 8 }}>
                 <Frases valor={d.palabras_clave || []} onChange={(v) => setDeps(deps.map((x, k) => (k === i ? { ...x, palabras_clave: v } : x)))} placeholder="Palabra clave (respaldo sin IA)" max={30} disabled={!puedeEditar} />
+              </div>
+              <label className="pv3-small" style={{ display: "block", marginTop: 10 }}>
+                Pasar llamadas a este teléfono (opcional)
+                <input className="pv3-input" style={{ marginTop: 4 }} type="tel" inputMode="tel" placeholder="+34 600 000 000" value={d.telefono_transferencia || ""} maxLength={32} disabled={!puedeEditar}
+                  onChange={(e) => setDeps(deps.map((x, k) => (k === i ? { ...x, telefono_transferencia: e.target.value } : x)))} />
+              </label>
+              <div className="pv3-small" style={{ marginTop: 4, opacity: 0.75 }}>
+                {d.telefono_transferencia
+                  ? "En horario, la asistente ofrecerá pasar la llamada aquí y sólo lo hará si el cliente dice que sí."
+                  : "Sin teléfono, la asistente toma nota y avisa por correo, como hasta ahora."}
               </div>
             </div>
           ))}

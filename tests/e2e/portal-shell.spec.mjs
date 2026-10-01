@@ -328,3 +328,33 @@ test("Enterprise no se encuentra ningún candado", async ({ context, page, baseU
   await page.getByRole("button", { name: /Automatismos/ }).click();
   await expect(page.getByText(/TU PLAN ES/i)).toHaveCount(0);
 });
+
+test("cada departamento tiene su teléfono para pasar llamadas y se guarda", async ({ context, page, baseURL }) => {
+  await montarPortal(context, page, baseURL);
+
+  const departamentos = [
+    { clave: "ventas", nombre: "Ventas", descripcion: "", palabras_clave: [], areas: [], activo: true, telefono_transferencia: "" },
+    { clave: "soporte", nombre: "Soporte técnico", descripcion: "", palabras_clave: [], areas: [], activo: true, telefono_transferencia: "+34600333444" },
+  ];
+  let enviado = null;
+  await page.route("**/api/portal/departamentos", async (route) => {
+    if (route.request().method() === "PUT") {
+      enviado = JSON.parse(route.request().postData() || "{}");
+      return route.fulfill(json({ success: true, data: enviado.departamentos, deSerie: false }));
+    }
+    return route.fulfill(json({ success: true, data: departamentos, deSerie: false, puedeEditar: true }));
+  });
+
+  await page.getByRole("button", { name: /Departamentos y avisos/ }).click();
+
+  const telefonos = page.getByPlaceholder("+34 600 000 000");
+  await expect(telefonos).toHaveCount(2);
+  await expect(telefonos.nth(1)).toHaveValue("+34600333444");
+  await expect(page.getByText("En horario, la asistente ofrecerá pasar la llamada aquí")).toBeVisible();
+  await expect(page.getByText("Sin teléfono, la asistente toma nota")).toBeVisible();
+
+  await telefonos.nth(0).fill("600 111 222");
+  await page.getByRole("button", { name: "Guardar departamentos" }).click();
+
+  await expect.poll(() => enviado?.departamentos?.map((d) => d.telefono_transferencia)).toEqual(["600 111 222", "+34600333444"]);
+});

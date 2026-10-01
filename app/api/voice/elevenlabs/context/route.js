@@ -6,6 +6,7 @@ import { bloqueDeConocimiento, bloqueRuperta, conocimientoVigente, estadoRuperta
 import { logErrorSeguro, observeRoute } from "@/lib/server/observability.mjs";
 import { ContextoElevenLabs, validar } from "@/lib/server/esquemas";
 import { leerJsonLimitado } from "@/lib/server/security";
+import { huecosDeTransferencia, reglasDeTransferencia, variablesDeTransferencia } from "@/lib/server/transferencias";
 
 /**
  * Lo que ElevenLabs pide ANTES de descolgar.
@@ -76,6 +77,9 @@ async function manejarPOST(req) {
     ]);
     const enHorario = dentroDeHorario(config);
     const contexto = promptDeEmpresa(config, { empresa: ctx.brandName, sector: ctx.industry, departamentos });
+    /* A quién se puede pasar la llamada ahora: departamentos con teléfono y
+       sólo en horario. Ver lib/server/transferencias.js. */
+    const huecos = huecosDeTransferencia(departamentos, { enHorario });
 
     const dynamic_variables = {
       nombre_empresa: ctx.brandName || ctx.companyName || "",
@@ -92,6 +96,9 @@ async function manejarPOST(req) {
       en_horario: enHorario ? "sí" : "no",
       mensaje_fuera_horario: config.mensaje_fuera_horario || "",
       contexto_empresa: [
+        /* Primero: el bloque se recorta a 8.000 caracteres y esto no puede
+           ser lo que se pierda. */
+        reglasDeTransferencia(huecos),
         ctx.companyPrompt, contexto, bloqueDeConocimiento(conocimiento),
         reglaDeContacto({ nombre: ctx.leadName }),
         bloqueRuperta(ruperta),
@@ -100,6 +107,9 @@ async function manejarPOST(req) {
       /* El agente los reenvía tal cual a anotar_instruccion; el servidor no se fía de ellos. */
       ruperta_permitido: ruperta.permitido ? "sí" : "no",
       caller_id: callerId,
+      /* transferir_N_nombre / transferir_N_telefono: los usan las reglas de
+         la herramienta transfer_to_number del agente. Siempre todas. */
+      ...variablesDeTransferencia(huecos),
     };
 
     return Response.json({
@@ -121,6 +131,8 @@ async function manejarPOST(req) {
       dynamic_variables: {
         nombre_empresa: "", client_id: "", sector: "", lead_id: "", lead_nombre: "", lead_necesidad: "",
         resumen_contacto: "", objetivo_llamada: "", en_horario: "sí", mensaje_fuera_horario: "", contexto_empresa: "",
+        /* Sin contexto no se sabe a quién pasar: todos los huecos vacíos. */
+        ...variablesDeTransferencia([]),
       },
       success: false,
       message: "No se pudo cargar el contexto para ElevenLabs",

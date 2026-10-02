@@ -43,7 +43,11 @@ function reglas() {
   return Array.from({ length: HUECOS }, (_, i) => {
     const n = i + 1;
     return {
-      transfer_destination: { type: "phone", phone_number: `{{transferir_${n}_telefono}}` },
+      /* «phone_dynamic_variable» con el NOMBRE de la variable, sin llaves. Con
+         «phone» y {{…}}, ElevenLabs no sustituye nada y Twilio recibe el
+         texto «{{transferir_1_telefono}}» (prueba real del 02-10-2026:
+         error 21211, número no válido). */
+      transfer_destination: { type: "phone_dynamic_variable", phone_number: `transferir_${n}_telefono` },
       condition: `El cliente ha dicho claramente que sí quiere que le pasen con el departamento ${n} de la lista «PASAR LA LLAMADA A UNA PERSONA» (el departamento {{transferir_${n}_nombre}}). Nunca si ese departamento no está en la lista.`,
       transfer_type: "conference",
     };
@@ -66,7 +70,7 @@ const placeholders = agent.dynamic_variables?.dynamic_variable_placeholders || {
 
 if (soloVer) {
   console.log(existente
-    ? `${NOMBRE} está en ${a.name} con ${existente.params?.transfers?.length || 0} reglas (${(existente.params?.transfers || []).map((t) => t.transfer_type).join(", ")}).`
+    ? `${NOMBRE} está en ${a.name} con ${existente.params?.transfers?.length || 0} reglas (${(existente.params?.transfers || []).map((t) => `${t.transfer_type}/${t.transfer_destination?.type}`).join(", ")}).`
     : `${NOMBRE} no está en ${a.name}.`);
   process.exit(0);
 }

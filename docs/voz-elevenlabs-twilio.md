@@ -113,17 +113,34 @@ petición del cliente» y la ficha del contacto, «Llamada pasada a
 <departamento>». Lo que hablan después cliente y trabajador ya no pasa por
 ElevenLabs y no se graba ni se transcribe.
 
+**El número va como variable.** Cada regla usa un destino de tipo
+`phone_dynamic_variable` con el nombre de la variable (`transferir_1_telefono`),
+sin llaves. Con tipo `phone` y `{{transferir_1_telefono}}`, ElevenLabs no lo
+sustituye y Twilio recibe el texto tal cual (error 21211): pasó en la primera
+prueba real, el 02-10-2026, y el cliente oyó un mensaje en inglés antes de
+colgarse.
+
+**Twilio tiene que permitir llamar a España.** En Twilio → Voice → Settings →
+Geo permissions, España activada (se hizo el 02-10-2026). Sin eso Twilio
+rechaza la transferencia («Account not authorized to call … enable some
+international permissions») y el cliente oye «we cannot connect your call».
+
+**Sólo cuenta si sale bien.** El portal marca «Pasada a …» cuando el
+resultado de `transfer_to_number` es un éxito, no cuando la asistente lo
+intenta. ElevenLabs cierra su conversación al pasar la llamada
+(«Call was transferred to number»): lo que hablan después cliente y
+trabajador no se cobra como minutos del agente.
+
 **Activarlo en el agente.** `node scripts/configurar-transferencias.mjs`
 (añade la herramienta con tres reglas y los valores por defecto de las
 variables, para que la vista previa del panel siga funcionando).
 `--ver` enseña cómo está; `--quitar` la quita y la asistente deja de pasar
 llamadas al momento.
 
-**Pendiente de comprobar con una llamada real.** Qué oye el cliente si el
-trabajador no coge (la documentación de ElevenLabs no lo dice; con la
-asistente ya fuera, puede acabar en el buzón de voz del trabajador) y si
-ElevenLabs deja de cobrar minutos al salirse. En la transferencia con
-resumen el trabajador ve el número de la empresa, no el del cliente.
+**Probado con llamadas reales (02-10-2026).** Dos transferencias conectadas,
+con resumen para el trabajador y contacto guardado durante la llamada. En la
+transferencia con resumen el trabajador ve el número de la empresa, no el
+del cliente.
 
 ## Webhook de WhatsApp
 

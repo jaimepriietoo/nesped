@@ -170,6 +170,7 @@ test("una llamada pasada a un departamento lo dice en la llamada y en la ficha",
   pasada.data.transcript = [
     { role: "user", message: "No me funciona la fibra." },
     { role: "agent", message: "Le paso, un momento.", tool_calls: [{ tool_name: "transfer_to_number", params_as_json: JSON.stringify({ transfer_number: "+34600333444" }) }] },
+    { role: "agent", tool_results: [{ tool_name: "transfer_to_number", is_error: false, result_value: JSON.stringify({ status: "success", transfer_number: "+34600333444" }) }] },
   ];
   pasada.data.conversation_initiation_client_data.dynamic_variables = {
     ...pasada.data.conversation_initiation_client_data.dynamic_variables,

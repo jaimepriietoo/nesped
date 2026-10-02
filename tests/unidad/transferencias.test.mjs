@@ -73,20 +73,23 @@ test("las reglas piden permiso, nombran sólo los departamentos disponibles y no
   assert.doesNotMatch(texto, /\+34|600/, "los teléfonos van en variables, no en el texto que lee el modelo");
 });
 
-test("al colgar se sabe a qué departamento se pasó", () => {
+test("al colgar se sabe a qué departamento se pasó, sólo si salió bien", () => {
   const variables = variablesDeTransferencia(huecosDeTransferencia(DEPARTAMENTOS));
-  const transcript = [
-    { role: "user", message: "No me funciona la fibra." },
-    { role: "agent", message: "Le paso, un momento.", tool_calls: [{ tool_name: "transfer_to_number", params_as_json: JSON.stringify({ transfer_number: "+34600333444", client_message: "Le paso" }) }] },
-  ];
+  /* Forma real de ElevenLabs: el resultado llega en tool_results, con
+     result_value como texto JSON. */
+  const exito = (numero) => [{ role: "agent", tool_results: [{ tool_name: "transfer_to_number", is_error: false, result_value: JSON.stringify({ result_type: "transfer_to_number_twilio_success", status: "success", transfer_number: numero }) }] }];
 
-  assert.deepEqual(transferenciaDeLaConversacion(transcript, variables), { departamento: "Soporte técnico", hueco: 2 });
+  assert.deepEqual(transferenciaDeLaConversacion(exito("+34600333444"), variables), { departamento: "Soporte técnico", hueco: 2 });
+  assert.deepEqual(transferenciaDeLaConversacion(exito("+34999999999"), variables), { departamento: "un departamento", hueco: null }, "si no se reconoce el número, se dice igualmente que se pasó");
   assert.equal(transferenciaDeLaConversacion([{ role: "agent", message: "Hasta luego" }], variables), null);
-  assert.deepEqual(
-    transferenciaDeLaConversacion([{ role: "agent", tool_calls: [{ tool_name: "transfer_to_number", params_as_json: "no es json" }] }], variables),
-    { departamento: "un departamento", hueco: null },
-    "si no se reconoce el número, se dice igualmente que se pasó",
-  );
+
+  /* Lo que pasó el 02-10-2026: Twilio rechazó la llamada. No se pasó. */
+  const fallida = [
+    { role: "agent", tool_calls: [{ tool_name: "transfer_to_number", params_as_json: JSON.stringify({ transfer_number: "+34600333444" }) }] },
+    { role: "agent", tool_results: [{ tool_name: "transfer_to_number", is_error: true, result_value: JSON.stringify({ result_type: "transfer_to_number_error", status: "error", error: "Account not authorized to call" }) }] },
+  ];
+  assert.equal(transferenciaDeLaConversacion(fallida, variables), null, "intentarlo no es pasarla");
+  assert.equal(transferenciaDeLaConversacion([{ role: "agent", tool_results: [{ tool_name: "transfer_to_number", is_error: true, result_value: "Tool execution was abandoned due to user input" }] }], variables), null);
 });
 
 test("el portal valida y normaliza el teléfono de cada departamento", () => {
@@ -117,6 +120,11 @@ test("el script del agente usa los mismos nombres de variable y transferencia co
     assert.ok(s.includes(plantilla) || s.includes(nombre.replace(/\d+/, "${i + 1}")), `${nombre} no está en el script`);
   }
   assert.match(s, /transfer_type: "conference"/);
+  /* El número sale de una variable: tipo phone_dynamic_variable y el nombre
+     de la variable sin llaves. Con type "phone" y {{…}} Twilio recibió el
+     texto literal y la transferencia falló en la prueba real. */
+  assert.match(s, /type: "phone_dynamic_variable", phone_number: `transferir_\$\{n\}_telefono`/);
+  assert.doesNotMatch(s, /phone_number: `\{\{transferir/, "nada de {{…}} en el número");
   assert.match(s, /const HUECOS = 3;/);
   assert.equal(HUECOS_DE_TRANSFERENCIA, 3, "el agente tiene tantas reglas como huecos manda Nesped");
   assert.match(s, /--quitar/);
@@ -131,4 +139,12 @@ test("el registro de auditoría guarda qué departamentos pasan llamadas, no los
   const auditoria = s.slice(s.indexOf('from("audit_logs")'), s.indexOf('from("audit_logs")') + 250);
   assert.match(auditoria, /conTransferencia/);
   assert.doesNotMatch(auditoria, /telefono_transferencia/);
+});
+
+test("guardar el contacto no depende de que la herramienta mande la empresa", async () => {
+  const { LeadElevenLabs } = await import("../../lib/server/esquemas.js");
+  /* La herramienta del panel perdió clientId y devolvió 400 días enteros. */
+  assert.equal(LeadElevenLabs.safeParse({ callerId: "+34600111222", calledNumber: "+34883827930", name: "Ana" }).success, true);
+  assert.equal(LeadElevenLabs.safeParse({ clientId: "fibergreen", name: "Ana" }).success, true);
+  assert.equal(LeadElevenLabs.safeParse({ callerId: "+34600111222", name: "Ana" }).success, false, "sin empresa ni número marcado no se puede saber de quién es");
 });
